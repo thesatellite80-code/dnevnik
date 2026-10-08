@@ -180,6 +180,472 @@ window.SixMin = window.SixMin || {};
 })();
 window.__v02stage = "after-sixmin-common"; if (window.__v02say) window.__v02say("v02 stage: after-sixmin-common");
 
+// app/js/sixmin-comments.js — v0.6: ОБЩИЕ комментарии и вложения к задачам
+// Один компонент на два места: личные/рабочие задачи (sixmin-tasks.js)
+// и общие задачи кругов + баунти (sixmin-circles.js).
+//
+// Вложения: 🖼 фото (просмотр + скачать), 📄 документы (pdf — просмотр,
+// остальные — скачать), 🎙 голосовые (прослушать + скачать).
+// Личная задача  → файл в приватной папке  <uid>/t/...
+// Задача круга   → файл в общей папке      circles/<circle_id>/<uid>/...
+//                  (поэтому его видят и могут скачать все участники круга)
+//
+// API:
+//   const cm = SixMinComments.create({
+//     render: () => render(),                  // перерисовать экран
+//     scope: (task) => ({ circle_id }) | null, // null = личная задача
+//     authorName: (uid) => "Мама",             // имя автора (для кругов)
+//     findTask: (id) => task,                  // задача по id
+//     canDelete: (comment) => true|false       // модерация (владелец круга)
+//   });
+//   cm.loadCounts(ids); cm.count(id); cm.buttonHTML(task); cm.panelHTML(task);
+//   cm.toggle(task); cm.close(); cm.wire(root); cm.reset();
+//
+// Важно: текст черновика и прикреплённые файлы хранятся в состоянии компонента,
+// поэтому они НЕ теряются при любой перерисовке экрана.
+
+window.SixMinComments = (function () {
+  const MAX_MB = 25;                 // предел одного файла
+  const POLL_MS = 20000;             // автообновление открытой переписки
+  const ACCEPT = "image/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.rtf,.zip";
+
+  const kindEmoji = (k) => (k === "image" ? "🖼" : k === "voice" ? "🎙" : "📄");
+  const safeName = (n) =>
+    (String(n || "").replace(/[^a-zA-Z0-9._-]/g, "_").replace(/_+/g, "_").slice(-40)) || "file";
+  const extOf = (n) => (String(n || "").split(".").pop() || "").toLowerCase();
+  const stamp = () => {
+    const d = new Date();
+    return d.toLocaleDateString("ru-RU", { day: "numeric", month: "short" }) + ", " +
+      d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+  };
+
+  // ---------- стили (свои, чтобы компонент работал и без модуля задач) ----------
+  function injectStyles() {
+    if (typeof document === "undefined" || document.getElementById("sixmin-comments-css")) return;
+    const css = document.createElement("style");
+    css.id = "sixmin-comments-css";
+    css.textContent = `
+      .sm-task-cm b{font-size:10px;background:var(--accent,#E30613);color:#fff;border-radius:8px;padding:1px 5px;margin-left:2px;vertical-align:middle}
+      .sm-cm-panel{border:1px solid rgba(128,128,128,.2);border-top:0;border-radius:0 0 12px 12px;
+                   padding:10px;background:rgba(128,128,128,.06);font-family:system-ui,sans-serif}
+      .sm-cm-bar{display:flex;align-items:center;gap:6px;margin:-2px 0 6px}
+      .sm-cm-cap{font-size:11px;font-weight:800;letter-spacing:.3px;text-transform:uppercase;opacity:.55;flex:1}
+      .sm-cm{padding:7px 2px;border-bottom:1px dashed rgba(128,128,128,.18)}
+      .sm-cm:last-of-type{border-bottom:0}
+      .sm-cm-head{font-size:11px;opacity:.6;margin-bottom:2px;display:flex;gap:6px;align-items:center}
+      .sm-cm-head b{opacity:.95;font-weight:700}
+      .sm-cm-del{border:0;background:transparent;color:inherit;opacity:.35;cursor:pointer;font-size:13px;
+                 padding:0 2px;margin-left:auto}
+      .sm-cm-del:hover{opacity:1;color:#E30613}
+      .sm-cm-body{font-size:13.5px;line-height:1.45;white-space:pre-wrap;word-break:break-word}
+      .sm-cm-chip{border:1px solid rgba(127,111,240,.4);color:inherit;background:var(--accent-soft,#FDE9E9);
+                  border-radius:999px;padding:4px 10px;font-size:12px;cursor:pointer;margin:4px 4px 0 0;
+                  max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+      .sm-cm-pend{margin-top:6px}
+      .sm-cm-pending b{color:#E30613;margin-left:6px;cursor:pointer}
+      .sm-cm-empty{font-size:12.5px;opacity:.6;padding:4px 2px}
+      .sm-cm-add{display:flex;gap:6px;align-items:center;margin-top:8px}
+      .sm-cm-input{flex:1;padding:9px 12px;border-radius:10px;border:1px solid rgba(128,128,128,.25);
+                   background:transparent;color:inherit;font-size:13.5px;outline:none;min-width:0}
+      .sm-cm-input:focus{border-color:var(--accent,#E30613)}
+      .sm-cm-btn{border:0;background:transparent;font-size:17px;cursor:pointer;padding:6px;border-radius:8px;
+                 color:inherit;line-height:1}
+      .sm-cm-send{color:var(--accent,#E30613);font-weight:700}
+      .sm-cm-hint{font-size:11px;opacity:.5;margin-top:6px;line-height:1.4}
+      .sm-cm-ov{position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:10002;display:flex;
+                flex-direction:column;align-items:center;justify-content:center;padding:16px;gap:14px}
+      .sm-cm-ov-name{color:#fff;font:600 13px/1.4 system-ui,sans-serif;opacity:.85;max-width:92vw;
+                     text-align:center;word-break:break-all}
+      .sm-cm-ov-acts{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:center}
+      .sm-cm-ov-dl{padding:10px 18px;border-radius:12px;background:var(--accent,#E30613);color:#fff;
+                   font:700 14px system-ui,sans-serif;text-decoration:none}
+      .sm-cm-ov-cl{padding:10px 18px;border-radius:12px;border:1px solid #777;background:transparent;
+                   color:#fff;font:14px system-ui,sans-serif;cursor:pointer}`;
+    document.head.appendChild(css);
+  }
+
+  // ---------- общий оверлей просмотра (фото / аудио / pdf) ----------
+  function viewer(innerHTML, name, url) {
+    if (typeof document === "undefined") return;
+    const ov = document.createElement("div");
+    ov.className = "sm-cm-ov";
+    ov.innerHTML = innerHTML +
+      '<div class="sm-cm-ov-name">' + SixMin.esc(name) + "</div>" +
+      '<div class="sm-cm-ov-acts">' +
+      '<a class="sm-cm-ov-dl" href="' + url + '" download="' + SixMin.esc(name) + '">Скачать</a>' +
+      '<button class="sm-cm-ov-cl" type="button">Закрыть</button></div>';
+    document.body.appendChild(ov);
+    const kill = () => { try { URL.revokeObjectURL(url); } catch (e) {} ov.remove(); };
+    ov.querySelector(".sm-cm-ov-cl").onclick = kill;
+    ov.addEventListener("click", (e) => { if (e.target === ov) kill(); });
+    const a = ov.querySelector("audio");
+    if (a) a.play().catch(() => {});
+    return ov;
+  }
+
+  async function openAtt(btn) {
+    const kind = btn.dataset.kind;
+    const path = btn.dataset.path;
+    const name = btn.dataset.name || "file";
+    SixMin.toast("Открываю…");
+    try {
+      const { data, error } = await SixMin.sb().storage.from("attachments").download(path);
+      if (error) throw error;
+      const url = URL.createObjectURL(data);
+      if (kind === "image") {
+        viewer('<img src="' + url + '" alt="" style="max-width:94vw;max-height:68vh;border-radius:12px;background:#000">', name, url);
+      } else if (kind === "voice") {
+        viewer('<audio controls src="' + url + '" style="width:min(92vw,420px)"></audio>', name, url);
+      } else if (extOf(name) === "pdf") {
+        viewer('<iframe src="' + url + '" title="" style="width:min(94vw,760px);height:66vh;border:0;border-radius:12px;background:#fff"></iframe>', name, url);
+      } else {
+        // документы: сразу предлагаем скачать (плюс ссылка в оверлее)
+        viewer('<div style="font-size:52px;line-height:1">📄</div>' +
+          '<div style="color:#fff;font:13px/1.5 system-ui,sans-serif;opacity:.75;max-width:80vw;text-align:center">' +
+          "Документ нельзя показать внутри приложения — нажмите «Скачать», он откроется на устройстве.</div>", name, url);
+      }
+    } catch (e) {
+      SixMin.toast("Не удалось открыть: " + (e.message || e));
+    }
+  }
+
+  // ---------- экземпляр компонента для одного экрана ----------
+  function create(host) {
+    host = host || {};
+    injectStyles();
+
+    let openId = null;        // id задачи с раскрытой перепиской
+    let cache = {};           // taskId -> { comments: [ {.., attachments:[]} ] }
+    let counts = {};          // taskId -> число комментариев
+    let pending = [];         // [{ blob, name, kind, type }]
+    let draft = "";           // текст в поле ввода (не теряется при перерисовке)
+    let busy = false;
+    let timer = null;
+    let myUid = null;
+
+    const render = () => { if (typeof host.render === "function") host.render(); };
+    const scopeOf = (t) => (typeof host.scope === "function" ? host.scope(t) : null);
+    const findTask = (id) => (typeof host.findTask === "function" ? host.findTask(id) : null);
+    const authorName = (uid) =>
+      (typeof host.authorName === "function" ? (host.authorName(uid) || "участник") : "");
+    const canDelete = (c) =>
+      c.user_id === myUid || (typeof host.canDelete === "function" && !!host.canDelete(c));
+
+    async function uid() {
+      if (!myUid) myUid = await SixMin.uid();
+      return myUid;
+    }
+
+    async function fetchFor(id) {
+      const sb = SixMin.sb();
+      const [cs, at] = await Promise.all([
+        sb.from("task_comments").select("*").eq("task_id", id)
+          .order("created_at", { ascending: true }).limit(300),
+        sb.from("task_attachments").select("*").eq("task_id", id)
+          .order("created_at", { ascending: true }).limit(500),
+      ]);
+      if (cs.error) throw cs.error;
+      const atts = at.data || [];
+      cache[id] = {
+        comments: (cs.data || []).map((c) => ({ ...c, attachments: atts.filter((a) => a.comment_id === c.id) })),
+      };
+      counts[id] = cache[id].comments.length;
+      return cache[id];
+    }
+
+    // счётчики для списка задач (один запрос на весь экран)
+    async function loadCounts(ids) {
+      const list = (ids || []).filter(Boolean);
+      if (!list.length) { counts = {}; return; }
+      try {
+        const { data } = await SixMin.sb().from("task_comments")
+          .select("task_id").in("task_id", list).limit(2000);
+        counts = {};
+        (data || []).forEach((c) => { counts[c.task_id] = (counts[c.task_id] || 0) + 1; });
+      } catch (e) { /* таблица ещё не создана — не ломаем экран */ }
+    }
+
+    const count = (id) => counts[id] || 0;
+
+    function startPolling(id) {
+      stopPolling();
+      if (typeof setInterval !== "function") return;
+      timer = setInterval(async () => {
+        if (openId !== id || busy) return;
+        // не перерисовываем экран, пока человек печатает или держит прикреплённые файлы
+        if (draft.trim() || pending.length) return;
+        const ae = typeof document !== "undefined" ? document.activeElement : null;
+        if (ae && ae.dataset && ae.dataset.cminput !== undefined) return;
+        try { await fetchFor(id); if (openId === id) render(); } catch (e) {}
+      }, POLL_MS);
+    }
+    function stopPolling() {
+      if (timer) { clearInterval(timer); timer = null; }
+    }
+
+    async function toggle(t) {
+      if (!t) return;
+      if (openId === t.id) { close(); return; }
+      openId = t.id; pending = []; draft = "";
+      render();
+      try { await fetchFor(t.id); } catch (e) { cache[t.id] = { comments: [], error: e.message || String(e) }; }
+      if (openId === t.id) { render(); startPolling(t.id); }
+    }
+
+    function close() {
+      stopPolling();
+      openId = null; pending = []; draft = "";
+      render();
+    }
+
+    async function reloadOpen() {
+      if (!openId) return;
+      try { await fetchFor(openId); } catch (e) { SixMin.toast("Не обновилось: " + (e.message || e)); }
+      render();
+    }
+
+    // ---------- разметка ----------
+    function buttonHTML(t, title) {
+      const n = count(t.id);
+      return '<button class="sm-task-btn sm-task-cm" data-cmopen="' + t.id + '" type="button" title="' +
+        SixMin.esc(title || "Комментарии и вложения") + '">💬' + (n ? "<b>" + n + "</b>" : "") + "</button>";
+    }
+
+    function attHTML(a) {
+      return '<button class="sm-cm-chip" type="button" data-att="' + a.id + '" data-path="' +
+        SixMin.esc(a.storage_path) + '" data-kind="' + SixMin.esc(a.kind) + '" data-name="' +
+        SixMin.esc(a.file_name || a.kind) + '">' + kindEmoji(a.kind) + " " +
+        SixMin.esc(a.file_name || a.kind) + "</button>";
+    }
+
+    function cmHTML(c) {
+      const who = authorName(c.user_id);
+      const mine = c.user_id === myUid;
+      return '<div class="sm-cm">' +
+        '<div class="sm-cm-head">' +
+        (who ? "<b>" + SixMin.esc(who) + "</b><span>·</span>" : "") +
+        "<span>" + stamp2(c.created_at) + "</span>" +
+        (mine ? "<em style=\"opacity:.7;font-style:normal\">· вы</em>" : "") +
+        (canDelete(c) ? '<button class="sm-cm-del" type="button" data-cmdel="' + c.id + '" title="Удалить комментарий">×</button>' : "") +
+        "</div>" +
+        (c.body ? '<div class="sm-cm-body">' + SixMin.esc(c.body) + "</div>" : "") +
+        ((c.attachments || []).map(attHTML).join("") || "") +
+        "</div>";
+    }
+    function stamp2(iso) {
+      try { const d = new Date(iso);
+        return d.toLocaleDateString("ru-RU", { day: "numeric", month: "short" }) + ", " +
+          d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }); }
+      catch (e) { return stamp(); }
+    }
+
+    function panelHTML(t) {
+      if (openId !== t.id) return "";
+      const c = cache[t.id];
+      const shared = !!(scopeOf(t) && scopeOf(t).circle_id);
+      const list = !c
+        ? '<div class="sm-cm-empty">Загружаю…</div>'
+        : (c.error
+          ? '<div class="sm-cm-empty">⚠️ ' + SixMin.esc(c.error) +
+            '<br>Обновите схему БД (миграция v0.6) — кнопка ⟳ справа вверху.</div>'
+          : (c.comments.length
+            ? c.comments.map(cmHTML).join("")
+            : '<div class="sm-cm-empty">Комментариев пока нет — напишите первый или прикрепите фото, документ либо голосовое.</div>'));
+      return '<div class="sm-cm-panel" data-cmpanel="' + t.id + '">' +
+        '<div class="sm-cm-bar"><span class="sm-cm-cap">' +
+        (shared ? "💬 Обсуждение круга" : "💬 Обсуждение") + "</span>" +
+        '<button class="sm-cm-btn" type="button" data-cmact="reload" title="Обновить">⟳</button>' +
+        '<button class="sm-cm-btn" type="button" data-cmact="close" title="Свернуть">✕</button></div>' +
+        list +
+        (pending.length
+          ? '<div class="sm-cm-pend">' + pending.map((p, i) =>
+            '<span class="sm-cm-chip sm-cm-pending">' + kindEmoji(p.kind) + " " + SixMin.esc(p.name) +
+            ' <b data-pendel="' + i + '" title="Убрать">×</b></span>').join("") + "</div>"
+          : "") +
+        '<div class="sm-cm-add">' +
+        '<input class="sm-cm-input" data-cminput placeholder="' +
+        (shared ? "Сообщение участникам круга…" : "Комментарий…") + '" maxlength="500" value="' +
+        SixMin.esc(draft) + '" autocomplete="off">' +
+        '<button class="sm-cm-btn" type="button" data-cmact="file" title="Фото или документ">📎</button>' +
+        '<button class="sm-cm-btn" type="button" data-cmact="voice" title="Голосовое сообщение">🎙</button>' +
+        '<button class="sm-cm-btn sm-cm-send" type="button" data-cmact="send" title="Отправить">➤</button>' +
+        "</div>" +
+        '<div class="sm-cm-hint">' +
+        (shared
+          ? "Файлы видят все участники круга: 🖼 просмотр, 🎙 прослушивание, 📄 скачивание. Обновляется само каждые 20 сек."
+          : "Файлы хранятся в вашем приватном облаке: 🖼 просмотр, 🎙 прослушивание, 📄 скачивание.") +
+        "</div>" +
+        '<input type="file" class="sm-cm-file" hidden accept="' + ACCEPT + '">' +
+        "</div>";
+    }
+
+    // ---------- действия ----------
+    async function send(t) {
+      if (!t || busy) return;
+      const body = draft.trim();
+      if (!body && !pending.length) { SixMin.toast("Напишите текст или прикрепите файл"); return; }
+      busy = true;
+      try {
+        const me = await uid();
+        const { data: cm, error } = await SixMin.sb().from("task_comments")
+          .insert({ task_id: t.id, user_id: me, body }).select().maybeSingle();
+        if (error) throw error;
+        const sc = scopeOf(t);
+        for (const p of pending) {
+          try {
+            const path = sc && sc.circle_id
+              ? "circles/" + sc.circle_id + "/" + me + "/" + Date.now() + "-" + safeName(p.name)
+              : me + "/t/" + Date.now() + "-" + safeName(p.name);
+            const { error: upErr } = await SixMin.sb().storage.from("attachments")
+              .upload(path, p.blob, { contentType: p.type || "application/octet-stream" });
+            if (upErr) throw upErr;
+            const { error: insErr } = await SixMin.sb().from("task_attachments").insert({
+              comment_id: (cm && cm.id) || null, task_id: t.id, user_id: me,
+              kind: p.kind, storage_path: path, file_name: p.name,
+            });
+            if (insErr) throw insErr;
+          } catch (e) {
+            SixMin.toast("Вложение не загружено: " + (e.message || e));
+          }
+        }
+        pending = []; draft = "";
+        await fetchFor(t.id);
+        render();
+      } catch (e) {
+        const hint = (e && e.code === "42501") ? " (нет прав — примените миграцию v0.6 в SQL Editor)" : "";
+        SixMin.toast("Не отправлено: " + (e.message || e) + hint);
+      } finally {
+        busy = false;
+      }
+    }
+
+    async function delComment(id) {
+      if (typeof confirm === "function" && !confirm("Удалить комментарий и его вложения?")) return;
+      const { error } = await SixMin.sb().from("task_comments").delete().eq("id", id);
+      if (error) { SixMin.toast("Не удалено: " + error.message); return; }
+      if (openId) { await fetchFor(openId).catch(() => {}); }
+      render();
+    }
+
+    function addFile(f) {
+      if (!f) return;
+      if (f.size && f.size > MAX_MB * 1024 * 1024) {
+        SixMin.toast("Файл больше " + MAX_MB + " МБ — приложите меньший");
+        return;
+      }
+      const type = f.type || "";
+      const kind = type.startsWith("image/") ? "image"
+        : type.startsWith("audio/") ? "voice"
+        : (extOf(f.name) === "wav" || extOf(f.name) === "mp3" || extOf(f.name) === "m4a" || extOf(f.name) === "ogg") ? "voice"
+        : "doc";
+      pending.push({ blob: f, name: f.name || "file", kind, type });
+      render();
+    }
+
+    async function addVoice() {
+      if (!window.SixMinVoice || typeof window.SixMinVoice.capture !== "function") {
+        SixMin.toast("Диктофон недоступен в этом браузере");
+        return;
+      }
+      try {
+        const res = await window.SixMinVoice.capture();
+        if (!res || !res.blob) return;
+        const t = new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }).replace(":", "_");
+        pending.push({ blob: res.blob, name: "audio-" + t + ".wav", kind: "voice", type: "audio/wav" });
+        render();
+      } catch (e) {
+        SixMin.toast("Запись не удалась: " + (e.message || e));
+      }
+    }
+
+    // ---------- навешивание событий на контейнер экрана ----------
+    function wire(rootEl) {
+      const rf = rootEl || (typeof document !== "undefined" ? document : null);
+      if (!rf || typeof rf.querySelectorAll !== "function") return;
+      const taskOf = (el) => {
+        const id = el && el.dataset ? el.dataset.cmopen : null;
+        return id ? findTask(id) : null;
+      };
+
+      rf.querySelectorAll("[data-cmopen]").forEach((b) => b.addEventListener("click", (e) => {
+        e.stopPropagation();
+        toggle(taskOf(b));
+      }));
+
+      rf.querySelectorAll("[data-cmact]").forEach((b) => b.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const panel = b.closest ? b.closest("[data-cmpanel]") : null;
+        const t = panel ? findTask(panel.dataset.cmpanel) : (openId ? findTask(openId) : null);
+        const act = b.dataset.cmact;
+        if (act === "close") { close(); return; }
+        if (act === "reload") { await reloadOpen(); return; }
+        if (!t) return;
+        if (act === "file") {
+          const inp = (panel || rf).querySelector(".sm-cm-file");
+          if (inp) inp.click();
+        }
+        if (act === "voice") await addVoice();
+        if (act === "send") await send(t);
+      }));
+
+      rf.querySelectorAll(".sm-cm-file").forEach((inp) => inp.addEventListener("change", () => {
+        addFile(inp.files && inp.files[0]);
+        try { inp.value = ""; } catch (e) {}
+      }));
+
+      rf.querySelectorAll("[data-cminput]").forEach((inp) => {
+        inp.addEventListener("input", () => { draft = inp.value; });
+        inp.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            draft = inp.value;
+            const panel = inp.closest ? inp.closest("[data-cmpanel]") : null;
+            const t = panel ? findTask(panel.dataset.cmpanel) : null;
+            if (t) send(t);
+          }
+        });
+      });
+
+      rf.querySelectorAll("[data-pendel]").forEach((b) => b.addEventListener("click", (e) => {
+        e.stopPropagation();
+        pending.splice(Number(b.dataset.pendel), 1);
+        render();
+      }));
+
+      rf.querySelectorAll("[data-att]").forEach((b) => b.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openAtt(b);
+      }));
+
+      rf.querySelectorAll("[data-cmdel]").forEach((b) => b.addEventListener("click", (e) => {
+        e.stopPropagation();
+        delComment(b.dataset.cmdel);
+      }));
+    }
+
+    function reset() {           // смена круга/вкладки: закрыть и очистить
+      stopPolling();
+      openId = null; pending = []; draft = ""; cache = {}; counts = {};
+    }
+
+    return {
+      styles: injectStyles, loadCounts, count, buttonHTML, panelHTML,
+      toggle, close, wire, reset, reloadOpen, openAtt,
+      isOpen: (id) => openId === id,
+      // служебный доступ для дымовых тестов (tools/smoke.js) — в UI не используется
+      _test: {
+        setDraft: (v) => { draft = v; },
+        addPending: (p) => pending.push(p),
+        send: (t) => send(t),
+        state: () => ({ openId, pending: pending.length, draft, counts }),
+      },
+    };
+  }
+
+  return { create, kindEmoji, styles: injectStyles, openAtt };
+})();
+window.__v02stage = "after-sixmin-comments"; if (window.__v02say) window.__v02say("v02 stage: after-sixmin-comments");
+
 // app/js/sixmin-voice.js — v0.2 FIX: модуль диктовки
 //
 // Исправляет критические баги:
@@ -1293,7 +1759,12 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
     const kindOf = (t) => KINDS.find((k) => k.id === (t.kind || KINDS[0].id)) || KINDS[0];
     let root = null, todayKey = null, newKind = KINDS[0].id;
     let today = [], overdue = [], upcoming = [], all = [];
-    let commentsOpen = null, cmCache = {}, cmCounts = {}, pendingAtt = [];
+    // комментарии + вложения: общий компонент v0.6 (тот же, что в кругах)
+    const CM = SixMinComments.create({
+      render: () => render(),
+      scope: () => null,   // личная/рабочая задача → приватная папка <uid>/t/...
+      findTask: (id) => [...today, ...overdue, ...upcoming].find((x) => x.id === id),
+    });
 
     async function load() {
       const uid = await SixMin.uid();
@@ -1309,12 +1780,7 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
       overdue = open.filter((t) => t.due_date < todayKey);
       upcoming = open.filter((t) => t.due_date > todayKey);
     const ids = [...today, ...overdue, ...upcoming].map((t) => t.id);
-    cmCounts = {};
-    if (ids.length) {
-      const { data: cms } = await SixMin.sb().from("task_comments")
-        .select("task_id").in("task_id", ids).limit(2000);
-      (cms || []).forEach((c) => { cmCounts[c.task_id] = (cmCounts[c.task_id] || 0) + 1; });
-    }
+    await CM.loadCounts(ids);
     }
 
     // ---------- статистика области (для рабочего экрана) ----------
@@ -1423,8 +1889,6 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
       await load(); render();
     }
 
-    const cmCount = (id) => cmCounts[id] || 0;
-    const kindEmoji = (k) => (k === "image" ? "🖼" : k === "voice" ? "🎙" : "📄");
 
     function taskRow(t, isOverdue, isUpcoming) {
       return `
@@ -1438,121 +1902,14 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
         <div class="sm-task-actions">
           ${!t.completed && !isUpcoming ? `<button class="sm-task-btn sm-task-postpone" data-act="postpone" data-id="${t.id}" title="Перенести на завтра">→ завтра</button>` : ""}
           ${isUpcoming ? `<button class="sm-task-btn sm-task-postpone" data-act="totoday" data-id="${t.id}">→ сегодня</button>` : ""}
-          <button class="sm-task-btn sm-task-cm" data-act="comments" data-id="${t.id}" title="Комментарии и вложения">💬${cmCount(t.id) ? "<b>" + cmCount(t.id) + "</b>" : ""}</button>
+          ${CM.buttonHTML(t)}
           <button class="sm-task-btn sm-task-del" data-act="del" data-id="${t.id}" title="Удалить">×</button>
         </div>
       </div>
-      ${commentsOpen === t.id ? panelHTML(t) : ""}
+      ${CM.panelHTML(t)}
       </li>`;
     }
 
-    function cmHTML(c) {
-      const d = new Date(c.created_at);
-      return `<div class="sm-cm">
-        <div class="sm-cm-head">${d.toLocaleDateString("ru-RU", { day: "numeric", month: "short" })}, ${d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</div>
-        ${c.body ? `<div class="sm-cm-body">${SixMin.esc(c.body)}</div>` : ""}
-        ${(c.attachments || []).map((a) =>
-          `<button class="sm-cm-chip" data-att="${a.id}" data-path="${SixMin.esc(a.storage_path)}" data-kind="${a.kind}" data-name="${SixMin.esc(a.file_name)}">${kindEmoji(a.kind)} ${SixMin.esc(a.file_name || a.kind)}</button>`).join("")}
-      </div>`;
-    }
-
-    function panelHTML(t) {
-      const c = cmCache[t.id];
-      return `<div class="sm-cm-panel">
-        ${!c ? '<div class="sm-cm-empty">Загружаю…</div>'
-          : (c.comments.length ? c.comments.map(cmHTML).join("")
-             : '<div class="sm-cm-empty">Комментариев пока нет — добавьте первый или прикрепите файл.</div>')}
-        ${pendingAtt.length ? '<div class="sm-cm-pend">' + pendingAtt.map((p, i) =>
-          `<span class="sm-cm-chip sm-cm-pending">${kindEmoji(p.kind)} ${SixMin.esc(p.name)} <b data-pendel="${i}">×</b></span>`).join("") + '</div>' : ""}
-        <div class="sm-cm-add">
-          <input class="sm-cm-input" placeholder="Комментарий…" maxlength="500">
-          <button class="sm-cm-btn" data-cmact="file" title="Фото или документ">📎</button>
-          <button class="sm-cm-btn" data-cmact="voice" title="Голосовое вложение">🎙</button>
-          <button class="sm-cm-btn sm-cm-send" data-cmact="send" title="Отправить">➤</button>
-        </div>
-        <input type="file" class="sm-cm-file" hidden accept="image/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.txt">
-      </div>`;
-    }
-
-    async function openComments(t) {
-      if (commentsOpen === t.id) { commentsOpen = null; pendingAtt = []; render(); return; }
-      commentsOpen = t.id; pendingAtt = [];
-      if (!cmCache[t.id]) {
-        const [cs, at] = await Promise.all([
-          SixMin.sb().from("task_comments").select("*").eq("task_id", t.id).order("created_at", { ascending: true }),
-          SixMin.sb().from("task_attachments").select("*").eq("task_id", t.id).order("created_at", { ascending: true }),
-        ]);
-        const atts = at.data || [];
-        cmCache[t.id] = { comments: (cs.data || []).map((c) => ({ ...c, attachments: atts.filter((a) => a.comment_id === c.id) })) };
-      }
-      render();
-    }
-
-    async function sendComment(t) {
-      const inp = root.querySelector(".sm-cm-input");
-      const body = (inp?.value || "").trim();
-      if (!body && !pendingAtt.length) return;
-      const uid = await SixMin.uid();
-      const { data: cm, error } = await SixMin.sb().from("task_comments")
-        .insert({ task_id: t.id, user_id: uid, body }).select().maybeSingle();
-      if (error) { SixMin.toast("Ошибка: " + error.message); return; }
-      for (const p of pendingAtt) {
-        try {
-          const safe = (p.name.replace(/[^a-zA-Z0-9._-]/g, "_").replace(/_+/g, "_").slice(-40)) || "file";
-          const path = `${uid}/t/${Date.now()}-${safe}`;
-          const { error: upErr } = await SixMin.sb().storage.from("attachments")
-            .upload(path, p.blob, { contentType: p.type || "application/octet-stream" });
-          if (upErr) throw upErr;
-          await SixMin.sb().from("task_attachments").insert({
-            comment_id: cm.id, task_id: t.id, user_id: uid,
-            kind: p.kind, storage_path: path, file_name: p.name,
-          });
-        } catch (e) { SixMin.toast("Вложение не загружено: " + (e.message || e)); }
-      }
-      pendingAtt = [];
-      const [cs, at] = await Promise.all([
-        SixMin.sb().from("task_comments").select("*").eq("task_id", t.id).order("created_at", { ascending: true }),
-        SixMin.sb().from("task_attachments").select("*").eq("task_id", t.id).order("created_at", { ascending: true }),
-      ]);
-      const atts = at.data || [];
-      cmCache[t.id] = { comments: (cs.data || []).map((c) => ({ ...c, attachments: atts.filter((a) => a.comment_id === c.id) })) };
-      cmCounts[t.id] = cmCache[t.id].comments.length;
-      render();
-    }
-
-    async function openAtt(btn) {
-      const kind = btn.dataset.kind, path = btn.dataset.path, name = btn.dataset.name || "file";
-      try {
-        const { data, error } = await SixMin.sb().storage.from("attachments").download(path);
-        if (error) throw error;
-        const url = URL.createObjectURL(data);
-        if (kind === "image") {
-          const ov = document.createElement("div");
-          ov.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:10002;" +
-            "display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;gap:14px";
-          ov.innerHTML = '<img src="' + url + '" alt="' + SixMin.esc(name) + '" style="max-width:94vw;max-height:74vh;border-radius:12px">' +
-            '<div style="display:flex;gap:10px;align-items:center">' +
-            '<a href="' + url + '" download="' + SixMin.esc(name) + '" style="padding:10px 18px;border-radius:12px;background:var(--accent,#E30613);color:#fff;font-weight:700;text-decoration:none;font-size:14px">Скачать</a>' +
-            '<button style="padding:10px 18px;border-radius:12px;border:1px solid #777;background:transparent;color:#fff;font-size:14px;cursor:pointer">Закрыть</button></div>';
-          document.body.appendChild(ov);
-          ov.querySelector("button").onclick = () => ov.remove();
-          ov.addEventListener("click", (e) => { if (e.target === ov) ov.remove(); });
-        } else if (kind === "voice") {
-          const a = document.createElement("audio");
-          a.controls = true; a.src = url;
-          a.style.cssText = "width:100%;height:38px;margin-top:6px";
-          btn.replaceWith(a);
-          a.play().catch(() => {});
-        } else {
-          const a = document.createElement("a");
-          a.href = url; a.download = name;
-          document.body.appendChild(a); a.click(); a.remove();
-          SixMin.toast("Скачиваю: " + name);
-        }
-      } catch (e) {
-        SixMin.toast("Не удалось открыть: " + (e.message || e));
-      }
-    }
 
     function render() {
       if (!root) return;
@@ -1599,7 +1956,6 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
         if (b.dataset.act === "postpone" && t) postpone(t, 1);
         if (b.dataset.act === "totoday" && t) moveToday(t);
         if (b.dataset.act === "del" && t) remove(t);
-        if (b.dataset.act === "comments" && t) openComments(t);
         if (b.dataset.act === "postpone-all") postponeAllOverdue();
       }));
 
@@ -1629,39 +1985,8 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
         if (inp.value.trim()) { inp.value = ""; add(inp.value); inp.focus(); }
       });
 
-      // панель комментариев
-    root.querySelectorAll("[data-cmact]").forEach((b) => b.addEventListener("click", async (e) => {
-      e.stopPropagation();
-      const li = b.closest(".sm-task-wrap");
-      const t = [...today, ...overdue, ...upcoming].find((x) => x.id === li?.dataset.id);
-      if (!t) return;
-      const act = b.dataset.cmact;
-      if (act === "file") li.querySelector(".sm-cm-file")?.click();
-      if (act === "voice") {
-        try {
-          const res = await SixMinVoice.capture();
-          if (res?.blob) pendingAtt.push({ blob: res.blob, name: "audio-" + new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }).replace(":", "_") + ".wav", kind: "voice", type: "audio/wav" });
-          render();
-        } catch (err) { SixMin.toast("Запись не удалась: " + (err.message || err)); }
-      }
-      if (act === "send") sendComment(t);
-    }));
-    root.querySelectorAll(".sm-cm-file").forEach((inp) => inp.addEventListener("change", () => {
-      const f = inp.files?.[0];
-      if (!f) return;
-      const kind = f.type.startsWith("image/") ? "image" : f.type.startsWith("audio/") ? "voice" : "doc";
-      pendingAtt.push({ blob: f, name: f.name, kind, type: f.type });
-      render();
-    }));
-    root.querySelectorAll("[data-pendel]").forEach((b) => b.addEventListener("click", (e) => {
-      e.stopPropagation();
-      pendingAtt.splice(Number(b.dataset.pendel), 1);
-      render();
-    }));
-    root.querySelectorAll("[data-att]").forEach((b) => b.addEventListener("click", (e) => {
-      e.stopPropagation();
-      openAtt(b);
-    }));
+      // комментарии и вложения (общий компонент v0.6)
+      CM.wire(root);
 
     // свайп влево = перенести на завтра
       root.querySelectorAll(".sm-task-wrap").forEach((li) => {
@@ -2221,6 +2546,17 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
   const code6 = () => Math.random().toString(36).slice(2, 8).toUpperCase();
   const esc = SixMin.esc;
 
+  // 💬 комментарии и вложения общих задач (v0.6) — тот же компонент, что в личных задачах.
+  // Файлы круга лежат в общей папке circles/<circle_id>/<user_id>/..., поэтому их
+  // видят, слушают и скачивают все участники.
+  const CM = SixMinComments.create({
+    render: () => render(),
+    scope: () => ({ circle_id: sel }),
+    authorName: (u) => nameOf(u),
+    findTask: (id) => [...(D?.tasks || []), ...(D?.bounties || [])].find((x) => x.id === id),
+    canDelete: () => circles.find((c) => c.id === sel)?.owner_id === D?.uid,
+  });
+
   async function loadCircles() {
     const uid = await SixMin.uid();
     const { data: ms } = await SixMin.sb().from("circle_members")
@@ -2263,6 +2599,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       rewards: rw.data || [], ledger: lg.data || [], bounties: bn.data || [],
     };
     for (const l of todayLogs.data || []) (D.todayBy[l.circle_habit_id] = D.todayBy[l.circle_habit_id] || []).push(l.user_id);
+    await CM.loadCounts([...D.tasks, ...D.bounties].map((x) => x.id));
   }
 
   const nameOf = (uidShort) => {
@@ -2433,7 +2770,8 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       return '<li class="sm-task-wrap"><div class="sm-task"><div class="sm-task-main">' +
         '<span class="sm-cr-bounty">🎁' + t.bounty_points + '</span>' +
         '<span class="sm-task-title">' + SixMin.esc(t.title) + '<em class="sm-cr-by"> · ' + status + '</em></span></div>' +
-        '<div class="sm-task-actions">' + acts + '</div></div></li>';
+        '<div class="sm-task-actions">' + CM.buttonHTML(t, "Обсуждение баунти") + acts + '</div></div>' +
+        CM.panelHTML(t) + '</li>';
     };
     return '<div class="sm-cr-sec">🎁 Бонусы круга · ' + cur() + ' ' + INFO_BTN("bonuses") + '</div>' +
       '<div class="sm-cr-bal"><div class="sm-cr-bal-me">Мой баланс: <b>' + balOf(D.uid) + '</b> ' + cur() + '</div>' +
@@ -2523,7 +2861,18 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       "<p><b>Как позвать близких:</b> нажмите «код: XXXXXX ⧉» — код скопируется, пришлите его. " +
       "Человек открывает приложение, создаёт аккаунт (Настройки → Облако → Создать аккаунт), входит, " +
       "открывает «Круги», вставляет код в поле «Код приглашения другого круга» и жмёт «Войти».</p>" +
+      "<p><b>💬 Переписка:</b> у общих задач и баунти есть комментарии с фото, документами и голосовыми — " +
+      "файлы видны всем участникам круга, их можно просмотреть, прослушать и скачать.</p>" +
       "<p>👑 — владелец круга: одобряет баунти и управляет наградами. Кругов может быть несколько — переключение чипами сверху.</p>"));
+    root.querySelector('[data-info="shared"]')?.addEventListener("click", () => SixMin.info("Задачи «на всех» и переписка",
+      "<p>Общая задача видна всем участникам круга: кто создал — подписано именем. " +
+      "Квадратик слева — выполнить (отметка общая для всех), «×» — удалить.</p>" +
+      "<p><b>💬 у каждой задачи</b> — обсуждение круга: текст, 📎 фото и документы, 🎙 голосовые. " +
+      "Файл открывается тапом: фото — просмотр и «Скачать», голосовое — плеер, документ — скачивание. " +
+      "Вложения круга хранятся в общей папке, поэтому их видят и могут скачать все участники.</p>" +
+      "<p>Переписка обновляется сама каждые 20 секунд, кнопка ⟳ — обновить сейчас. " +
+      "Свой комментарий можно удалить (×), владелец круга 👑 может убрать любой.</p>" +
+      "<p>💬 есть и у баунти 🎁 — там удобно присылать фото результата до одобрения.</p>"));
     root.querySelector('[data-info="bonuses"]')?.addEventListener("click", () => SixMin.info("Бонусы круга",
       "<p>Бонусы — книга учёта заслуг внутри круга. Деньги и подарки происходят в реальной жизни, " +
       "приложение лишь честно записывает баллы.</p>" +
@@ -2588,9 +2937,12 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
           ${t.due_date !== D.today ? `<span class="sm-task-overdue-badge">${t.due_date.slice(8)}.${t.due_date.slice(5, 7)}</span>` : ""}
         </div>
         <div class="sm-task-actions">
+          ${CM.buttonHTML(t)}
           <button class="sm-task-btn sm-task-del" data-sdel="${t.id}">×</button>
         </div>
-      </div></li>`).join("");
+      </div>
+      ${CM.panelHTML(t)}
+      </li>`).join("");
 
     root.innerHTML = `
       <div class="sm-circles">
@@ -2617,7 +2969,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
           <button class="sm-add-btn" type="submit">+</button>
         </form>
 
-        <div class="sm-cr-sec">👥 Задачи «на всех»</div>
+        <div class="sm-cr-sec">👥 Задачи «на всех» ${INFO_BTN("shared")}</div>
         <ul class="sm-task-list">${tasks || '<li class="sm-tasks-empty">Общих задач нет — добавьте первую.</li>'}</ul>
         <div class="sm-kind-row">
           <button type="button" class="sm-kind-chip${newKind === "high" ? " on" : ""}" data-ck="high">⚡ Приоритетные</button>
@@ -2647,7 +2999,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
         () => SixMin.toast("Код: " + c));
     });
     root.querySelectorAll("[data-csel]").forEach((b) =>
-      b.addEventListener("click", () => { sel = b.dataset.csel; refresh(); }));
+      b.addEventListener("click", () => { sel = b.dataset.csel; CM.reset(); refresh(); }));
     root.querySelectorAll(".sm-focus-title[data-gidx]").forEach((t) =>
       t.addEventListener("input", () => saveGoal(Number(t.dataset.gidx), { title: t.value })));
     root.querySelectorAll("[data-gdone]").forEach((b) =>
@@ -2722,6 +3074,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       await SixMin.sb().from("circle_rewards").insert({ circle_id: sel, title, cost_points: cost });
       await refresh();
     });
+    CM.wire(root);
     root.querySelector(".sm-cr-join-more")?.addEventListener("submit", (e) => {
       e.preventDefault();
       const inp = e.target.querySelector("input");
