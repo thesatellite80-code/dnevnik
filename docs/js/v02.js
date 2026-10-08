@@ -38,6 +38,7 @@
 
 
 
+
 window.__v02stage = "v02-start";
 
 // app/js/sixmin-common.js — общие утилиты для модулей v0.2
@@ -2473,7 +2474,10 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       <div class="sm-circles">
         <div class="sm-cr-top">
           <div class="sm-cr-head">🤝 ${esc(circle?.name || "")}</div>
-          <button class="sm-cr-code" title="Скопировать код приглашения">код: <b>${esc(circle?.invite_code || "")}</b> ⧉</button>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <button class="sm-cr-code" title="Скопировать код приглашения">код: <b>${esc(circle?.invite_code || "")}</b> ⧉</button>
+            <button class="sm-cr-new" title="Создать ещё один круг">+ Круг</button>
+          </div>
         </div>
         <div class="sm-cr-members">
           ${D.members.map((m) => `<span class="sm-cr-member${m.user_id === D.uid ? " me" : ""}" title="${esc(m.profiles?.email || "")}">${esc(nameOf(m.user_id))}${m.role === "owner" ? " 👑" : ""}</span>`).join("")}
@@ -2509,6 +2513,10 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       </div>`;
 
     // события
+    root.querySelector(".sm-cr-new")?.addEventListener("click", () => {
+      const n = prompt("Название нового круга (Семья, Коллеги, Команда, Клуб…):");
+      if (n && n.trim()) createCircle(n);
+    });
     root.querySelector(".sm-cr-code")?.addEventListener("click", () => {
       const c = circle?.invite_code || "";
       (navigator.clipboard?.writeText(c) || Promise.reject()).then(
@@ -2577,6 +2585,8 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       .sm-cr-head{font-weight:800;font-size:16px}
       .sm-cr-code{border:1px solid rgba(127,111,240,.4);background:#7c6cf01a;color:#7c6cf0;border-radius:999px;
                   padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer}
+      .sm-cr-new{border:1px solid rgba(48,164,108,.5);background:#30a46c1a;color:#30a46c;border-radius:999px;
+                 padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer}
       .sm-cr-members{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
       .sm-cr-member{font-size:12px;border:1px solid rgba(128,128,128,.25);border-radius:999px;padding:4px 10px;opacity:.8}
       .sm-cr-member.me{border-color:#7c6cf0;color:#7c6cf0;font-weight:700}
