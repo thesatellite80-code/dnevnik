@@ -13,35 +13,6 @@
   });
 })();
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 window.__v02stage = "v02-start";
 
 // app/js/sixmin-common.js — общие утилиты для модулей v0.2
@@ -207,7 +178,6 @@ window.SixMin = window.SixMin || {};
     el._t = setTimeout(() => { el.style.opacity = "0"; }, 2600);
   };
 })();
-
 window.__v02stage = "after-sixmin-common"; if (window.__v02say) window.__v02say("v02 stage: after-sixmin-common");
 
 // app/js/sixmin-voice.js — v0.2 FIX: модуль диктовки
@@ -690,7 +660,6 @@ window.__v02stage = "after-sixmin-common"; if (window.__v02say) window.__v02say(
 
   window.SixMinVoice = { mount, start, stop, capture, checkRecovery };
 })();
-
 window.__v02stage = "after-sixmin-voice"; if (window.__v02say) window.__v02say("v02 stage: after-sixmin-voice");
 
 // app/js/sixmin-voicelist.js — v0.2: «Мои записи» — прослушивание голосовых из voice_notes
@@ -789,6 +758,23 @@ window.__v02stage = "after-sixmin-voice"; if (window.__v02say) window.__v02say("
   function mount(container) {
     root = typeof container === "string" ? document.querySelector(container) : container;
     injectStyles();
+    // кнопка [i] в заголовок карточки «🎧 Голосовые записи»
+    const card = root.closest("article") || root.parentElement;
+    const h = card && card.querySelector("h3");
+    if (h && !h.querySelector('[data-info="voicelist"]')) {
+      const b = document.createElement("button");
+      b.className = "sm-ib";
+      b.dataset.info = "voicelist";
+      b.setAttribute("aria-label", "Как это работает");
+      b.textContent = "i";
+      b.style.cssText = "margin-left:8px;vertical-align:middle";
+      h.appendChild(b);
+      b.addEventListener("click", () => SixMin.info("Голосовые записи",
+        "<p>Здесь хранятся аудиоверсии ваших диктовок: «Сегодня → Быстрая диктовка» пишёт голос, " +
+        "запись сохраняется в облако и появляется в этом списке.</p>" +
+        "<p>▶ — прослушать запись, × — удалить из облака безвозвратно.</p>" +
+        "<p>Записи приватны: доступны только вашему аккаунту.</p>"));
+    }
     refresh();
   }
 
@@ -815,7 +801,6 @@ window.__v02stage = "after-sixmin-voice"; if (window.__v02say) window.__v02say("
 
   window.SixMinVoiceList = { mount, refresh };
 })();
-
 window.__v02stage = "after-sixmin-voicelist"; if (window.__v02say) window.__v02say("v02 stage: after-sixmin-voicelist");
 
 // app/js/sixmin-habits.js — v0.2: Трекер привычек (сетка 5 × 7, ○/●, % выполнения)
@@ -1028,7 +1013,6 @@ window.__v02stage = "after-sixmin-voicelist"; if (window.__v02say) window.__v02s
 
   window.SixMinHabits = { mount, refresh };
 })();
-
 window.__v02stage = "after-sixmin-habits"; if (window.__v02say) window.__v02say("v02 stage: after-sixmin-habits");
 
 // app/js/sixmin-focus.js — v0.2: Фокус дня / недели / месяца
@@ -1280,7 +1264,6 @@ window.__v02stage = "after-sixmin-habits"; if (window.__v02say) window.__v02say(
 
   window.SixMinFocus = { mount, refresh };
 })();
-
 window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("v02 stage: after-sixmin-focus");
 
 // app/js/sixmin-tasks.js — v0.2.1: To-Do с переносом, ДВЕ области: личная и рабочая
@@ -1784,7 +1767,6 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
     mount: (container, opts) => createInstance(opts).mount(container),
   };
 })();
-
 window.__v02stage = "after-sixmin-tasks"; if (window.__v02say) window.__v02say("v02 stage: after-sixmin-tasks");
 
 // app/js/sixmin-analytics.js — v0.2: Инфографика и сводки
@@ -2018,7 +2000,6 @@ window.__v02stage = "after-sixmin-tasks"; if (window.__v02say) window.__v02say("
 
   window.SixMinAnalytics = { mount, refresh: render };
 })();
-
 window.__v02stage = "after-sixmin-analytics"; if (window.__v02say) window.__v02say("v02 stage: after-sixmin-analytics");
 
 // app/js/sixmin-theory.js — v0.2: Теория, мотивация и цитаты
@@ -2222,7 +2203,6 @@ window.__v02stage = "after-sixmin-analytics"; if (window.__v02say) window.__v02s
 
   window.SixMinTheory = { mountCards, randomQuote, getRandomQuote, showSuccessQuote, QUOTES, PRINCIPLES };
 })();
-
 window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say("v02 stage: after-sixmin-theory");
 
 // app/js/sixmin-circles.js — v0.4: КРУГИ (семья, друзья, фокус-группы)
@@ -2328,6 +2308,17 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     Object.assign(g, patch);
   }, 700);
 
+  // подзадачи общих целей: текст редактируется инпутом (как в Фокусе), сохранение с дебаунсом
+  const saveSubs = SixMin.debounce(async (g, subs) => {
+    if (!g?.id) return;
+    await SixMin.sb().from("circle_goals").update({ subtasks: subs }).eq("id", g.id);
+  }, 500);
+
+  function focusLastSub(i) {
+    const inputs = root.querySelectorAll(`.sm-sub-input[data-gsubin^="${i}:"]`);
+    inputs[inputs.length - 1]?.focus();
+  }
+
   async function toggleSub(g, si) {
     const subs = Array.isArray(g.subtasks) ? g.subtasks.map((x) => ({ ...x })) : [];
     if (!subs[si]) return;
@@ -2335,6 +2326,24 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     g.subtasks = subs;
     render();
     await SixMin.sb().from("circle_goals").update({ subtasks: subs }).eq("id", g.id);
+  }
+
+  async function editSub(g, si, text) {
+    if (!g) return;
+    const subs = Array.isArray(g.subtasks) ? g.subtasks.map((x) => ({ ...x })) : [];
+    if (!subs[si]) subs[si] = { text: "", done: false };
+    subs[si].text = text;
+    g.subtasks = subs;
+    saveSubs(g, subs);
+  }
+
+  async function delSub(g, si) {
+    if (!g) return;
+    const subs = Array.isArray(g.subtasks) ? g.subtasks.map((x) => ({ ...x })) : [];
+    subs.splice(si, 1);
+    g.subtasks = subs;
+    render();
+    if (g.id) await SixMin.sb().from("circle_goals").update({ subtasks: subs }).eq("id", g.id);
   }
 
   async function addSub(g) {
@@ -2347,11 +2356,12 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
         circle_id: sel, period_type: "month", period_key: mk, goal_index: g.goal_index,
         title: g.title || "", subtasks: subs,
       }).select().maybeSingle();
-      if (data) { D.goals = D.goals.map((x) => x.goal_index === g.goal_index ? data : x); render(); return; }
+      if (data) { D.goals = D.goals.map((x) => x.goal_index === g.goal_index ? data : x); render(); focusLastSub(g.goal_index); return; }
     } else {
       await SixMin.sb().from("circle_goals").update({ subtasks: subs }).eq("id", g.id);
     }
     render();
+    focusLastSub(g.goal_index);
   }
 
   async function toggleHabit(h) {
@@ -2404,7 +2414,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     const balOf = (u) => (D.ledger || []).filter((l) => l.user_id === u).reduce((s2, l) => s2 + l.delta, 0);
     const isOwner = c.owner_id === D.uid;
     if (!c.bonuses_enabled) {
-      return isOwner ? '<div class="sm-cr-sec">🎁 Бонусы</div>' +
+      return isOwner ? '<div class="sm-cr-sec">🎁 Бонусы ' + INFO_BTN("bonuses") + '</div>' +
         '<button class="sm-cr-new" data-bact="enable">Включить бонусную систему круга</button>' : "";
     }
     const live = (D.bounties || []).filter((t) => ["open", "claimed", "done"].includes(t.bounty_status));
@@ -2425,7 +2435,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
         '<span class="sm-task-title">' + SixMin.esc(t.title) + '<em class="sm-cr-by"> · ' + status + '</em></span></div>' +
         '<div class="sm-task-actions">' + acts + '</div></div></li>';
     };
-    return '<div class="sm-cr-sec">🎁 Бонусы круга · ' + cur() + '</div>' +
+    return '<div class="sm-cr-sec">🎁 Бонусы круга · ' + cur() + ' ' + INFO_BTN("bonuses") + '</div>' +
       '<div class="sm-cr-bal"><div class="sm-cr-bal-me">Мой баланс: <b>' + balOf(D.uid) + '</b> ' + cur() + '</div>' +
       '<div class="sm-cr-board">' + board.map((x, i) =>
         '<span class="sm-cr-member' + (x.u === D.uid ? " me" : "") + '">' + (i + 1) + '. ' + SixMin.esc(nameOf(x.u)) + ' · ' + x.b + '</span>').join("") + '</div></div>' +
@@ -2493,7 +2503,8 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
           ${subs.map((s, si) => `
             <div class="sm-sub-row${s.done ? " sm-sub-done" : ""}">
               <button class="sm-sub-check" data-gsub="${i}:${si}">${s.done ? "☑" : "☐"}</button>
-              <span class="sm-sub-text">${esc(s.text)}</span>
+              <input class="sm-sub-input" data-gsubin="${i}:${si}" value="${esc(s.text)}" maxlength="80" placeholder="Подзадача…">
+              <button class="sm-sub-del" data-gsubdel="${i}:${si}" aria-label="Удалить подзадачу">×</button>
             </div>`).join("")}
           <button class="sm-sub-add" data-gadd="${i}">+ подзадача</button>
         </div>
@@ -2502,12 +2513,32 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
 
   const monthLabel = () => new Date().toLocaleDateString("ru-RU", { month: "long", year: "numeric" });
 
+  const INFO_BTN = (key) => `<button class="sm-ib" data-info="${key}" aria-label="Как это работает">i</button>`;
+
+  function wireInfo() {
+    root.querySelector('[data-info="circles"]')?.addEventListener("click", () => SixMin.info("Круги",
+      "<p><b>Круг</b> — общее пространство семьи или команды: общие цели месяца с подзадачами, " +
+      "общие привычки (видно, кто сегодня отметил) и задачи «на всех».</p>" +
+      "<p><b>Личное остаётся личным:</b> участники не видят чужие дневники, привычки и задачи — только общее поле круга.</p>" +
+      "<p><b>Как позвать близких:</b> нажмите «код: XXXXXX ⧉» — код скопируется, пришлите его. " +
+      "Человек открывает приложение, создаёт аккаунт (Настройки → Облако → Создать аккаунт), входит, " +
+      "открывает «Круги», вставляет код в поле «Код приглашения другого круга» и жмёт «Войти».</p>" +
+      "<p>👑 — владелец круга: одобряет баунти и управляет наградами. Кругов может быть несколько — переключение чипами сверху.</p>"));
+    root.querySelector('[data-info="bonuses"]')?.addEventListener("click", () => SixMin.info("Бонусы круга",
+      "<p>Бонусы — книга учёта заслуг внутри круга. Деньги и подарки происходят в реальной жизни, " +
+      "приложение лишь честно записывает баллы.</p>" +
+      "<p><b>Баунти:</b> владелец публикует задачу с наградой («🎁 50»). Участник жмёт «Взять» → делает → «Готово ✅» → " +
+      "владелец «Одобрить» — баллы начислены. «↩» возвращает на доработку.</p>" +
+      "<p><b>Витрина наград:</b> баллы можно списать на награду (кино-вечер, пицца). Все начисления и списания видны в «Моей выписке».</p>" +
+      "<p>Баланс и лидерборд считаются по всем операциям круга.</p>"));
+  }
+
   function render() {
     if (!root) return;
     if (!circles.length) {
       root.innerHTML = `
         <div class="sm-circles">
-          <div class="sm-cr-head">🤝 Круги</div>
+          <div class="sm-cr-head">🤝 Круги ${INFO_BTN("circles")}</div>
           <p class="sm-cr-note">Семья, друзья или фокус-группа: общие цели, общие привычки
              и задачи «на всех». Личные дневники участников остаются приватными.</p>
           <form class="sm-cr-create">
@@ -2529,6 +2560,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
         const inp = root.querySelector(".sm-cr-join input");
         if (inp.value.trim()) joinCircle(inp.value);
       });
+      wireInfo();
       return;
     }
 
@@ -2563,7 +2595,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     root.innerHTML = `
       <div class="sm-circles">
         <div class="sm-cr-top">
-          <div class="sm-cr-head">🤝 ${esc(circle?.name || "")}</div>
+          <div class="sm-cr-head">🤝 ${esc(circle?.name || "")} ${INFO_BTN("circles")}</div>
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
             <button class="sm-cr-code" title="Скопировать код приглашения">код: <b>${esc(circle?.invite_code || "")}</b> ⧉</button>
             <button class="sm-cr-new" title="Создать ещё один круг">+ Круг</button>
@@ -2631,6 +2663,16 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
         const [i, si] = b.dataset.gsub.split(":").map(Number);
         toggleSub(D.goals.find((x) => x.goal_index === i), si);
       }));
+    root.querySelectorAll(".sm-sub-input[data-gsubin]").forEach((inp) =>
+      inp.addEventListener("input", () => {
+        const [i, si] = inp.dataset.gsubin.split(":").map(Number);
+        editSub(D.goals.find((x) => x.goal_index === i), si, inp.value);
+      }));
+    root.querySelectorAll("[data-gsubdel]").forEach((b) =>
+      b.addEventListener("click", () => {
+        const [i, si] = b.dataset.gsubdel.split(":").map(Number);
+        delSub(D.goals.find((x) => x.goal_index === i), si);
+      }));
     root.querySelectorAll("[data-gadd]").forEach((b) =>
       b.addEventListener("click", () => addSub(D.goals.find((x) => x.goal_index === Number(b.dataset.gadd)) || { goal_index: Number(b.dataset.gadd), title: "" })));
     root.querySelectorAll("[data-hab]").forEach((b) =>
@@ -2685,6 +2727,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       const inp = e.target.querySelector("input");
       if (inp.value.trim()) joinCircle(inp.value);
     });
+    wireInfo();
   }
 
   async function refresh() { await loadCircles(); await loadData(); render(); }
@@ -2751,13 +2794,18 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
         #tabbar button{font-size:10px;padding:8px 2px;gap:2px;min-width:0}
         #tabbar button span{font-size:18px}
       }
-      .sm-cr-create .sm-add-btn,.sm-cr-hadd .sm-add-btn,.sm-cr-tadd .sm-add-btn{width:auto;padding:0 16px;font-size:14px;font-weight:700}`;
+      .sm-cr-create .sm-add-btn,.sm-cr-hadd .sm-add-btn,.sm-cr-tadd .sm-add-btn{width:auto;padding:0 16px;font-size:14px;font-weight:700}
+      .sm-circles .sm-sub-input{flex:1;border:0;background:transparent;color:inherit;font:14px system-ui;outline:none;padding:4px 0;min-width:0}
+      .sm-circles .sm-sub-del{border:0;background:transparent;color:inherit;opacity:.3;cursor:pointer;font-size:15px}
+      .sm-circles .sm-sub-del:hover{opacity:.9;color:#E30613}
+      .sm-circles .sm-sub-done .sm-sub-input{text-decoration:line-through;opacity:.5}
+      .sm-cr-head .sm-ib{vertical-align:middle;margin-left:6px}
+      .sm-cr-sec .sm-ib{width:20px;height:20px;font-size:11px;vertical-align:middle;margin-left:6px}`;
     document.head.appendChild(css);
   }
 
   window.SixMinCircles = { mount, refresh };
 })();
-
 window.__v02stage = "after-sixmin-circles"; if (window.__v02say) window.__v02say("v02 stage: after-sixmin-circles");
 
 // app/js/sixmin-auth.js — v0.4: регистрация самообслуживанием в карточке «Облако»
@@ -2797,8 +2845,8 @@ window.__v02stage = "after-sixmin-circles"; if (window.__v02say) window.__v02say
   setInterval(() => { if (!document.getElementById("sm-signup")) mount(); }, 5000);
   window.SixMinAuth = { mount };
 })();
-
 window.__v02stage = "after-sixmin-auth"; if (window.__v02say) window.__v02say("v02 stage: after-sixmin-auth");
+
 /* ===== v0.2: монтирование модулей + экранная диагностика ===== */
 (function () {
   var t0 = Date.now();
@@ -2904,7 +2952,41 @@ window.__v02stage = "after-sixmin-auth"; if (window.__v02say) window.__v02say("v
     });
     paint();
   }
-  document.addEventListener("DOMContentLoaded", function () { setTimeout(tryMount, 500); setTimeout(themeUI, 600); setInterval(themeUI, 3000); });
+  /* ── [i]-шторки на экранах v0.1 (История, Прогресс, Настройки) ── */
+  function prodInfoButtons() {
+    if (!window.SixMin || !window.SixMin.info) return;
+    var specs = [
+      ["#screen-history", "history", "История",
+        "<p>Календарь за выбранный месяц: каждая клетка — день. <b>Тёмная</b> — заполнены оба блока (утро и вечер), " +
+        "<b>светлая</b> — один, <b>пунктир</b> — день в заморозке, <b>пустая</b> — записей не было.</p>" +
+        "<p>Нажмите на день — откроется запись дня (ответы, благодарности, задачи). ‹ › — листать месяцы. " +
+        "Поиск сверху ищет по всем записям за всё время.</p>"],
+      ["#screen-stats", "stats", "Прогресс",
+        "<p>Верхние карточки: 🔥 текущая серия дней с записями, рекордная серия, число дней с записями за месяц и среднее время записи.</p>" +
+        "<p><b>Настроение и энергия</b> — столбики за 14 дней по ответам утра и вечера. <b>Темы записей</b> — частые темы. " +
+        "<b>Когда вы реально пишете</b> — распределение по часам.</p>" +
+        "<p>Нижний блок «Привычки и активность» — v0.2: heatmap активности, серии и автовыводы.</p>"],
+      ["#screen-settings", "settings", "Настройки",
+        "<p><b>Облако:</b> вход и регистрация (Supabase). Там хранится всё: записи, привычки, задачи, круги. " +
+        "«Синхронизировать» — подтянуть то, что вы надиктовали боту в Telegram.</p>" +
+        "<p><b>Напоминания:</b> время утра/вечера в будни и выходные, повторный сигнал, тихие часы, отпуск.</p>" +
+        "<p><b>Тема:</b> авто/день/ночь. «Выйти» — выход из аккаунта на этом устройстве.</p>"]
+    ];
+    specs.forEach(function (s) {
+      var head = document.querySelector(s[0] + " .head") || document.querySelector(s[0] + " header");
+      if (!head || head.querySelector('[data-info="' + s[1] + '"]')) return;
+      var b = document.createElement("button");
+      b.className = "sm-ib";
+      b.setAttribute("data-info", s[1]);
+      b.setAttribute("aria-label", "Как это работает");
+      b.textContent = "i";
+      b.style.cssText = "margin-left:8px;vertical-align:middle";
+      var t = head.querySelector(".page-title");
+      if (t) t.appendChild(b); else head.appendChild(b);
+      b.addEventListener("click", function () { window.SixMin.info(s[2], s[3]); });
+    });
+  }
+  document.addEventListener("DOMContentLoaded", function () { setTimeout(tryMount, 500); setTimeout(themeUI, 600); setInterval(themeUI, 3000); setTimeout(prodInfoButtons, 700); setInterval(prodInfoButtons, 4000); });
   setInterval(tryMount, 3000);
   document.addEventListener("click", function (e) {
     var b = e.target && e.target.closest && e.target.closest('[data-tab="tracker"]');
