@@ -39,6 +39,7 @@
 
 
 
+
 window.__v02stage = "v02-start";
 
 // app/js/sixmin-common.js — общие утилиты для модулей v0.2
@@ -2256,7 +2257,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     const week = SixMin.weekKeys(0);
     const mk = SixMin.monthKey();
     const sb = SixMin.sb();
-    const [g, h, myLogs, todayLogs, t, m] = await Promise.all([
+    const [g, h, myLogs, todayLogs, t, m, rw, lg, bn] = await Promise.all([
       sb.from("circle_goals").select("*").eq("circle_id", sel)
         .eq("period_type", "month").eq("period_key", mk).order("goal_index"),
       sb.from("circle_habits").select("*").eq("circle_id", sel)
@@ -2264,14 +2265,20 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       sb.from("circle_habit_logs").select("*").eq("user_id", uid).in("day", week),
       sb.from("circle_habit_logs").select("circle_habit_id, user_id").eq("day", today),
       sb.from("tasks").select("*").eq("circle_id", sel).neq("completed", true)
+        .is("bounty_points", null)
         .order("due_date", { ascending: true }).limit(100),
       sb.from("circle_members").select("user_id, role, profiles(display_name, email)").eq("circle_id", sel),
+      sb.from("circle_rewards").select("*").eq("circle_id", sel).eq("active", true).order("cost_points"),
+      sb.from("bonus_ledger").select("*").eq("circle_id", sel).order("created_at", { ascending: false }).limit(500),
+      sb.from("tasks").select("*").eq("circle_id", sel).not("bounty_points", "is", null)
+        .order("created_at", { ascending: false }).limit(100),
     ]);
     D = {
       uid, today,
       goals: g.data || [], habits: h.data || [],
       myLogs: Object.fromEntries((myLogs.data || []).map((l) => [l.circle_habit_id + "|" + l.day, l.completed])),
       todayBy: {}, tasks: t.data || [], members: m.data || [],
+      rewards: rw.data || [], ledger: lg.data || [], bounties: bn.data || [],
     };
     for (const l of todayLogs.data || []) (D.todayBy[l.circle_habit_id] = D.todayBy[l.circle_habit_id] || []).push(l.user_id);
   }
@@ -2385,6 +2392,87 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     D.tasks = D.tasks.filter((x) => x.id !== t.id);
     render();
     await SixMin.sb().from("tasks").delete().eq("id", t.id);
+  }
+
+  // ---------- бонусы круга ----------
+  function bonusesHTML() {
+    const c = circles.find((x) => x.id === sel);
+    if (!c || !D) return "";
+    const cur = () => SixMin.esc(c.bonus_currency || "баллы");
+    const balOf = (u) => (D.ledger || []).filter((l) => l.user_id === u).reduce((s2, l) => s2 + l.delta, 0);
+    const isOwner = c.owner_id === D.uid;
+    if (!c.bonuses_enabled) {
+      return isOwner ? '<div class="sm-cr-sec">🎁 Бонусы</div>' +
+        '<button class="sm-cr-new" data-bact="enable">Включить бонусную систему круга</button>' : "";
+    }
+    const live = (D.bounties || []).filter((t) => ["open", "claimed", "done"].includes(t.bounty_status));
+    const board = (D.members || []).map((m) => ({ u: m.user_id, b: balOf(m.user_id) })).sort((a, b) => b.b - a.b);
+    const myLedger = (D.ledger || []).filter((l) => l.user_id === D.uid).slice(0, 8);
+    const btn = (act, id, label, cls) =>
+      '<button class="sm-task-btn ' + (cls || "sm-task-postpone") + '" data-bact="' + act + '" data-id="' + id + '">' + label + '</button>';
+    const row = (t) => {
+      const who = t.assignee_id ? SixMin.esc(nameOf(t.assignee_id)) : null;
+      let acts = "";
+      if (t.bounty_status === "open") acts = btn("claim", t.id, "Взять") + (isOwner ? btn("cancel", t.id, "×", "sm-task-del") : "");
+      if (t.bounty_status === "claimed" && t.assignee_id === D.uid) acts = btn("done", t.id, "Готово ✅");
+      if (t.bounty_status === "done" && isOwner) acts = btn("approve", t.id, "Одобрить +" + t.bounty_points) + btn("reject", t.id, "↩");
+      const status = t.bounty_status === "open" ? (who ? "делегировано: " + who : "ждёт героя")
+        : t.bounty_status === "claimed" ? "в работе: " + who : "ждёт одобрения: " + who;
+      return '<li class="sm-task-wrap"><div class="sm-task"><div class="sm-task-main">' +
+        '<span class="sm-cr-bounty">🎁' + t.bounty_points + '</span>' +
+        '<span class="sm-task-title">' + SixMin.esc(t.title) + '<em class="sm-cr-by"> · ' + status + '</em></span></div>' +
+        '<div class="sm-task-actions">' + acts + '</div></div></li>';
+    };
+    return '<div class="sm-cr-sec">🎁 Бонусы круга · ' + cur() + '</div>' +
+      '<div class="sm-cr-bal"><div class="sm-cr-bal-me">Мой баланс: <b>' + balOf(D.uid) + '</b> ' + cur() + '</div>' +
+      '<div class="sm-cr-board">' + board.map((x, i) =>
+        '<span class="sm-cr-member' + (x.u === D.uid ? " me" : "") + '">' + (i + 1) + '. ' + SixMin.esc(nameOf(x.u)) + ' · ' + x.b + '</span>').join("") + '</div></div>' +
+      (isOwner ? '<form class="sm-cr-badd" data-role="bounty">' +
+        '<input class="sm-cr-input" name="t" placeholder="Баунти: задача за награду" maxlength="120">' +
+        '<input class="sm-cr-input sm-cr-num" name="p" type="number" min="1" max="999" value="10" title="Награда">' +
+        '<select class="sm-cr-input sm-cr-sel" name="w"><option value="">кто возьмёт</option>' +
+        D.members.filter((m) => m.user_id !== D.uid).map((m) => '<option value="' + m.user_id + '">' + SixMin.esc(nameOf(m.user_id)) + '</option>').join("") +
+        '</select><button class="sm-add-btn" type="submit">+</button></form>' : '') +
+      '<ul class="sm-task-list">' + (live.map(row).join("") || '<li class="sm-tasks-empty">Баунти пока нет — создайте первое.</li>') + '</ul>' +
+      '<div class="sm-cr-sec">Витрина наград</div>' +
+      '<div class="sm-cr-shop">' + ((D.rewards || []).map((r) =>
+        '<span class="sm-cm-chip">' + SixMin.esc(r.title) + ' · ' + r.cost_points + ' ' + cur() + ' ' +
+        (isOwner ? '<b data-bact="delreward" data-id="' + r.id + '">×</b>'
+                 : '<b data-bact="spend" data-id="' + r.id + '">списать</b>') + '</span>').join("") || '<p class="sm-cr-note">Витрина пуста.</p>') + '</div>' +
+      (isOwner ? '<form class="sm-cr-badd" data-role="reward">' +
+        '<input class="sm-cr-input" name="t" placeholder="Награда: кино-вечер, пицца…" maxlength="80">' +
+        '<input class="sm-cr-input sm-cr-num" name="p" type="number" min="1" max="9999" value="20" title="Цена">' +
+        '<button class="sm-add-btn" type="submit">+</button></form>' : '') +
+      '<div class="sm-cr-sec">Моя выписка</div>' +
+      '<div class="sm-cr-ledger">' + (myLedger.map((l) =>
+        '<div class="sm-cr-led-row"><span>' + new Date(l.created_at).toLocaleDateString("ru-RU", { day: "numeric", month: "short" }) +
+        ' · ' + SixMin.esc(l.reason) + '</span><b class="' + (l.delta >= 0 ? "plus" : "minus") + '">' + (l.delta >= 0 ? "+" : "") + l.delta + '</b></div>').join("")
+        || '<p class="sm-cr-note">Операций пока нет.</p>') + '</div>';
+  }
+
+  async function bountyAct(act, id) {
+    const t = (D.bounties || []).find((x) => x.id === id);
+    if (!t) return;
+    const sb = SixMin.sb();
+    if (act === "claim") await sb.from("tasks").update({ assignee_id: D.uid, bounty_status: "claimed" }).eq("id", id);
+    if (act === "done") await sb.from("tasks").update({ bounty_status: "done" }).eq("id", id);
+    if (act === "reject") { await sb.from("tasks").update({ bounty_status: "claimed" }).eq("id", id); SixMin.toast("Возвращено в работу с комментарием… (отклонено)"); }
+    if (act === "cancel") await sb.from("tasks").delete().eq("id", id);
+    if (act === "approve") {
+      await sb.from("tasks").update({ bounty_status: "approved", completed: true, completed_at: new Date().toISOString() }).eq("id", id);
+      await sb.from("bonus_ledger").insert({ circle_id: sel, user_id: t.assignee_id, delta: t.bounty_points, reason: "баунти: " + t.title, task_id: id });
+      SixMin.toast("Одобрено: +" + t.bounty_points + " " + (circles.find((c) => c.id === sel)?.bonus_currency || "баллов") + " → " + nameOf(t.assignee_id));
+    }
+    await refresh();
+  }
+
+  async function spendReward(r) {
+    const c = circles.find((x) => x.id === sel);
+    const bal = (D.ledger || []).filter((l) => l.user_id === D.uid).reduce((s2, l) => s2 + l.delta, 0);
+    if (bal < r.cost_points) { SixMin.toast("Не хватает " + (r.cost_points - bal) + " " + (c?.bonus_currency || "баллов")); return; }
+    await SixMin.sb().from("bonus_ledger").insert({ circle_id: sel, user_id: D.uid, delta: -r.cost_points, reason: "награда: " + r.title, reward_id: r.id });
+    SixMin.toast("Списано " + r.cost_points + " — наслаждайтесь 🎉");
+    await refresh();
   }
 
   // ---------- рендер ----------
@@ -2506,6 +2594,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
           <button class="sm-add-btn" type="submit">+</button>
         </form>
 
+        ${bonusesHTML()}
         <form class="sm-cr-join sm-cr-join-more">
           <input class="sm-cr-input" placeholder="Код приглашения другого круга" maxlength="6">
           <button class="sm-cr-join-btn" type="submit">Войти</button>
@@ -2560,6 +2649,35 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       b.addEventListener("click", () => toggleShared(D.tasks.find((t) => t.id === b.dataset.st))));
     root.querySelectorAll("[data-sdel]").forEach((b) =>
       b.addEventListener("click", () => delShared(D.tasks.find((t) => t.id === b.dataset.sdel))));
+    root.querySelectorAll("[data-bact]").forEach((b) => b.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const act = b.dataset.bact, id = b.dataset.id;
+      if (act === "enable") {
+        await SixMin.sb().from("circles").update({ bonuses_enabled: true }).eq("id", sel);
+        SixMin.toast("Бонусы включены! Создайте первое баунти 🎁");
+        await refresh(); return;
+      }
+      if (act === "spend") { const r = (D.rewards || []).find((x) => x.id === id); if (r) await spendReward(r); return; }
+      if (act === "delreward") { await SixMin.sb().from("circle_rewards").update({ active: false }).eq("id", id); await refresh(); return; }
+      await bountyAct(act, id);
+    }));
+    root.querySelector('form[data-role="bounty"]')?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const f = e.target, title = f.t.value.trim(), pts = parseInt(f.p.value, 10) || 10, who = f.w.value || null;
+      if (!title) return;
+      await SixMin.sb().from("tasks").insert({
+        user_id: D.uid, title, due_date: D.today, area: "personal", kind: "high",
+        circle_id: sel, bounty_points: pts, assignee_id: who, bounty_status: who ? "claimed" : "open",
+      });
+      await refresh();
+    });
+    root.querySelector('form[data-role="reward"]')?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const f = e.target, title = f.t.value.trim(), cost = parseInt(f.p.value, 10) || 10;
+      if (!title) return;
+      await SixMin.sb().from("circle_rewards").insert({ circle_id: sel, title, cost_points: cost });
+      await refresh();
+    });
     root.querySelector(".sm-cr-join-more")?.addEventListener("submit", (e) => {
       e.preventDefault();
       const inp = e.target.querySelector("input");
@@ -2611,6 +2729,22 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
                          font-size:11px;font-weight:800;display:inline-flex;align-items:center;justify-content:center}
       .sm-cr-habit-who em{font-style:normal;font-size:11px;opacity:.45}
       .sm-cr-by{font-style:normal;font-size:11px;opacity:.55;font-weight:500}
+      .sm-cr-bounty{background:#f5a62322;color:#f5a623;font-weight:800;font-size:12px;border-radius:8px;
+                    padding:3px 7px;flex-shrink:0}
+      .sm-cr-bal{display:flex;flex-direction:column;gap:6px;margin-bottom:10px}
+      .sm-cr-bal-me{font-size:14px;font-weight:700}
+      .sm-cr-bal-me b{color:#f5a623;font-size:17px}
+      .sm-cr-board{display:flex;gap:6px;flex-wrap:wrap}
+      .sm-cr-badd{display:flex;gap:6px;margin:8px 0;flex-wrap:wrap}
+      .sm-cr-num{flex:0 0 64px;text-align:center}
+      .sm-cr-sel{flex:0 0 130px;background:transparent;color:inherit;border:1px solid rgba(128,128,128,.25);
+                 border-radius:12px;padding:10px 8px;font-size:13px}
+      .sm-cr-shop{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+      .sm-cr-shop b{color:#7c6cf0;margin-left:6px;cursor:pointer;font-weight:800}
+      .sm-cr-ledger{display:flex;flex-direction:column;gap:4px}
+      .sm-cr-led-row{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;opacity:.85}
+      .sm-cr-led-row .plus{color:#30a46c;font-weight:800}
+      .sm-cr-led-row .minus{color:#e5484d;font-weight:800}
       .sm-cr-create .sm-add-btn,.sm-cr-hadd .sm-add-btn,.sm-cr-tadd .sm-add-btn{width:auto;padding:0 16px;font-size:14px;font-weight:700}`;
     document.head.appendChild(css);
   }
