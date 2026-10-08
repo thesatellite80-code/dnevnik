@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Шесть минут с собой</title>
+<meta name="description" content="Цифровой дневник на 6 минут в день: утро и вечер, напоминания, серия дней, обзор недели.">
+<meta name="theme-color" content="#F6F1E8">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="6 минут">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<style>
+/* «Шесть минут с собой» — стили, mobile-first, iOS-friendly */
+
+:root{
+  --bg:#F6F1E8;
+  --card:#FFFFFF;
+  --ink:#2A2622;
+  --muted:#8A8078;
+  --line:#E6DED1;
+  --accent:#C97B4A;
+  --accent-soft:#F3E3D6;
+  --ok:#4F8A5B;
+  --danger:#B4503C;
+  --radius:18px;
+  --shadow:0 2px 10px rgba(60,45,30,.06);
+  --tab-h:64px;
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+}
+
+html[data-theme="light"]{--bg:#F6F1E8;--card:#FFFFFF;--ink:#2A2622;--muted:#8A8078;--line:#E6DED1;--accent:#C97B4A;--accent-soft:#F3E3D6;--shadow:0 2px 10px rgba(60,45,30,.06);color-scheme:light}
+html[data-theme="dark"]{--bg:#171512;--card:#211E1A;--ink:#F1EBE1;--muted:#9C928A;--line:#322C26;--accent:#E0975F;--accent-soft:#33291F;--shadow:0 2px 12px rgba(0,0,0,.35);color-scheme:dark}
+
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#171512;
+    --card:#211E1A;
+    --ink:#F1EBE1;
+    --muted:#9C928A;
+    --line:#322C26;
+    --accent:#E0975F;
+    --accent-soft:#33291F;
+    --shadow:0 2px 12px rgba(0,0,0,.35);
+  }
+}
+
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;height:100%}
+body{
+  font-family:var(--font);
+  background:var(--bg);
+  color:var(--ink);
+  font-size:17px;
+  line-height:1.45;
+  overscroll-behavior-y:none;
+  padding-top:env(safe-area-inset-top);
+}
+h1,h2,h3{margin:0;line-height:1.2}
+p{margin:.35em 0}
+code{background:var(--accent-soft);padding:1px 5px;border-radius:5px;font-size:.92em}
+button{font-family:inherit;font-size:inherit}
+input,textarea,select{
+  font-family:inherit;font-size:16px;color:var(--ink);
+  background:var(--bg);border:1px solid var(--line);border-radius:12px;
+  padding:12px 14px;width:100%;
+}
+textarea{resize:vertical;min-height:96px;line-height:1.5}
+input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:transparent}
+.muted{color:var(--muted);font-size:15px}
+.hint-text{color:var(--muted);font-size:13.5px;margin-top:10px}
+
+/* ── экраны ───────────────────────────────── */
+.screen{display:none;min-height:100vh;min-height:100dvh;flex-direction:column}
+.screen.active{display:flex}
+.content{flex:1;overflow-y:auto;padding:14px 16px calc(var(--tab-h) + env(safe-area-inset-bottom) + 24px);
+  -webkit-overflow-scrolling:touch}
+#screen-form .content,#screen-quick .content,#screen-done .content{padding-bottom:110px}
+
+/* ── шапка ───────────────────────────────── */
+.head{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:14px 16px 10px;position:sticky;top:0;z-index:5;
+  background:linear-gradient(var(--bg) 72%,transparent);
+}
+.date{font-size:15px;color:var(--muted);letter-spacing:.02em}
+.streak{font-size:22px;font-weight:650;margin-top:2px}
+.page-title{font-size:22px;font-weight:700}
+.ghost-btn{
+  background:transparent;border:1px solid var(--line);color:var(--ink);
+  border-radius:999px;padding:8px 14px;font-size:15px;cursor:pointer;
+}
+.ghost-btn.small{padding:6px 11px;font-size:13.5px}
+.form-head{justify-content:space-between}
+.form-title{font-weight:650;font-size:17px}
+.timer{font-variant-numeric:tabular-nums;color:var(--muted);font-size:15px;min-width:44px;text-align:right}
+.timer.over{color:var(--danger)}
+
+/* ── карточки ─────────────────────────────── */
+.card{
+  background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  padding:16px;margin-bottom:12px;box-shadow:var(--shadow);
+}
+.card h3{font-size:16px;margin-bottom:6px}
+.slot{display:flex;align-items:center;gap:14px;padding:18px 16px;cursor:pointer;transition:transform .12s}
+.slot:active{transform:scale(.985)}
+.slot.done{opacity:.72}
+.slot-emoji{font-size:30px;line-height:1}
+.slot-body{flex:1}
+.slot-body h2{font-size:19px;font-weight:650}
+.slot-sub{color:var(--muted);font-size:14px;margin-top:3px}
+.slot-action{font-size:22px;color:var(--muted)}
+.slot.done .slot-action{color:var(--ok)}
+.memory-label{font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.memory-text{font-size:16px;font-style:italic;margin-top:6px}
+
+/* ── кнопки ───────────────────────────────── */
+.btn{
+  border:none;border-radius:14px;padding:14px 18px;font-size:16px;font-weight:600;
+  cursor:pointer;transition:transform .1s,opacity .15s;
+}
+.btn:active{transform:scale(.98)}
+.btn.primary{background:var(--accent);color:#fff}
+.btn.secondary{background:var(--accent-soft);color:var(--accent)}
+.btn.ghost{background:transparent;border:1px solid var(--line);color:var(--ink);font-weight:500}
+.btn.danger{background:transparent;border:1px solid var(--danger);color:var(--danger)}
+.btn.wide{width:100%}
+.btn-row{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+.btn-row .btn{flex:1;min-width:130px}
+.link-btn{background:none;border:none;color:var(--accent);font-weight:600;cursor:pointer;font-size:15px}
+
+/* ── нижняя навигация ─────────────────────── */
+.tabbar{
+  position:fixed;left:0;right:0;bottom:0;height:calc(var(--tab-h) + env(safe-area-inset-bottom));
+  padding-bottom:env(safe-area-inset-bottom);
+  display:flex;background:var(--card);border-top:1px solid var(--line);z-index:20;
+}
+.tabbar button{
+  flex:1;background:none;border:none;color:var(--muted);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  font-size:11.5px;cursor:pointer;padding:6px 0;
+}
+.tabbar button span{font-size:20px;line-height:1}
+.tabbar button.active{color:var(--accent);font-weight:600}
+.form-bar{gap:10px;padding:10px 16px calc(10px + env(safe-area-inset-bottom))}
+.form-bar .btn{flex:1}
+.form-bar .btn.primary{flex:1.6}
+
+/* ── форма вопроса ────────────────────────── */
+.progress{height:4px;background:var(--line);border-radius:99px;overflow:hidden;margin-bottom:22px}
+.progress-bar{height:100%;width:0;background:var(--accent);transition:width .25s}
+.q-counter{color:var(--muted);font-size:13.5px;letter-spacing:.05em;text-transform:uppercase}
+.q-text{font-size:24px;font-weight:650;margin:10px 0 18px;line-height:1.3}
+.q-tools{display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap}
+.q-hint{color:var(--muted);font-size:13.5px}
+.rate-label{display:block;font-size:14px;color:var(--muted);margin:16px 0 8px}
+.rate{display:flex;gap:8px}
+.rate button{
+  flex:1;aspect-ratio:1;border-radius:14px;border:1px solid var(--line);
+  background:var(--bg);font-size:17px;color:var(--muted);cursor:pointer;
+}
+.rate button.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.chip{
+  border:1px solid var(--line);background:var(--bg);color:var(--ink);
+  border-radius:999px;padding:8px 14px;font-size:14.5px;cursor:pointer;
+}
+.chip.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+
+/* ── история ──────────────────────────────── */
+.month-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;font-weight:600}
+.grid-weekdays{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:4px}
+.grid-weekdays div{text-align:center;font-size:11.5px;color:var(--muted);text-transform:uppercase}
+.grid-month{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.day{
+  aspect-ratio:1;border-radius:12px;background:var(--card);border:1px solid var(--line);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+  font-size:14px;cursor:pointer;position:relative;
+}
+.day.other{opacity:.28}
+.day.today{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.day.sel{background:var(--accent-soft)}
+.dot{width:7px;height:7px;border-radius:99px;display:inline-block;background:transparent}
+.dot.full{background:var(--ok)}
+.dot.part{background:var(--accent)}
+.dot.frozen{background:#7FA8C9}
+.dot.empty{background:var(--line)}
+.dot.mood{background:var(--accent)}
+.dot.energy{background:#7FA8C9}
+.legend{display:flex;gap:14px;flex-wrap:wrap;color:var(--muted);font-size:12.5px;margin:12px 2px}
+.legend span{display:flex;align-items:center;gap:5px}
+.day-detail{margin-top:8px}
+.entry-block{border-top:1px solid var(--line);padding:10px 0}
+.entry-block:first-child{border-top:none}
+.entry-q{color:var(--muted);font-size:13px;margin-bottom:2px}
+.entry-a{font-size:16px;white-space:pre-wrap}
+.search-results .card{cursor:pointer}
+
+/* ── статистика ───────────────────────────── */
+.stat-cards{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.card.stat{text-align:center;padding:18px 10px;margin:0}
+.card.stat span{font-size:30px;font-weight:700;display:block}
+.card.stat label{color:var(--muted);font-size:13px}
+.bars{display:flex;align-items:flex-end;gap:4px;height:120px;margin:10px 0 6px}
+.bars .bargroup{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;height:100%;justify-content:flex-end}
+.bars .pair{display:flex;gap:2px;align-items:flex-end;height:100%;width:100%;justify-content:center}
+.bars i{width:8px;border-radius:3px 3px 0 0;display:block}
+.bars i.mood{background:var(--accent)}
+.bars i.energy{background:#7FA8C9}
+.bars small{font-size:10px;color:var(--muted)}
+.tag-stats .row{display:flex;align-items:center;gap:10px;margin:7px 0;font-size:14.5px}
+.tag-stats .row b{min-width:110px;font-weight:600}
+.tag-stats .row .track{flex:1;height:8px;background:var(--line);border-radius:99px;overflow:hidden}
+.tag-stats .row .fill{height:100%;background:var(--accent)}
+.tag-stats .row span{color:var(--muted);min-width:26px;text-align:right}
+
+/* ── настройки ────────────────────────────── */
+.field{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:9px 0}
+.field span{color:var(--muted);font-size:15px;flex:0 0 auto}
+.field input,.field select{max-width:180px;text-align:right}
+.seg{display:flex;gap:8px;margin:10px 0}
+.seg button{flex:1;border:1px solid var(--line);background:var(--card);color:var(--muted);
+  border-radius:12px;padding:11px;cursor:pointer;font-weight:600}
+.seg button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.code-row{display:flex;gap:10px;align-items:center;margin-top:8px}
+.big-code{font-size:26px;letter-spacing:.18em;font-weight:700;padding:10px 16px;flex:1;text-align:center}
+.sync-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px}
+.sync-state{font-size:13.5px;color:var(--muted)}
+.version{color:var(--muted);font-size:12.5px;text-align:center;margin:18px 0 0}
+
+/* ── экран успеха ─────────────────────────── */
+.done-content{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:10px}
+.done-emoji{font-size:56px}
+#done-title{font-size:28px;font-weight:700}
+.done-sub{color:var(--muted);font-size:16px;max-width:340px}
+.card.quote{font-style:italic;max-width:360px;margin-top:8px}
+
+/* ── всплывающее сообщение ────────────────── */
+.flash{
+  margin:0 16px 8px;padding:12px 14px;border-radius:14px;font-size:15px;
+  background:var(--accent-soft);color:var(--accent);border:1px solid transparent;
+}
+.flash.err{background:#F7DEDA;color:var(--danger)}
+.flash.ok{background:#DDEBDF;color:var(--ok)}
+
+@media (min-width:720px){
+  .content{max-width:640px;margin:0 auto;width:100%}
+  .head{max-width:640px;margin:0 auto;width:100%}
+  .tabbar{justify-content:center}
+  .tabbar button{max-width:150px}
+}
+
+/* ── кнопка [i] и шторка-инструкция ─────────── */
+.info-btn{
+  width:26px;height:26px;border-radius:50%;border:1px solid var(--line);
+  background:var(--bg);color:var(--muted);font-family:Georgia,"Times New Roman",serif;
+  font-style:italic;font-size:14px;line-height:1;cursor:pointer;flex:0 0 auto;
+}
+.info-btn:active{transform:scale(.94)}
+.sheet{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;padding:18px}
+.sheet[hidden]{display:none}
+.sheet-back{position:absolute;inset:0;background:rgba(0,0,0,.45)}
+.sheet-card{
+  position:relative;background:var(--card);border:1px solid var(--line);border-radius:20px;
+  padding:18px;max-width:520px;width:100%;max-height:80vh;overflow:auto;box-shadow:var(--shadow);
+}
+.sheet-card h3{margin:4px 0 8px;font-size:18px}
+.sheet-card p,.sheet-card li{font-size:15px;margin:.35em 0}
+.sheet-card ul{padding-left:18px;margin:.3em 0}
+.sheet-card .muted{font-size:13.5px}
+.quote-author{color:var(--muted);font-size:13.5px;margin-top:10px;font-style:normal}
+
+</style>
+</head>
+<body>
+
+<!-- ══════════════ ГЛАВНАЯ / СЕГОДНЯ ══════════════ -->
+<section id="screen-today" class="screen active">
+  <header class="head">
+    <div>
+      <div class="date" id="today-date">—</div>
+      <div class="streak" id="today-streak">🔥 0</div>
+    </div>
+    <button class="ghost-btn" id="btn-quick" title="Быстрая запись">⚡ Быстро</button>
+  </header>
+
+  <div id="flash" class="flash" hidden></div>
+
+  <main class="content">
+    <article class="card slot" id="card-am" data-slot="am">
+      <div class="slot-emoji">☀️</div>
+      <div class="slot-body">
+        <h2>Утро</h2>
+        <p class="slot-sub" id="am-sub">3 вопроса · около 3 минут</p>
+      </div>
+      <button class="info-btn" data-info="am" aria-label="Как пользоваться блоком «Утро»">i</button>
+      <div class="slot-action" id="am-action">→</div>
+    </article>
+
+    <article class="card slot" id="card-pm" data-slot="pm">
+      <div class="slot-emoji">🌙</div>
+      <div class="slot-body">
+        <h2>Вечер</h2>
+        <p class="slot-sub" id="pm-sub">3 вопроса · около 3 минут</p>
+      </div>
+      <button class="info-btn" data-info="pm" aria-label="Как пользоваться блоком «Вечер»">i</button>
+      <div class="slot-action" id="pm-action">→</div>
+    </article>
+
+    <article class="card memory" id="memory-card" hidden>
+      <div class="memory-label" id="memory-label">В этот день</div>
+      <p class="memory-text" id="memory-text"></p>
+    </article>
+
+    <article class="card weekly" id="weekly-card">
+      <h2>📊 Обзор недели <button class="info-btn" data-info="weekly" aria-label="Как пользоваться обзором недели">i</button></h2>
+      <p class="slot-sub" id="weekly-sub">5 вопросов по воскресеньям</p>
+      <button class="btn secondary" id="btn-weekly">Заполнить обзор</button>
+    </article>
+
+    <article class="card hint">
+      <h3>💡 Некогда писать?</h3>
+      <p>Ответьте боту в Telegram одной фразой или голосовым — запись появится здесь после синхронизации.</p>
+      <div class="sync-row">
+        <span id="sync-state" class="sync-state">Облако не подключено</span>
+        <button class="link-btn" id="btn-sync">Синхронизировать</button>
+      </div>
+    </article>
+
+    <article class="card">
+      <h3 style="margin-bottom:4px">🎙️ Быстрая диктовка</h3>
+      <p class="slot-sub" style="margin:0 0 10px">Скажите дневнику — запись сохранится в облако</p>
+      <div id="voice-host"></div>
+    </article>
+
+    <article class="card">
+      <h3 style="margin-bottom:8px">🎧 Голосовые записи</h3>
+      <div id="voicelist-host"></div>
+    </article>
+  </main>
+</section>
+
+<!-- ══════════════ ФОРМА ══════════════ -->
+<section id="screen-form" class="screen">
+  <header class="head form-head">
+    <button class="ghost-btn" id="btn-form-close">✕</button>
+    <div class="form-title" id="form-title">Утро</div>
+    <div class="timer" id="form-timer">3:00</div>
+  </header>
+
+  <main class="content form-content">
+    <div class="progress"><div class="progress-bar" id="form-progress"></div></div>
+
+    <div class="q-step" id="q-step">
+      <div class="q-counter" id="q-counter">1 / 3</div>
+      <h1 class="q-text" id="q-text">—</h1>
+      <textarea id="q-input" rows="4" placeholder="Пишите свободно…"></textarea>
+      <div class="q-tools">
+        <button class="ghost-btn small" id="btn-mic" title="Голосовой ввод">🎙 Диктовка</button>
+        <span class="q-hint" id="q-hint"></span>
+      </div>
+    </div>
+
+    <div class="q-step" id="rate-step" hidden>
+      <h1 class="q-text">Как прошёл день?</h1>
+      <label class="rate-label">Настроение</label>
+      <div class="rate" id="rate-mood"></div>
+      <label class="rate-label">Энергия</label>
+      <div class="rate" id="rate-energy"></div>
+      <label class="rate-label">Теги</label>
+      <div class="chips" id="tag-chips"></div>
+    </div>
+  </main>
+
+  <footer class="tabbar form-bar">
+    <button class="btn ghost" id="btn-prev">Назад</button>
+    <button class="btn primary" id="btn-next">Дальше</button>
+  </footer>
+</section>
+
+<!-- ══════════════ БЫСТРАЯ ЗАПИСЬ ══════════════ -->
+<section id="screen-quick" class="screen">
+  <header class="head form-head">
+    <button class="ghost-btn" id="btn-quick-close">✕</button>
+    <div class="form-title">Быстрая запись <button class="info-btn" data-info="quick" aria-label="Как пользоваться быстрой записью">i</button></div>
+    <div></div>
+  </header>
+  <main class="content">
+    <p class="muted">Три короткие строки — этого достаточно. Позже можно дополнить.</p>
+    <div class="seg" id="quick-slot">
+      <button data-slot="am">☀️ Утро</button>
+      <button data-slot="pm">🌙 Вечер</button>
+    </div>
+    <textarea id="quick-1" rows="2" placeholder="Что хорошего сейчас?"></textarea>
+    <textarea id="quick-2" rows="2" placeholder="Что важно сегодня?"></textarea>
+    <textarea id="quick-3" rows="2" placeholder="Что возьмёшь из сегодня в завтра?"></textarea>
+  </main>
+  <footer class="tabbar form-bar">
+    <button class="btn primary wide" id="btn-quick-save">Сохранить (10 секунд)</button>
+  </footer>
+</section>
+
+<!-- ══════════════ ИСТОРИЯ ══════════════ -->
+<section id="screen-history" class="screen">
+  <header class="head">
+    <h1 class="page-title">История</h1>
+    <input type="search" id="search" placeholder="Поиск…">
+  </header>
+  <main class="content">
+    <div class="month-nav">
+      <button class="ghost-btn" id="m-prev">‹</button>
+      <div id="m-label">—</div>
+      <button class="ghost-btn" id="m-next">›</button>
+    </div>
+    <div class="grid-weekdays" id="grid-weekdays"></div>
+    <div class="grid-month" id="grid-month"></div>
+    <div class="legend">
+      <span><i class="dot full"></i> оба блока</span>
+      <span><i class="dot part"></i> один блок</span>
+      <span><i class="dot frozen"></i> заморозка</span>
+      <span><i class="dot empty"></i> пусто</span>
+    </div>
+    <div id="day-detail" class="day-detail" hidden></div>
+    <div id="search-results" class="search-results"></div>
+  </main>
+</section>
+
+<!-- ══════════════ СТАТИСТИКА ══════════════ -->
+<section id="screen-stats" class="screen">
+  <header class="head"><h1 class="page-title">Прогресс</h1></header>
+  <main class="content" id="stats-content">
+    <div class="stat-cards">
+      <div class="card stat"><span id="stat-streak">0</span><label>серия, дней</label></div>
+      <div class="card stat"><span id="stat-longest">0</span><label>рекорд</label></div>
+      <div class="card stat"><span id="stat-month">0</span><label>дней за месяц</label></div>
+      <div class="card stat"><span id="stat-avg">—</span><label>среднее время</label></div>
+    </div>
+
+    <div class="card">
+      <h3>Настроение и энергия, 14 дней</h3>
+      <div class="bars" id="bars-chart"></div>
+      <div class="legend"><span><i class="dot mood"></i> настроение</span><span><i class="dot energy"></i> энергия</span></div>
+    </div>
+
+    <div class="card">
+      <h3>Темы записей</h3>
+      <div id="top-tags" class="tag-stats"></div>
+    </div>
+
+    <div class="card">
+      <h3>Когда вы реально пишете</h3>
+      <div id="hour-hist" class="tag-stats"></div>
+    </div>
+    <div class="card">
+      <h3>Привычки и активность (v0.2)</h3>
+      <div id="stats-host"></div>
+    </div>
+  </main>
+</section>
+
+<!-- ══════════════ НАСТРОЙКИ ══════════════ -->
+<section id="screen-settings" class="screen">
+  <header class="head"><h1 class="page-title">Настройки</h1></header>
+  <main class="content">
+
+    <div class="card">
+      <h3>👤 Облако (Supabase)</h3>
+      <p class="muted" id="auth-status">Не подключено — записи хранятся только на этом устройстве.</p>
+      <div id="auth-box">
+        <input type="email" id="auth-email" placeholder="ваша@почта.ру" autocomplete="email" inputmode="email">
+        <button class="btn primary" id="btn-login">Войти по ссылке на почту</button>
+        <input type="password" id="auth-pass" placeholder="Пароль (запасной вход, если письмо не доходит)" autocomplete="current-password">
+        <button class="btn secondary" id="btn-login-pass">Войти с паролем</button>
+      </div>
+      <button class="btn ghost" id="btn-logout" hidden>Выйти</button>
+      <p class="hint-text">Magic link: пароль не нужен. Если письмо не доходит (спа-фильтры ya.ru), создайте пользователя в Supabase → Authentication → Users → Add user (галка auto-confirm) и входите паролем.</p>
+    </div>
+
+    <div class="card">
+      <h3>🤖 Telegram-бот</h3>
+      <p class="muted">Код для привязки (живёт 15 минут). Отправьте боту: <code>/link КОД</code></p>
+      <div class="code-row">
+        <code id="link-code" class="big-code">—</code>
+        <button class="btn secondary" id="btn-gen-code">Создать код</button>
+      </div>
+      <p class="hint-text" id="link-note"></p>
+    </div>
+
+    <div class="card">
+      <h3>⏰ Напоминания</h3>
+      <label class="field"><span>Будни, утро</span><input type="time" id="set-wd-am"></label>
+      <label class="field"><span>Будни, вечер</span><input type="time" id="set-wd-pm"></label>
+      <label class="field"><span>Выходные, утро</span><input type="time" id="set-we-am"></label>
+      <label class="field"><span>Выходные, вечер</span><input type="time" id="set-we-pm"></label>
+      <label class="field"><span>Догонять через, мин</span><input type="number" id="set-followup" min="0" max="240" step="15"></label>
+      <label class="field"><span>Часовой пояс</span><input type="text" id="set-tz" readonly></label>
+      <label class="field"><span>Пауза до (отпуск)</span><input type="date" id="set-vacation"></label>
+      <label class="field"><span>Ротация вопросов</span>
+        <select id="set-rotation">
+          <option value="fixed">Всегда одинаковые</option>
+          <option value="random">Случайные варианты</option>
+          <option value="weekly">Менять раз в неделю</option>
+        </select>
+      </label>
+      <button class="btn primary" id="btn-save-settings">Сохранить и перепланировать</button>
+    </div>
+
+    <div class="card">
+      <h3>📅 Календарь (Google / Apple)</h3>
+      <p class="muted">Файл .ics с ежедневными событиями «6 минут». Импорт: iPhone — открыть файл → «Добавить всё»; Google Calendar — Настройки → Импорт.</p>
+      <button class="btn secondary" id="btn-ics">Скачать .ics</button>
+    </div>
+
+    <div class="card">
+      <h3>📱 На домашний экран iPhone</h3>
+      <p class="muted">Safari → кнопка «Поделиться» → «На экран Домой». После этого приложение открывается в полноэкранном режиме и работает офлайн.</p>
+      <p class="hint-text">Для автозапуска по расписанию добавьте в «Команды» (Shortcuts) автоматизацию: Время → «Открыть URL» → адрес этого приложения.</p>
+    </div>
+
+    <div class="card">
+      <h3>💾 Данные</h3>
+      <div class="btn-row">
+        <button class="btn secondary" id="btn-export-json">Экспорт JSON</button>
+        <button class="btn secondary" id="btn-export-csv">Экспорт CSV</button>
+      </div>
+      <div class="btn-row">
+        <button class="btn secondary" id="btn-export-md">Экспорт Markdown</button>
+        <label class="btn secondary file-label">Импорт JSON<input type="file" id="file-import" accept="application/json" hidden></label>
+      </div>
+      <div class="btn-row">
+        <button class="btn ghost" id="btn-freeze">🧊 Заморозить сегодня</button>
+        <button class="btn danger" id="btn-wipe">Стереть всё</button>
+      </div>
+    </div>
+
+    <p class="version">v0.1 · данные на устройстве + Supabase · <span id="build-info"></span></p>
+  </main>
+</section>
+
+<!-- ══════════════ ЭКРАН УСПЕХА ══════════════ -->
+<section id="screen-done" class="screen">
+  <main class="content done-content">
+    <div class="done-emoji" id="done-emoji">✅</div>
+    <h1 id="done-title">Готово</h1>
+    <p class="done-sub" id="done-sub"></p>
+    <div class="card quote"><span id="done-quote"></span><div class="quote-author" id="done-quote-author"></div></div>
+    <button class="btn primary wide" id="btn-done-close">Вернуться</button>
+  </main>
+</section>
+
+<!-- ══════════════ ЭКРАН ТРЕКЕР (v0.2) ══════════════ -->
+<section id="screen-tracker" class="screen">
+  <header class="head"><h1 class="page-title">Трекер</h1></header>
+  <main class="content">
+    <div class="card"><div id="habits-host"></div></div>
+    <div class="card"><div id="focus-host"></div></div>
+    <div class="card"><div id="tasks-host"></div></div>
+    <div class="card"><div id="theory-host"></div></div>
+    <div class="card"><div id="circles-host"></div></div>
+  </main>
+</section>
+
+<!-- ══════════════ ЭКРАН РАБОТА (v0.2.1) ══════════════ -->
+<section id="screen-work" class="screen">
+  <header class="head"><h1 class="page-title">Работа</h1></header>
+  <main class="content">
+    <div class="card"><div id="work-host"></div></div>
+  </main>
+</section>
+
+<!-- ══════════════ ШТОРКА-ИНСТРУКЦИЯ ══════════════ -->
+<section id="info-sheet" class="sheet" hidden>
+  <div class="sheet-back" id="info-back"></div>
+  <div class="sheet-card">
+    <button class="ghost-btn" id="info-close">✕ Закрыть</button>
+    <div id="info-body"></div>
+  </div>
+</section>
+
+<!-- ══════════════ НИЖНЯЯ НАВИГАЦИЯ ══════════════ -->
+<nav class="tabbar" id="tabbar">
+  <button data-tab="today" class="active"><span>☀️</span>Сегодня</button>
+  <button data-tab="history"><span>📚</span>История</button>
+  <button data-tab="stats"><span>📈</span>Прогресс</button>
+  <button data-tab="tracker"><span>🎯</span>Трекер</button>
+  <button data-tab="work"><span>💼</span>Работа</button>
+  <button data-tab="settings"><span>⚙️</span>Настройки</button>
+</nav>
+
+<script defer src="js/bundle.js?v=022"></script>
+<script defer src="js/v02.js?v=022"></script>
+</body>
+</html>
