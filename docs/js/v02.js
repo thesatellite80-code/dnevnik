@@ -40,6 +40,8 @@
 
 
 
+
+
 window.__v02stage = "v02-start";
 
 // app/js/sixmin-common.js — общие утилиты для модулей v0.2
@@ -582,7 +584,7 @@ window.__v02stage = "after-sixmin-common"; if (window.__v02say) window.__v02say(
         </p>
         <div style="display:flex;gap:10px">
           <button id="sixmin-restore" style="flex:1;padding:12px;border:0;border-radius:12px;
-                  background:#7c6cf0;color:#fff;font-size:15px;font-weight:600;cursor:pointer">
+                  background:var(--accent,#E30613);color:#fff;font-size:15px;font-weight:600;cursor:pointer">
             Восстановить
           </button>
           <button id="sixmin-discard" style="padding:12px 16px;border:1px solid #ddd;border-radius:12px;
@@ -615,14 +617,14 @@ window.__v02stage = "after-sixmin-common"; if (window.__v02say) window.__v02say(
         <button class="sm-ib" data-info="voice" aria-label="Как это работает" style="position:absolute;top:6px;right:6px">i</button>
         <div class="sixmin-vr-timer" style="font:600 40px/1 ui-monospace,monospace;letter-spacing:2px">00:00</div>
         <div class="sixmin-vr-meter" style="width:180px;height:8px;border-radius:4px;background:rgba(128,128,128,.25);overflow:hidden">
-          <div class="sixmin-vr-meter-fill" style="width:0%;height:100%;background:#e5484d;transition:width .15s"></div>
+          <div class="sixmin-vr-meter-fill" style="width:0%;height:100%;background:#E30613;transition:width .15s"></div>
         </div>
         <div style="display:flex;gap:16px;align-items:center">
           <button class="sixmin-vr-start" aria-label="Начать запись" style="width:72px;height:72px;border-radius:50%;
-                  border:0;background:#e5484d;color:#fff;font-size:30px;cursor:pointer;
+                  border:0;background:#E30613;color:#fff;font-size:30px;cursor:pointer;
                   box-shadow:0 6px 20px rgba(229,72,77,.4)">🎙️</button>
           <button class="sixmin-vr-stop" aria-label="Остановить и сохранить" style="width:72px;height:72px;border-radius:50%;
-                  border:3px solid #e5484d;background:transparent;color:#e5484d;font-size:22px;font-weight:800;
+                  border:3px solid #E30613;background:transparent;color:#E30613;font-size:22px;font-weight:800;
                   cursor:pointer;display:none">СТОП</button>
         </div>
         <div class="sixmin-vr-status" style="font-size:13px;opacity:.7;min-height:18px;text-align:center">
@@ -665,8 +667,8 @@ window.__v02stage = "after-sixmin-common"; if (window.__v02say) window.__v02say(
       "display:flex;align-items:center;justify-content:center;padding:20px";
     ov.innerHTML = '<div style="background:#222;color:#fff;border-radius:16px;padding:22px 28px;text-align:center;font:14px system-ui,sans-serif">' +
       '<div class="sm-cap-t" style="font:600 30px ui-monospace,monospace;margin-bottom:10px">00:00</div>' +
-      '<div class="sm-cap-dot" style="width:14px;height:14px;border-radius:50%;background:#e5484d;margin:0 auto 14px"></div>' +
-      '<button class="sm-cap-stop" style="padding:10px 24px;border:0;border-radius:12px;background:#e5484d;color:#fff;font-weight:700;font-size:15px;cursor:pointer">Стоп</button>' +
+      '<div class="sm-cap-dot" style="width:14px;height:14px;border-radius:50%;background:#E30613;margin:0 auto 14px"></div>' +
+      '<button class="sm-cap-stop" style="padding:10px 24px;border:0;border-radius:12px;background:#E30613;color:#fff;font-weight:700;font-size:15px;cursor:pointer">Стоп</button>' +
       '<div style="margin-top:10px;opacity:.6;font-size:12px">аудио приложится к задаче</div></div>';
     document.body.appendChild(ov);
     const t0 = Date.now();
@@ -755,7 +757,7 @@ window.__v02stage = "after-sixmin-voice"; if (window.__v02say) window.__v02say("
       host.innerHTML = '<audio controls src="' + url + '" style="width:100%;height:38px"></audio>';
       host.querySelector("audio").play().catch(() => {});
     } catch (e) {
-      host.innerHTML = '<span style="font-size:12px;color:#e5484d">Ошибка загрузки: ' +
+      host.innerHTML = '<span style="font-size:12px;color:#E30613">Ошибка загрузки: ' +
         SixMin.esc(e.message || e) + '</span>';
     }
   }
@@ -799,7 +801,7 @@ window.__v02stage = "after-sixmin-voice"; if (window.__v02say) window.__v02say("
       .sm-vl-row{display:flex;align-items:center;gap:12px;padding:9px 4px;
                  border-bottom:1px dashed rgba(128,128,128,.22);flex-wrap:wrap}
       .sm-vl-row:last-child{border-bottom:0}
-      .sm-vl-play{width:40px;height:40px;border-radius:50%;border:0;background:#7c6cf0;color:#fff;
+      .sm-vl-play{width:40px;height:40px;border-radius:50%;border:0;background:var(--accent,#E30613);color:#fff;
                   font-size:14px;cursor:pointer;flex-shrink:0}
       .sm-vl-play:active{transform:scale(.92)}
       .sm-vl-meta{display:flex;flex-direction:column;font-size:13px;min-width:0}
@@ -807,7 +809,7 @@ window.__v02stage = "after-sixmin-voice"; if (window.__v02say) window.__v02say("
       .sm-vl-player{flex:1 1 100%;min-width:0}
       .sm-vl-del{border:0;background:transparent;color:inherit;opacity:.4;font-size:17px;cursor:pointer;
                  margin-left:auto;padding:4px;flex-shrink:0}
-      .sm-vl-del:active{opacity:1;color:#e5484d}`;
+      .sm-vl-del:active{opacity:1;color:#E30613}`;
     document.head.appendChild(css);
   }
 
@@ -873,7 +875,7 @@ window.__v02stage = "after-sixmin-voicelist"; if (window.__v02say) window.__v02s
       return;
     }
     const uid = await SixMin.uid();
-    const colors = ["#7c6cf0", "#e5484d", "#30a46c", "#f5a623", "#3b82f6"];
+    const colors = ["var(--accent,#E30613)", "#E30613", "#9A9A9A", "var(--accent,#E30613)", "#6E6E6E"];
     const { error } = await SixMin.sb().from("habits").insert({
       user_id: uid, name: name.trim(),
       color: colors[state.habits.length % colors.length],
@@ -991,7 +993,7 @@ window.__v02stage = "after-sixmin-voicelist"; if (window.__v02say) window.__v02s
       .sm-nav:disabled{opacity:.3;cursor:default}
       .sm-progress-wrap{margin-bottom:14px}
       .sm-progress{height:8px;border-radius:4px;background:var(--bg);overflow:hidden}
-      .sm-progress-fill{height:100%;background:linear-gradient(90deg,#7c6cf0,#a78bfa);border-radius:4px;transition:width .3s}
+      .sm-progress-fill{height:100%;background:linear-gradient(90deg,var(--accent,#E30613),#FF6B6B);border-radius:4px;transition:width .3s}
       .sm-progress-text{font-size:13px;margin-top:5px;font-weight:600}
       .sm-progress-text span{opacity:.6;font-weight:400}
       .sm-grid-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
@@ -999,19 +1001,19 @@ window.__v02stage = "after-sixmin-voicelist"; if (window.__v02say) window.__v02s
       .sm-grid th,.sm-grid td{padding:4px;text-align:center}
       .sm-h-dow{font-size:11px;opacity:.6;font-weight:500}
       .sm-h-dow span{display:block;font-size:10px;opacity:.7}
-      .sm-h-dow.sm-today{color:#7c6cf0;opacity:1;font-weight:700}
+      .sm-h-dow.sm-today{color:var(--accent,#E30613);opacity:1;font-weight:700}
       .sm-h-name{text-align:left!important;max-width:138px;min-width:100px;position:relative;padding-right:22px!important}
       .sm-h-title{font-size:12.5px;font-weight:600;line-height:1.3;word-break:break-word;
-                  border-left:3px solid var(--hc,#7c6cf0);padding-left:8px;
+                  border-left:3px solid var(--hc,var(--accent,#E30613));padding-left:8px;
                   display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden}
       .sm-h-del{position:absolute;right:2px;top:50%;transform:translateY(-50%);border:0;background:transparent;
                 color:inherit;opacity:.3;cursor:pointer;font-size:16px;line-height:1}
-      .sm-h-del:hover{opacity:.9;color:#e5484d}
+      .sm-h-del:hover{opacity:.9;color:#E30613}
       .sm-cell{width:38px;height:38px;border-radius:50%;border:0;background:transparent;font-size:19px;
                cursor:pointer;color:inherit;transition:transform .1s}
       .sm-cell:active{transform:scale(.85)}
       .sm-empty{opacity:.35}
-      .sm-done{color:#30a46c}
+      .sm-done{color:var(--accent,#E30613)}
       .sm-off{opacity:.08;cursor:default}
       .sm-h-pct{font-size:12px;opacity:.7;font-weight:600;min-width:36px}
       .sm-h-pct-head{font-size:11px;opacity:.5}
@@ -1019,8 +1021,8 @@ window.__v02stage = "after-sixmin-voicelist"; if (window.__v02say) window.__v02s
       .sm-add{display:flex;gap:8px;margin-top:14px}
       .sm-add-input{flex:1;padding:11px 14px;border-radius:12px;border:1px solid var(--bg);
                     background:transparent;color:inherit;font-size:14px;outline:none}
-      .sm-add-input:focus{border-color:#7c6cf0}
-      .sm-add-btn{width:44px;border-radius:12px;border:0;background:#7c6cf0;color:#fff;font-size:22px;cursor:pointer}`;
+      .sm-add-input:focus{border-color:var(--accent,#E30613)}
+      .sm-add-btn{width:44px;border-radius:12px;border:0;background:var(--accent,#E30613);color:#fff;font-size:22px;cursor:pointer}`;
     document.head.appendChild(css);
   }
 
@@ -1147,17 +1149,17 @@ window.__v02stage = "after-sixmin-habits"; if (window.__v02say) window.__v02say(
   function render() {
     if (!root) return;
     const cfgs = {
-      day: [cardHTML(0, { emoji: "🦌", caption: "Антилопа дня — главная задача", color: "#e5484d", rows: 2,
+      day: [cardHTML(0, { emoji: "🦌", caption: "Антилопа дня — главная задача", color: "#E30613", rows: 2,
         placeholder: "Если сегодня сделать только ОДНО дело — то какое?" })],
       week: [
-        cardHTML(0, { emoji: "🎯", caption: "Цель недели №1", color: "#7c6cf0", rows: 2,
+        cardHTML(0, { emoji: "🎯", caption: "Цель недели №1", color: "var(--accent,#E30613)", rows: 2,
           placeholder: "Первая главная цель недели", subtasks: true }),
-        cardHTML(1, { emoji: "🎯", caption: "Цель недели №2", color: "#30a46c", rows: 2,
+        cardHTML(1, { emoji: "🎯", caption: "Цель недели №2", color: "#9A9A9A", rows: 2,
           placeholder: "Вторая главная цель недели", subtasks: true }),
       ],
       month: [0, 1, 2, 3, 4].map((i) => cardHTML(i, {
         emoji: "🏔️", caption: "Цель месяца №" + (i + 1),
-        color: ["#f5a623", "#7c6cf0", "#30a46c", "#e5484d", "#3b82f6"][i],
+        color: ["var(--accent,#E30613)", "var(--accent,#E30613)", "#9A9A9A", "#E30613", "#6E6E6E"][i],
         rows: 2, placeholder: "Цель месяца — своими словами", subtasks: true })),
     };
 
@@ -1265,12 +1267,12 @@ window.__v02stage = "after-sixmin-habits"; if (window.__v02say) window.__v02say(
       .sm-focus-title::placeholder{opacity:.4;font-weight:400}
       .sm-focus-subs{margin-top:10px;border-top:1px dashed var(--bg);padding-top:8px}
       .sm-sub-row{display:flex;align-items:center;gap:6px;margin-bottom:4px}
-      .sm-sub-check{border:0;background:transparent;color:#7c6cf0;font-size:17px;cursor:pointer;padding:0;line-height:1;flex-shrink:0}
+      .sm-sub-check{border:0;background:transparent;color:var(--accent,#E30613);font-size:17px;cursor:pointer;padding:0;line-height:1;flex-shrink:0}
       .sm-sub-done .sm-sub-input{text-decoration:line-through;opacity:.5}
       .sm-sub-input{flex:1;border:0;background:transparent;color:inherit;font:14px system-ui;outline:none;padding:4px 0}
       .sm-sub-del{border:0;background:transparent;color:inherit;opacity:.3;cursor:pointer;font-size:15px}
-      .sm-sub-del:hover{opacity:.9;color:#e5484d}
-      .sm-sub-add{border:0;background:transparent;color:#7c6cf0;font-size:13px;font-weight:600;cursor:pointer;padding:6px 0 0}
+      .sm-sub-del:hover{opacity:.9;color:#E30613}
+      .sm-sub-add{border:0;background:transparent;color:var(--accent,#E30613);font-size:13px;font-weight:600;cursor:pointer;padding:6px 0 0}
       .sm-nav{width:36px;height:36px;border-radius:10px;border:1px solid var(--bg);background:transparent;
               color:inherit;font-size:20px;cursor:pointer;line-height:1}`;
     document.head.appendChild(css);
@@ -1547,7 +1549,7 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
             "display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;gap:14px";
           ov.innerHTML = '<img src="' + url + '" alt="' + SixMin.esc(name) + '" style="max-width:94vw;max-height:74vh;border-radius:12px">' +
             '<div style="display:flex;gap:10px;align-items:center">' +
-            '<a href="' + url + '" download="' + SixMin.esc(name) + '" style="padding:10px 18px;border-radius:12px;background:#7c6cf0;color:#fff;font-weight:700;text-decoration:none;font-size:14px">Скачать</a>' +
+            '<a href="' + url + '" download="' + SixMin.esc(name) + '" style="padding:10px 18px;border-radius:12px;background:var(--accent,#E30613);color:#fff;font-weight:700;text-decoration:none;font-size:14px">Скачать</a>' +
             '<button style="padding:10px 18px;border-radius:12px;border:1px solid #777;background:transparent;color:#fff;font-size:14px;cursor:pointer">Закрыть</button></div>';
           document.body.appendChild(ov);
           ov.querySelector("button").onclick = () => ov.remove();
@@ -1726,38 +1728,38 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
       .sm-task{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 10px;
                border-radius:12px;background:var(--bg);transition:transform .15s,opacity .15s;
                touch-action:pan-y}
-      .sm-task-cm b{font-size:10px;background:#7c6cf0;color:#fff;border-radius:8px;padding:1px 5px;margin-left:2px;vertical-align:middle}
+      .sm-task-cm b{font-size:10px;background:var(--accent,#E30613);color:#fff;border-radius:8px;padding:1px 5px;margin-left:2px;vertical-align:middle}
       .sm-cm-panel{border:1px solid rgba(128,128,128,.2);border-top:0;border-radius:0 0 12px 12px;
                    padding:10px;background:rgba(128,128,128,.06)}
       .sm-cm{padding:7px 2px;border-bottom:1px dashed rgba(128,128,128,.18)}
       .sm-cm:last-of-type{border-bottom:0}
       .sm-cm-head{font-size:11px;opacity:.55;margin-bottom:2px}
       .sm-cm-body{font-size:13.5px;line-height:1.45;white-space:pre-wrap}
-      .sm-cm-chip{border:1px solid rgba(127,111,240,.4);color:inherit;background:#7c6cf01a;border-radius:999px;
+      .sm-cm-chip{border:1px solid rgba(127,111,240,.4);color:inherit;background:var(--accent-soft,#FDE9E9);border-radius:999px;
                   padding:4px 10px;font-size:12px;cursor:pointer;margin:4px 4px 0 0}
-      .sm-cm-pending b{color:#e5484d;margin-left:4px}
+      .sm-cm-pending b{color:#E30613;margin-left:4px}
       .sm-cm-empty{font-size:12.5px;opacity:.6;padding:4px 2px}
       .sm-cm-add{display:flex;gap:6px;align-items:center;margin-top:8px}
       .sm-cm-input{flex:1;padding:9px 12px;border-radius:10px;border:1px solid rgba(128,128,128,.25);
                    background:transparent;color:inherit;font-size:13.5px;outline:none;min-width:0}
       .sm-cm-btn{border:0;background:transparent;font-size:17px;cursor:pointer;padding:6px;border-radius:8px}
-      .sm-cm-send{color:#7c6cf0;font-weight:700}
+      .sm-cm-send{color:var(--accent,#E30613);font-weight:700}
       .sm-task-main{display:flex;align-items:center;gap:10px;flex:1;min-width:0}
-      .sm-task-check{border:0;background:transparent;font-size:20px;cursor:pointer;color:#7c6cf0;line-height:1;padding:0}
+      .sm-task-check{border:0;background:transparent;font-size:20px;cursor:pointer;color:var(--accent,#E30613);line-height:1;padding:0}
       .sm-task-title{font-size:14.5px;line-height:1.35;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;word-break:break-word}
       .sm-task-done .sm-task-title{text-decoration:line-through;opacity:.5}
-      .sm-task-moved{font-style:normal;font-size:11px;color:#f5a623;font-weight:700}
-      .sm-task-overdue-badge{font-size:10px;background:#e5484d22;color:#e5484d;padding:2px 6px;border-radius:6px;font-weight:700;white-space:nowrap}
+      .sm-task-moved{font-style:normal;font-size:11px;color:var(--accent,#E30613);font-weight:700}
+      .sm-task-overdue-badge{font-size:10px;background:var(--accent-soft,#FDE9E9);color:#E30613;padding:2px 6px;border-radius:6px;font-weight:700;white-space:nowrap}
       .sm-task-actions{display:flex;gap:4px;flex-shrink:0}
       .sm-task-btn{border:0;border-radius:8px;cursor:pointer;font-size:12px;padding:6px 8px;background:transparent;color:inherit}
-      .sm-task-postpone{color:#7c6cf0;font-weight:700;background:#7c6cf01a}
+      .sm-task-postpone{color:var(--accent,#E30613);font-weight:700;background:var(--accent-soft,#FDE9E9)}
       .sm-task-del{opacity:.4;font-size:15px}
-      .sm-task-del:hover{opacity:1;color:#e5484d}
+      .sm-task-del:hover{opacity:1;color:#E30613}
       .sm-tasks-empty{padding:22px 10px;text-align:center;opacity:.55;font-size:14px;line-height:1.6;list-style:none}
-      .sm-overdue{border:1px solid #e5484d44;border-radius:14px;padding:10px;margin-bottom:14px;background:#e5484d0d}
+      .sm-overdue{border:1px solid #E3061344;border-radius:14px;padding:10px;margin-bottom:14px;background:#E306130d}
       .sm-overdue-head{display:flex;justify-content:space-between;align-items:center;gap:8px;
-                       font-size:13px;font-weight:700;color:#e5484d;margin-bottom:8px;flex-wrap:wrap}
-      .sm-overdue-all{border:0;background:#e5484d;color:#fff;border-radius:8px;padding:6px 10px;
+                       font-size:13px;font-weight:700;color:#E30613;margin-bottom:8px;flex-wrap:wrap}
+      .sm-overdue-all{border:0;background:#E30613;color:#fff;border-radius:8px;padding:6px 10px;
                       font-size:12px;font-weight:700;cursor:pointer}
       .sm-upcoming{margin-top:14px;border-top:1px dashed rgba(128,128,128,.25);padding-top:10px}
       .sm-up-head{font-size:13px;font-weight:700;opacity:.75;margin-bottom:4px}
@@ -1765,13 +1767,13 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
       .sm-kind-row{display:flex;gap:6px;margin-top:12px;flex-wrap:wrap}
       .sm-kind-chip{border:1px solid rgba(128,128,128,.25);border-radius:999px;padding:6px 11px;font-size:12px;
                     background:transparent;color:inherit;cursor:pointer;opacity:.7}
-      .sm-kind-chip.on{background:#7c6cf0;border-color:#7c6cf0;color:#fff;opacity:1}
+      .sm-kind-chip.on{background:var(--accent,#E30613);border-color:var(--accent,#E30613);color:#fff;opacity:1}
       .sm-kind-head{font-size:12px;font-weight:700;opacity:.6;margin:10px 0 4px}
       .sm-task-add{display:flex;gap:8px;margin-top:8px}
       .sm-task-add-input{flex:1;padding:11px 14px;border-radius:12px;border:1px solid var(--bg);
                          background:transparent;color:inherit;font-size:14px;outline:none}
-      .sm-task-add-input:focus{border-color:#7c6cf0}
-      .sm-task-add-btn{width:44px;border-radius:12px;border:0;background:#7c6cf0;color:#fff;font-size:22px;cursor:pointer}`;
+      .sm-task-add-input:focus{border-color:var(--accent,#E30613)}
+      .sm-task-add-btn{width:44px;border-radius:12px;border:0;background:var(--accent,#E30613);color:#fff;font-size:22px;cursor:pointer}`;
       document.head.appendChild(css);
     }
 
@@ -1795,7 +1797,7 @@ window.__v02stage = "after-sixmin-tasks"; if (window.__v02say) window.__v02say("
 (function () {
   let root = null;
 
-  const LEVEL_COLORS = ["rgba(128,128,128,.10)", "#c7f0d8", "#83dd9f", "#3fbc63", "#1a8a3c"];
+  const LEVEL_COLORS = ["rgba(128,128,128,.10)", "#F7CCCC", "#EF8A8A", "#E34040", "#A80303"];
   const DAYS = 17 * 7; // ~4 месяца
 
   async function loadAll() {
@@ -2004,7 +2006,7 @@ window.__v02stage = "after-sixmin-tasks"; if (window.__v02say) window.__v02say("
       .sm-hm-cols{display:flex;gap:3px;width:max-content}
       .sm-hm-col{display:flex;flex-direction:column;gap:3px}
       .sm-hm-cell{width:13px;height:13px;border-radius:3px}
-      .sm-hm-today{outline:2px solid #7c6cf0;outline-offset:1px}
+      .sm-hm-today{outline:2px solid var(--accent,#E30613);outline-offset:1px}
       .sm-hm-legend{display:flex;align-items:center;gap:4px;font-size:11px;opacity:.6;margin-top:8px}
       .sm-hm-legend span{width:11px;height:11px;border-radius:3px;display:inline-block}
       .sm-insights{list-style:none;margin:0;padding:0}
@@ -2212,7 +2214,7 @@ window.__v02stage = "after-sixmin-analytics"; if (window.__v02say) window.__v02s
       .sm-card p{padding:0 16px 14px;margin:0;font-size:14px;line-height:1.6;opacity:.85}
       .sm-card-emoji{font-size:20px}
       .sm-quote{text-align:center;padding:18px 10px}
-      .sm-quote-mark{font-size:44px;line-height:.5;color:#7c6cf0;font-family:Georgia,serif}
+      .sm-quote-mark{font-size:44px;line-height:.5;color:var(--accent,#E30613);font-family:Georgia,serif}
       .sm-quote-text{font-size:16px;line-height:1.55;font-style:italic;margin:10px 0 8px}
       .sm-quote-author{font-size:13px;opacity:.6;font-weight:600}`;
     document.head.appendChild(css);
@@ -2701,20 +2703,20 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       .sm-circles{font-family:system-ui,sans-serif}
       .sm-cr-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
       .sm-cr-head{font-weight:800;font-size:16px}
-      .sm-cr-code{border:1px solid rgba(127,111,240,.4);background:#7c6cf01a;color:#7c6cf0;border-radius:999px;
+      .sm-cr-code{border:1px solid rgba(127,111,240,.4);background:var(--accent-soft,#FDE9E9);color:var(--accent,#E30613);border-radius:999px;
                   padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer}
       .sm-cr-new{border:1px solid rgba(48,164,108,.5);background:#30a46c1a;color:#30a46c;border-radius:999px;
                  padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer}
       .sm-cr-members{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
       .sm-cr-member{font-size:12px;border:1px solid rgba(128,128,128,.25);border-radius:999px;padding:4px 10px;opacity:.8}
-      .sm-cr-member.me{border-color:#7c6cf0;color:#7c6cf0;font-weight:700}
+      .sm-cr-member.me{border-color:var(--accent,#E30613);color:var(--accent,#E30613);font-weight:700}
       .sm-cr-switch{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
       .sm-cr-note{font-size:13px;opacity:.65;line-height:1.55;margin:0 0 12px}
       .sm-cr-create,.sm-cr-join,.sm-cr-hadd,.sm-cr-tadd{display:flex;gap:8px;margin-bottom:10px}
       .sm-cr-join-more{margin-top:16px;opacity:.85}
       .sm-cr-input{flex:1;padding:10px 13px;border-radius:12px;border:1px solid rgba(128,128,128,.25);
                    background:transparent;color:inherit;font-size:14px;outline:none;min-width:0}
-      .sm-cr-join-btn{border:0;border-radius:12px;background:transparent;color:#7c6cf0;font-weight:700;
+      .sm-cr-join-btn{border:0;border-radius:12px;background:transparent;color:var(--accent,#E30613);font-weight:700;
                       font-size:13px;padding:0 12px;cursor:pointer;border:1px solid rgba(127,111,240,.4)}
       .sm-cr-sec{font-size:12px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;opacity:.6;
                  margin:16px 0 8px}
@@ -2723,28 +2725,32 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       .sm-cr-goal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
       .sm-cr-goal-cap{font-size:12px;font-weight:800;opacity:.7;text-transform:uppercase}
       .sm-cr-habit{display:flex;align-items:center;gap:10px;padding:6px 2px}
-      .sm-cr-habit-name{flex:1;font-size:14px;font-weight:600;border-left:3px solid var(--hc,#7c6cf0);padding-left:8px}
+      .sm-cr-habit-name{flex:1;font-size:14px;font-weight:600;border-left:3px solid var(--hc,var(--accent,#E30613));padding-left:8px}
       .sm-cr-habit-who{display:flex;gap:3px;align-items:center}
-      .sm-cr-habit-who i{font-style:normal;width:22px;height:22px;border-radius:50%;background:#30a46c22;color:#30a46c;
+      .sm-cr-habit-who i{font-style:normal;width:22px;height:22px;border-radius:50%;background:var(--accent-soft,#FDE9E9);color:#30a46c;
                          font-size:11px;font-weight:800;display:inline-flex;align-items:center;justify-content:center}
       .sm-cr-habit-who em{font-style:normal;font-size:11px;opacity:.45}
       .sm-cr-by{font-style:normal;font-size:11px;opacity:.55;font-weight:500}
-      .sm-cr-bounty{background:#f5a62322;color:#f5a623;font-weight:800;font-size:12px;border-radius:8px;
+      .sm-cr-bounty{background:var(--accent-soft,#FDE9E9);color:var(--accent,#E30613);font-weight:800;font-size:12px;border-radius:8px;
                     padding:3px 7px;flex-shrink:0}
       .sm-cr-bal{display:flex;flex-direction:column;gap:6px;margin-bottom:10px}
       .sm-cr-bal-me{font-size:14px;font-weight:700}
-      .sm-cr-bal-me b{color:#f5a623;font-size:17px}
+      .sm-cr-bal-me b{color:var(--accent,#E30613);font-size:17px}
       .sm-cr-board{display:flex;gap:6px;flex-wrap:wrap}
       .sm-cr-badd{display:flex;gap:6px;margin:8px 0;flex-wrap:wrap}
       .sm-cr-num{flex:0 0 64px;text-align:center}
       .sm-cr-sel{flex:0 0 130px;background:transparent;color:inherit;border:1px solid rgba(128,128,128,.25);
                  border-radius:12px;padding:10px 8px;font-size:13px}
       .sm-cr-shop{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
-      .sm-cr-shop b{color:#7c6cf0;margin-left:6px;cursor:pointer;font-weight:800}
+      .sm-cr-shop b{color:var(--accent,#E30613);margin-left:6px;cursor:pointer;font-weight:800}
       .sm-cr-ledger{display:flex;flex-direction:column;gap:4px}
       .sm-cr-led-row{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;opacity:.85}
       .sm-cr-led-row .plus{color:#30a46c;font-weight:800}
-      .sm-cr-led-row .minus{color:#e5484d;font-weight:800}
+      .sm-cr-led-row .minus{color:#E30613;font-weight:800}
+      @media (max-width:430px){
+        #tabbar button{font-size:10px;padding:8px 2px;gap:2px;min-width:0}
+        #tabbar button span{font-size:18px}
+      }
       .sm-cr-create .sm-add-btn,.sm-cr-hadd .sm-add-btn,.sm-cr-tadd .sm-add-btn{width:auto;padding:0 16px;font-size:14px;font-weight:700}`;
     document.head.appendChild(css);
   }
