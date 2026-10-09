@@ -2094,6 +2094,142 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
 })();
 window.__v02stage = "after-sixmin-tasks"; if (window.__v02say) window.__v02say("v02 stage: after-sixmin-tasks");
 
+// app/js/sixmin-donetoday.js — v0.7.1: «Сегодня выполнено» на ПЕРВОМ экране (☀️ Сегодня)
+//  Карточка-спойлер: сколько задач выполнено сегодня (личные 🍰🍒🎈 + рабочие ⚡📋),
+//  полоса прогресса «N из M», а сам список сделанного — внутри спойлера (тап → раскрыть).
+//  Данные: таблица tasks (completed_at = сегодня ИЛИ due_date = сегодня и completed).
+//  Обновление: при тапе на вкладку «Сегодня» + каждые 45 с, пока вкладка открыта.
+// API: SixMinDoneToday.mount(container)
+
+(function () {
+  const KIND_EMOJI = { cream: "🍰", cherry: "🍒", fun: "🎈", high: "⚡", low: "📋" };
+  const POLL_MS = 45000;
+
+  let root = null;
+  let done = [];      // выполненные сегодня (хронологически)
+  let openToday = 0;  // осталось на сегодня
+  let wasOpen = false; // спойлер был раскрыт — не захлопываем при обновлении
+  let started = false;
+
+  function timeOf(iso) {
+    try {
+      return new Date(iso).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+    } catch (e) { return ""; }
+  }
+
+  async function load() {
+    const uid = await SixMin.uid();
+    const todayKey = await SixMin.todayKey();
+    const sb = SixMin.sb();
+    const [d, o] = await Promise.all([
+      sb.from("tasks").select("*").eq("user_id", uid).eq("completed", true)
+        .order("completed_at", { ascending: false }).limit(100),
+      sb.from("tasks").select("id").eq("user_id", uid).neq("completed", true)
+        .eq("due_date", todayKey).limit(300),
+    ]);
+    const dayOf = (t) => (t.completed_at ? SixMin.fmtKey(new Date(t.completed_at)) : (t.due_date || ""));
+    done = (d.data || []).filter((t) => dayOf(t) === todayKey).reverse(); // утром сверху
+    openToday = (o.data || []).length;
+  }
+
+  function render() {
+    if (!root) return;
+    const n = done.length;
+    const total = n + openToday;
+    if (!total) { root.innerHTML = ""; return; } // задач на сегодня нет — карточку не показываем
+    const pct = Math.max(0, Math.min(100, Math.round((n / total) * 100)));
+    const list = done.map((t) => `
+      <li class="sm-dt-item">
+        <span class="sm-dt-em">${KIND_EMOJI[t.kind] || "✅"}</span>
+        <span class="sm-dt-title">${SixMin.esc(t.title && t.title.trim() ? t.title : "(без названия)")}</span>
+        ${t.area === "work" ? '<span class="sm-dt-area" title="рабочая">💼</span>' : ""}
+        <span class="sm-dt-time">${t.completed_at ? timeOf(t.completed_at) : ""}</span>
+      </li>`).join("");
+    root.innerHTML = `
+      <article class="card sm-dt-card">
+        <details class="sm-dt"${wasOpen ? " open" : ""}>
+          <summary>
+            <span class="sm-dt-sum">✅ Сегодня выполнено: <b>${n}</b> из ${total}</span>
+            <span class="sm-dt-bar"><i style="width:${pct}%"></i></span>
+            <span class="sm-dt-arrow">▾</span>
+          </summary>
+          <div class="sm-dt-body">
+            ${n ? `<ul class="sm-dt-list">${list}</ul>`
+                : '<p class="sm-dt-empty">Пока ни одной — задачи отмечаются квадратиком ☑ в Трекере и на вкладке Работа.</p>'}
+            ${n && n === total ? '<p class="sm-dt-all">🎉 Все задачи на сегодня выполнены!</p>'
+              : openToday ? `<p class="sm-dt-rest">Осталось на сегодня: ${openToday}</p>` : ""}
+          </div>
+        </details>
+      </article>`;
+    const d = root.querySelector("details");
+    if (d && d.addEventListener) d.addEventListener("toggle", () => { wasOpen = !!d.open; });
+  }
+
+  async function refresh() {
+    try { await load(); } catch (e) { done = []; openToday = 0; }
+    render();
+  }
+
+  function injectStyles() {
+    if (document.getElementById("sixmin-donetoday-css")) return;
+    const css = document.createElement("style");
+    css.id = "sixmin-donetoday-css";
+    css.textContent = `
+      .sm-dt-card{padding:6px 8px}
+      .sm-dt summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;
+                     padding:10px 8px;user-select:none}
+      .sm-dt summary::-webkit-details-marker{display:none}
+      .sm-dt-sum{font-size:14px;font-weight:700;flex-shrink:0}
+      .sm-dt-sum b{color:var(--accent,#E30613);font-size:16px}
+      .sm-dt-bar{flex:1;height:6px;border-radius:99px;background:rgba(128,128,128,.18);overflow:hidden;min-width:36px}
+      .sm-dt-bar i{display:block;height:100%;background:var(--accent,#E30613);border-radius:99px;transition:width .3s}
+      .sm-dt-arrow{opacity:.5;font-size:12px;transition:transform .2s;flex-shrink:0}
+      .sm-dt[open] .sm-dt-arrow{transform:rotate(180deg)}
+      .sm-dt-body{padding:2px 8px 10px;border-top:1px dashed rgba(128,128,128,.25)}
+      .sm-dt-list{list-style:none;margin:8px 0 0;padding:0}
+      .sm-dt-item{display:flex;align-items:center;gap:8px;padding:6px 0;
+                  border-bottom:1px dashed rgba(128,128,128,.15);font-size:13.5px}
+      .sm-dt-item:last-child{border-bottom:0}
+      .sm-dt-em{flex-shrink:0}
+      .sm-dt-title{flex:1;min-width:0;text-decoration:line-through;opacity:.75;
+                   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+      .sm-dt-area{font-size:12px;flex-shrink:0;opacity:.8}
+      .sm-dt-time{font-size:11px;opacity:.5;flex-shrink:0;font-variant-numeric:tabular-nums}
+      .sm-dt-empty{font-size:13px;opacity:.6;margin:10px 0 2px;line-height:1.5}
+      .sm-dt-all{font-size:13px;font-weight:700;color:#30a46c;margin:8px 0 2px}
+      .sm-dt-rest{font-size:12px;opacity:.6;margin:8px 0 2px}`;
+    document.head.appendChild(css);
+  }
+
+  function startAutoRefresh() {
+    if (started) return;
+    started = true;
+    // тап по вкладке «Сегодня» — обновить (например, после отметки задачи в Трекере)
+    document.addEventListener("click", (e) => {
+      const b = e.target && e.target.closest && e.target.closest('[data-tab="today"]');
+      if (b) setTimeout(refresh, 200);
+    });
+    // мягкий опрос, пока открыта первая вкладка (задачи могли прийти от бота)
+    setInterval(() => {
+      try {
+        if (document.visibilityState !== "visible") return;
+        const s = document.getElementById("screen-today");
+        if (s && s.classList && s.classList.contains("active")) refresh();
+      } catch (e) { /* тихо */ }
+    }, POLL_MS);
+  }
+
+  function mount(container) {
+    root = typeof container === "string" ? document.querySelector(container) : container;
+    injectStyles();
+    startAutoRefresh();
+    refresh();
+  }
+
+  window.SixMinDoneToday = { mount, refresh };
+})();
+window.__v02stage = "after-sixmin-donetoday"; if (window.__v02say) window.__v02say("v02 stage: after-sixmin-donetoday");
+
 // app/js/sixmin-analytics.js — v0.2: Инфографика и сводки
 //  - Heatmap-календарь как на GitHub (последние ~17 недель)
 //  - Текущая и лучшая серия (streak) по привычкам
@@ -2585,7 +2721,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       sb.from("tasks").select("*").eq("circle_id", sel).neq("completed", true)
         .is("bounty_points", null)
         .order("due_date", { ascending: true }).limit(100),
-      sb.from("circle_members").select("user_id, role, profiles(display_name, email)").eq("circle_id", sel),
+      loadMembers(sb, sel),
       sb.from("circle_rewards").select("*").eq("circle_id", sel).eq("active", true).order("cost_points"),
       sb.from("bonus_ledger").select("*").eq("circle_id", sel).order("created_at", { ascending: false }).limit(500),
       sb.from("tasks").select("*").eq("circle_id", sel).not("bounty_points", "is", null)
@@ -2595,17 +2731,76 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       uid, today,
       goals: g.data || [], habits: h.data || [],
       myLogs: Object.fromEntries((myLogs.data || []).map((l) => [l.circle_habit_id + "|" + l.day, l.completed])),
-      todayBy: {}, tasks: t.data || [], members: m.data || [],
+      todayBy: {}, tasks: t.data || [], members: m || [],
       rewards: rw.data || [], ledger: lg.data || [], bounties: bn.data || [],
     };
     for (const l of todayLogs.data || []) (D.todayBy[l.circle_habit_id] = D.todayBy[l.circle_habit_id] || []).push(l.user_id);
+    await ensureMyProfile(sb, uid);
     await CM.loadCounts([...D.tasks, ...D.bounties].map((x) => x.id));
+  }
+
+  // v0.6.1: имена участников. Раньше делали embed-запрос
+  // circle_members.select("profiles(...)") — но FK у circle_members ведёт на
+  // auth.users, а не на profiles, поэтому PostgREST возвращал ошибку и список
+  // участников приходил пустым → все подписывались «участник».
+  // Теперь имена отдаёт security-definer функция circle_members_ui (обходит RLS
+  // и не зависит от FK), а старый embed оставлен как запасной путь.
+  async function loadMembers(sb, circleId) {
+    const rpc = await sb.rpc("circle_members_ui", { p_circle: circleId });
+    let rows = rpc.data;
+    if (!rows) {
+      const fb = await sb.from("circle_members")
+        .select("user_id, role, profiles(display_name, email)").eq("circle_id", circleId);
+      rows = fb.data;
+    }
+    return (rows || []).map((r) => ({
+      user_id: r.user_id,
+      role: r.role,
+      display_name: r.display_name != null ? r.display_name : (r.profiles ? r.profiles.display_name : null),
+      email: r.email != null ? r.email : (r.profiles ? r.profiles.email : null),
+    }));
+  }
+
+  // Гарантируем, что у текущего пользователя есть строка в profiles,
+  // и применяем имя, сохранённое при регистрации до подтверждения почты.
+  async function ensureMyProfile(sb, uid) {
+    try {
+      const u = await sb.auth.getUser();
+      const em = (u && u.data && u.data.user && u.data.user.email) || null;
+      if (em) await sb.from("profiles").upsert({ id: uid, email: em }, { onConflict: "id", ignoreDuplicates: true });
+      const pending = localStorage.getItem("sm_pending_name");
+      if (pending) {
+        const r = await sb.rpc("set_my_display_name", { p_name: pending });
+        if (!r.error) localStorage.removeItem("sm_pending_name");
+      }
+    } catch (e) { /* тихо: имена не критичны для работы круга */ }
+  }
+
+  async function saveMyName(name) {
+    const sb = SixMin.sb();
+    const { error } = await sb.rpc("set_my_display_name", { p_name: name });
+    if (error) { SixMin.toast("Не удалось сохранить имя: " + error.message); return; }
+    localStorage.removeItem("sm_pending_name");
+    SixMin.toast("Имя сохранено — его видят все ваши круги.");
+    await refresh();
   }
 
   const nameOf = (uidShort) => {
     const m = (D?.members || []).find((x) => x.user_id === uidShort);
-    const p = m?.profiles;
-    return p?.display_name || (p?.email ? p.email.split("@")[0] : "участник");
+    return m?.display_name || (m?.email ? m.email.split("@")[0] : "участник");
+  };
+
+  const myName = () => {
+    const me = (D?.members || []).find((x) => x.user_id === D?.uid);
+    return me?.display_name || (me?.email ? me.email.split("@")[0] : "");
+  };
+
+  // v0.7.1: «1 участник / 2 участника / 5 участников»
+  const membersWord = (n) => {
+    const m10 = n % 10, m100 = n % 100;
+    if (m10 === 1 && m100 !== 11) return "участник";
+    if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return "участника";
+    return "участников";
   };
 
   // ---------- действия ----------
@@ -2826,14 +3021,18 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
   }
 
   // ---------- рендер ----------
-  function goalHTML(i) {
+  function goalHTML(i, pos) {
     const g = D.goals.find((x) => x.goal_index === i) || { goal_index: i, title: "", subtasks: [] };
     const subs = Array.isArray(g.subtasks) ? g.subtasks : [];
+    const n = (pos == null ? i : pos) + 1;
     return `
       <div class="sm-cr-goal${g.done ? " done" : ""}">
         <div class="sm-cr-goal-head">
-          <span class="sm-cr-goal-cap">🎯 Цель круга №${i + 1}</span>
-          <button class="sm-focus-check" data-gdone="${i}">${g.done ? "✅" : "⬜"}</button>
+          <span class="sm-cr-goal-cap">🎯 Цель круга №${n}</span>
+          <span class="sm-cr-goal-btns">
+            ${g.id ? `<button class="sm-cr-goal-del" data-gdel="${i}" aria-label="Удалить цель" title="Удалить цель">×</button>` : ""}
+            <button class="sm-focus-check" data-gdone="${i}">${g.done ? "✅" : "⬜"}</button>
+          </span>
         </div>
         <textarea class="sm-focus-title" data-gidx="${i}" rows="2"
           placeholder="Общая цель на ${SixMin.esc(monthLabel())}">${esc(g.title)}</textarea>
@@ -2914,7 +3113,11 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     }
 
     const circle = circles.find((c) => c.id === sel);
-    const goals = [0, 1, 2].map(goalHTML).join("");
+    // v0.6.2: цель одна по умолчанию, остальные — по кнопке «+ добавить цель».
+    // Показываем только реально существующие цели (плюс пустой слот №1, если их нет).
+    const goalIdxs = (D.goals || []).length ? D.goals.map((g) => g.goal_index) : [0];
+    const goals = goalIdxs.map(goalHTML).join("") +
+      `<button class="sm-sub-add sm-cr-goal-add" type="button" data-gnew="1">+ добавить цель</button>`;
     const habits = D.habits.map((h) => {
       const done = !!D.myLogs[h.id + "|" + D.today];
       const who = (D.todayBy[h.id] || []);
@@ -2953,34 +3156,48 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
             <button class="sm-cr-new" title="Создать ещё один круг">+ Круг</button>
           </div>
         </div>
-        <div class="sm-cr-members">
-          ${D.members.map((m) => `<span class="sm-cr-member${m.user_id === D.uid ? " me" : ""}" title="${esc(m.profiles?.email || "")}">${esc(nameOf(m.user_id))}${m.role === "owner" ? " 👑" : ""}</span>`).join("")}
+        <details class="sm-cr-members-sp">
+          <summary>👥 <b>${D.members.length}</b> ${membersWord(D.members.length)} <span class="sm-cr-sp-arrow">▾</span></summary>
+          <div class="sm-cr-members">
+            ${D.members.map((m) => `<span class="sm-cr-member${m.user_id === D.uid ? " me" : ""}" title="${esc(m.email || "")}">${esc(nameOf(m.user_id))}${m.role === "owner" ? " 👑" : ""}</span>`).join("")}
+          </div>
+        </details>
+        <div class="sm-cr-myname">
+          <span>Ваше имя в круге:</span>
+          <input id="sm-cr-myname" maxlength="40" placeholder="напр. Мама, Игорь, Саша…" value="${esc(myName())}">
+          <button id="sm-cr-myname-save" type="button">Сохранить</button>
         </div>
         ${circles.length > 1 ? `<div class="sm-cr-switch">${circles.map((c) =>
           `<button class="sm-kind-chip${c.id === sel ? " on" : ""}" data-csel="${c.id}">${esc(c.name)}</button>`).join("")}</div>` : ""}
 
-        <div class="sm-cr-sec">🎯 Общие цели · ${monthLabel()}</div>
-        ${goals}
+        <section class="sm-cr-block">
+          <div class="sm-cr-sec">🎯 Общие цели · ${monthLabel()}</div>
+          ${goals}
+        </section>
 
-        <div class="sm-cr-sec">● Общие привычки · сегодня</div>
-        ${habits || '<p class="sm-cr-note">Добавьте первую общую привычку — например, «Вечерняя прогулка вместе».</p>'}
-        <form class="sm-cr-hadd">
-          <input class="sm-cr-input" placeholder="Новая общая привычка" maxlength="40">
-          <button class="sm-add-btn" type="submit">+</button>
-        </form>
+        <section class="sm-cr-block">
+          <div class="sm-cr-sec">● Общие привычки · сегодня</div>
+          ${habits || '<p class="sm-cr-note">Добавьте первую общую привычку — например, «Вечерняя прогулка вместе».</p>'}
+          <form class="sm-cr-hadd">
+            <input class="sm-cr-input" placeholder="Новая общая привычка" maxlength="40">
+            <button class="sm-add-btn" type="submit">+</button>
+          </form>
+        </section>
 
-        <div class="sm-cr-sec">👥 Задачи «на всех» ${INFO_BTN("shared")}</div>
-        <ul class="sm-task-list">${tasks || '<li class="sm-tasks-empty">Общих задач нет — добавьте первую.</li>'}</ul>
-        <div class="sm-kind-row">
-          <button type="button" class="sm-kind-chip${newKind === "high" ? " on" : ""}" data-ck="high">⚡ Приоритетные</button>
-          <button type="button" class="sm-kind-chip${newKind === "low" ? " on" : ""}" data-ck="low">📋 Второстепенные</button>
-        </div>
-        <form class="sm-cr-tadd">
-          <input class="sm-cr-input" placeholder="Задача для всех…" maxlength="120">
-          <button class="sm-add-btn" type="submit">+</button>
-        </form>
+        <section class="sm-cr-block">
+          <div class="sm-cr-sec">👥 Задачи «на всех» ${INFO_BTN("shared")}</div>
+          <ul class="sm-task-list">${tasks || '<li class="sm-tasks-empty">Общих задач нет — добавьте первую.</li>'}</ul>
+          <div class="sm-kind-row">
+            <button type="button" class="sm-kind-chip${newKind === "high" ? " on" : ""}" data-ck="high">⚡ Приоритетные</button>
+            <button type="button" class="sm-kind-chip${newKind === "low" ? " on" : ""}" data-ck="low">📋 Второстепенные</button>
+          </div>
+          <form class="sm-cr-tadd">
+            <input class="sm-cr-input" placeholder="Задача для всех…" maxlength="120">
+            <button class="sm-add-btn" type="submit">+</button>
+          </form>
+        </section>
 
-        ${bonusesHTML()}
+        ${(() => { const b = bonusesHTML(); return b ? `<section class="sm-cr-block">${b}</section>` : ""; })()}
         <form class="sm-cr-join sm-cr-join-more">
           <input class="sm-cr-input" placeholder="Код приглашения другого круга" maxlength="6">
           <button class="sm-cr-join-btn" type="submit">Войти</button>
@@ -3000,6 +3217,11 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     });
     root.querySelectorAll("[data-csel]").forEach((b) =>
       b.addEventListener("click", () => { sel = b.dataset.csel; CM.reset(); refresh(); }));
+    root.querySelector("#sm-cr-myname-save")?.addEventListener("click", () => {
+      const v = (root.querySelector("#sm-cr-myname")?.value || "").trim();
+      if (!v) { SixMin.toast("Введите имя — например, «Мама» или своё настоящее."); return; }
+      saveMyName(v);
+    });
     root.querySelectorAll(".sm-focus-title[data-gidx]").forEach((t) =>
       t.addEventListener("input", () => saveGoal(Number(t.dataset.gidx), { title: t.value })));
     root.querySelectorAll("[data-gdone]").forEach((b) =>
@@ -3027,6 +3249,32 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       }));
     root.querySelectorAll("[data-gadd]").forEach((b) =>
       b.addEventListener("click", () => addSub(D.goals.find((x) => x.goal_index === Number(b.dataset.gadd)) || { goal_index: Number(b.dataset.gadd), title: "" })));
+    // v0.6.2: необязательные дополнительные цели — создаём пустую и сразу фокус на названии
+    root.querySelector("[data-gnew]")?.addEventListener("click", async () => {
+      const idxs = (D.goals || []).map((g) => g.goal_index);
+      if (idxs.length >= 8) { SixMin.toast("Up to 8 goals: more than that and the circle's focus gets scattered."); return; }
+      const next = idxs.length ? Math.max(...idxs) + 1 : 0;
+      const mk = SixMin.monthKey();
+      const { data, error } = await SixMin.sb().from("circle_goals").insert({
+        circle_id: sel, period_type: "month", period_key: mk, goal_index: next, title: "",
+      }).select().maybeSingle();
+      if (error) { SixMin.toast("Failed to add goal: " + error.message); return; }
+      if (data) D.goals.push(data);
+      render();
+      root.querySelector(`.sm-focus-title[data-gidx="${next}"]`)?.focus();
+    });
+    // v0.6.2: goal deletion (along with its subtasks)
+    root.querySelectorAll("[data-gdel]").forEach((b) =>
+      b.addEventListener("click", async () => {
+        const i = Number(b.dataset.gdel);
+        const g = D.goals.find((x) => x.goal_index === i);
+        if (!g || !g.id) return;
+        const pos = (D.goals || []).map((x) => x.goal_index).indexOf(i);
+        if (!confirm(`Delete goal #${pos + 1}${g.title ? " «" + g.title + "»" : ""} along with its subtasks?`)) return;
+        await SixMin.sb().from("circle_goals").delete().eq("id", g.id);
+        D.goals = D.goals.filter((x) => x.goal_index !== i);
+        render();
+      }));
     root.querySelectorAll("[data-hab]").forEach((b) =>
       b.addEventListener("click", () => toggleHabit(D.habits.find((h) => h.id === b.dataset.hab))));
     root.querySelector(".sm-cr-hadd")?.addEventListener("submit", (e) => {
@@ -3104,6 +3352,19 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       .sm-cr-new{border:1px solid rgba(48,164,108,.5);background:#30a46c1a;color:#30a46c;border-radius:999px;
                  padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer}
       .sm-cr-members{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+      /* v0.7.1: участники круга — количество снаружи, список в спойлере */
+      .sm-cr-members-sp{margin-bottom:10px}
+      .sm-cr-members-sp summary{list-style:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;
+        font-size:13px;font-weight:700;border:1px solid rgba(128,128,128,.25);border-radius:999px;padding:6px 13px;
+        background:transparent;color:inherit;user-select:none}
+      .sm-cr-members-sp summary::-webkit-details-marker{display:none}
+      .sm-cr-members-sp summary b{color:var(--accent,#E30613);font-size:14px}
+      .sm-cr-sp-arrow{font-size:10px;opacity:.55;transition:transform .2s}
+      .sm-cr-members-sp[open] .sm-cr-sp-arrow{transform:rotate(180deg)}
+      .sm-cr-members-sp .sm-cr-members{margin-top:9px;margin-bottom:2px}
+      .sm-cr-myname{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:12px;opacity:.9;margin:-4px 0 10px}
+      .sm-cr-myname input{flex:1;min-width:120px;padding:7px 10px;border-radius:9px;border:1px solid rgba(128,128,128,.25);background:transparent;color:inherit;font-size:13px;outline:none}
+      .sm-cr-myname button{border:0;border-radius:9px;padding:7px 12px;background:rgba(128,128,128,.18);color:inherit;font-size:12px;font-weight:700;cursor:pointer}
       .sm-cr-member{font-size:12px;border:1px solid rgba(128,128,128,.25);border-radius:999px;padding:4px 10px;opacity:.8}
       .sm-cr-member.me{border-color:var(--accent,#E30613);color:var(--accent,#E30613);font-weight:700}
       .sm-cr-switch{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
@@ -3116,11 +3377,28 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
                       font-size:13px;padding:0 12px;cursor:pointer;border:1px solid rgba(127,111,240,.4)}
       .sm-cr-sec{font-size:12px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;opacity:.6;
                  margin:16px 0 8px}
-      .sm-cr-goal{border:1px solid rgba(128,128,128,.18);border-radius:14px;padding:12px;margin-bottom:10px}
+      /* v0.6.2: разделы круга — отдельные блоки на тон-два светлее фона, с подсветкой при наведении */
+      .sm-cr-block{background:var(--block,#1D1D1D);border:1px solid var(--block-line,var(--line,rgba(128,128,128,.18)));
+                   border-radius:16px;padding:12px 12px 8px;margin:0 0 14px;
+                   transition:background-color .18s ease,border-color .18s ease}
+      .sm-cr-block:hover{background:var(--block-hi,#242424);border-color:var(--accent,#E30613)}
+      .sm-cr-block .sm-cr-sec{margin:14px 0 10px}
+      .sm-cr-block .sm-cr-sec:first-child{margin:2px 0 10px}
+      .sm-cr-block .sm-cr-note{margin-bottom:8px}
+      .sm-cr-goal{border:1px solid rgba(128,128,128,.18);border-radius:14px;padding:12px;margin-bottom:10px;
+                  background:var(--inset,#242424);transition:background-color .18s ease,border-color .18s ease}
+      .sm-cr-goal:hover{background:var(--inset-hi,#2A2A2A);border-color:rgba(227,6,19,.45)}
       .sm-cr-goal.done{opacity:.55}
       .sm-cr-goal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
       .sm-cr-goal-cap{font-size:12px;font-weight:800;opacity:.7;text-transform:uppercase}
-      .sm-cr-habit{display:flex;align-items:center;gap:10px;padding:6px 2px}
+      .sm-cr-goal-btns{display:flex;gap:8px;align-items:center}
+      .sm-cr-goal-del{border:0;background:transparent;color:inherit;opacity:.35;cursor:pointer;
+                      font-size:17px;line-height:1;padding:2px 4px}
+      .sm-cr-goal-del:hover{opacity:1;color:#E30613}
+      .sm-cr-goal-add{margin:0 0 8px}
+      .sm-cr-habit{display:flex;align-items:center;gap:10px;padding:8px;border-radius:10px;
+                   border:1px solid transparent;transition:background-color .15s ease}
+      .sm-cr-habit:hover{background:var(--inset,#242424)}
       .sm-cr-habit-name{flex:1;font-size:14px;font-weight:600;border-left:3px solid var(--hc,var(--accent,#E30613));padding-left:8px}
       .sm-cr-habit-who{display:flex;gap:3px;align-items:center}
       .sm-cr-habit-who i{font-style:normal;width:22px;height:22px;border-radius:50%;background:var(--accent-soft,#FDE9E9);color:#30a46c;
@@ -3176,18 +3454,33 @@ window.__v02stage = "after-sixmin-circles"; if (window.__v02say) window.__v02say
         'style="width:100%;margin-bottom:8px;padding:11px 12px;border-radius:10px;border:1px solid rgba(128,128,128,.25);background:transparent;color:inherit;font-size:15px;outline:none">' +
       '<input id="sm-su-pass" type="password" placeholder="Пароль (минимум 6 символов)" autocomplete="new-password" ' +
         'style="width:100%;margin-bottom:8px;padding:11px 12px;border-radius:10px;border:1px solid rgba(128,128,128,.25);background:transparent;color:inherit;font-size:15px;outline:none">' +
+      '<input id="sm-su-name" type="text" placeholder="Имя — как видеть в кругах (необязательно)" maxlength="40" autocomplete="nickname" ' +
+        'style="width:100%;margin-bottom:8px;padding:11px 12px;border-radius:10px;border:1px solid rgba(128,128,128,.25);background:transparent;color:inherit;font-size:15px;outline:none">' +
       '<button id="sm-su-btn" style="width:100%;padding:11px;border:0;border-radius:10px;background:#30a46c;color:#fff;font-weight:700;font-size:14px;cursor:pointer">Создать аккаунт</button>' +
       '<div id="sm-su-msg" style="font-size:12.5px;margin-top:8px;line-height:1.5;opacity:.8"></div>';
     box.appendChild(wrap);
     wrap.querySelector("#sm-su-btn").onclick = async () => {
       const email = wrap.querySelector("#sm-su-email").value.trim();
       const pass = wrap.querySelector("#sm-su-pass").value;
+      const name = (wrap.querySelector("#sm-su-name").value || "").trim();
       const msg = wrap.querySelector("#sm-su-msg");
       if (!email || email.indexOf("@") < 0) { msg.textContent = "Нужна корректная почта."; return; }
       if (pass.length < 6) { msg.textContent = "Пароль — минимум 6 символов."; return; }
       msg.textContent = "Создаю…";
-      const { data, error } = await SixMin.sb().auth.signUp({ email, password: pass });
+      const { data, error } = await SixMin.sb().auth.signUp({
+        email, password: pass,
+        options: { data: { display_name: name || null } },
+      });
       if (error) { msg.textContent = "Ошибка: " + error.message; return; }
+      // v0.6.1: сразу пишем имя в profiles, чтобы в кругах человек был не «участник».
+      if (name) {
+        if (data.session) {
+          const r = await SixMin.sb().rpc("set_my_display_name", { p_name: name });
+          if (r.error) localStorage.setItem("sm_pending_name", name);
+        } else {
+          localStorage.setItem("sm_pending_name", name); // применим после входа
+        }
+      }
       if (data.user && !data.session)
         msg.textContent = "Аккаунт создан. Supabase отправил письмо со ссылкой подтверждения — откройте её, затем входите паролем.";
       else
@@ -3199,6 +3492,92 @@ window.__v02stage = "after-sixmin-circles"; if (window.__v02say) window.__v02say
   window.SixMinAuth = { mount };
 })();
 window.__v02stage = "after-sixmin-auth"; if (window.__v02say) window.__v02say("v02 stage: after-sixmin-auth");
+
+// app/js/sixmin-swipe.js — v0.6.3: горизонтальный свайп по экрану переключает вкладки.
+// Свайп влево  → следующая вкладка нижнего меню (порядок как в панели).
+// Свайп вправо → предыдущая вкладка.
+// НЕ срабатывает: на экранах без нижнего меню (форма/быстро/готово), при вертикальном
+// скролле, в полях ввода, внутри горизонтально скроллимых блоков (сетка трекера),
+// на свайпе задачи «перенести на завтра» и на элементах с [data-noswipe].
+
+(function () {
+  const MIN_DX = 60;  // минимальное горизонтальное смещение, px
+  const MAX_DY = 45;  // максимальное вертикальное смещение, px
+  const RATIO = 2;    // |dx| должно превышать |dy| минимум вдвое
+
+  let x0 = null;
+  let y0 = null;
+  let blocked = false;
+
+  function horizScrollable(el) {
+    for (let n = el; n && n !== document.body; n = n.parentElement) {
+      if (!(n instanceof Element)) break;
+      const ox = getComputedStyle(n).overflowX;
+      if ((ox === "auto" || ox === "scroll") && n.scrollWidth > n.clientWidth + 4) return true;
+    }
+    return false;
+  }
+
+  function reset() {
+    x0 = null;
+    y0 = null;
+    blocked = false;
+  }
+
+  document.addEventListener(
+    "touchstart",
+    (e) => {
+      if (e.touches.length !== 1) return reset();
+      const t = e.target;
+      blocked =
+        !!(t.closest && t.closest("input,textarea,select,[contenteditable],.sm-task-wrap,[data-noswipe]")) ||
+        horizScrollable(t);
+      x0 = e.touches[0].clientX;
+      y0 = e.touches[0].clientY;
+    },
+    { passive: true }
+  );
+
+  document.addEventListener(
+    "touchmove",
+    (e) => {
+      if (x0 === null) return;
+      if (e.touches.length !== 1) reset();
+    },
+    { passive: true }
+  );
+
+  document.addEventListener(
+    "touchcancel",
+    () => reset(),
+    { passive: true }
+  );
+
+  document.addEventListener(
+    "touchend",
+    (e) => {
+      if (x0 === null || blocked) return reset();
+      const dx = e.changedTouches[0].clientX - x0;
+      const dy = e.changedTouches[0].clientY - y0;
+      reset();
+      if (Math.abs(dx) < MIN_DX || Math.abs(dy) > MAX_DY || Math.abs(dx) < RATIO * Math.abs(dy)) return;
+
+      const bar = document.getElementById("tabbar");
+      if (!bar) return;
+      if (getComputedStyle(bar).display === "none") return; // форма/быстро/готово
+      const btns = Array.prototype.slice.call(bar.querySelectorAll("button"));
+      const active = bar.querySelector("button.active");
+      if (!active) return;
+      const next = btns[btns.indexOf(active) + (dx < 0 ? 1 : -1)];
+      if (next) next.click();
+    },
+    { passive: true }
+  );
+
+  window.SixMin = window.SixMin || {};
+  window.SixMin.swipeVersion = "0.6.3";
+})();
+window.__v02stage = "after-sixmin-swipe"; if (window.__v02say) window.__v02say("v02 stage: after-sixmin-swipe");
 
 /* ===== v0.2: монтирование модулей + экранная диагностика ===== */
 (function () {
@@ -3247,6 +3626,7 @@ window.__v02stage = "after-sixmin-auth"; if (window.__v02say) window.__v02say("v
       [window.SixMinFocus, "mount", "#focus-host", "focus", undefined],
       [window.SixMinTasks, "mount", "#tasks-host", "tasks", { area: "personal" }],
       [window.SixMinTasks, "mount", "#work-host", "work", { area: "work", stats: true }],
+      [window.SixMinDoneToday, "mount", "#donetoday-host", "donetoday", undefined],
       [window.SixMinAnalytics, "mount", "#stats-host", "analytics", undefined],
       [window.SixMinTheory, "mountCards", "#theory-host", "theory", undefined],
       [window.SixMinVoice, "mount", "#voice-host", "voice", { slot: "quick" }],

@@ -30,10 +30,16 @@
   --shadow:0 2px 10px rgba(60,45,30,.06);
   --tab-h:64px;
   --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  /* v0.6.2: фона внутренних блоков (круги): на пару тонов светлее карточки + подсветка */
+  --block:#F4F4F2;
+  --block-hi:#EBEBE8;
+  --block-line:#E4E4E2;
+  --inset:#FFFFFF;
+  --inset-hi:#FAFAF8;
 }
 
-html[data-theme="light"]{--bg:#FFFFFF;--card:#FFFFFF;--ink:#0A0A0A;--muted:#6E6E6E;--line:#E4E4E4;--accent:#E30613;--accent-soft:#FDE9E9;--shadow:0 2px 10px rgba(0,0,0,.08);color-scheme:light}
-html[data-theme="dark"]{--bg:#0B0B0B;--card:#161616;--ink:#F5F5F5;--muted:#9C9C9C;--line:#2A2A2A;--accent:#FF2B2B;--accent-soft:#2B1212;--shadow:0 2px 12px rgba(0,0,0,.5);color-scheme:dark}
+html[data-theme="light"]{--bg:#FFFFFF;--card:#FFFFFF;--ink:#0A0A0A;--muted:#6E6E6E;--line:#E4E4E4;--accent:#E30613;--accent-soft:#FDE9E9;--shadow:0 2px 10px rgba(0,0,0,.08);color-scheme:light;--block:#F4F4F2;--block-hi:#EBEBE8;--block-line:#E4E4E2;--inset:#FFFFFF;--inset-hi:#FAFAF8}
+html[data-theme="dark"]{--bg:#0B0B0B;--card:#161616;--ink:#F5F5F5;--muted:#9C9C9C;--line:#2A2A2A;--accent:#FF2B2B;--accent-soft:#2B1212;--shadow:0 2px 12px rgba(0,0,0,.5);color-scheme:dark;--block:#1D1D1D;--block-hi:#252525;--block-line:#2E2E2E;--inset:#242424;--inset-hi:#2A2A2A}
 
 @media (prefers-color-scheme: dark){
   :root{
@@ -45,6 +51,11 @@ html[data-theme="dark"]{--bg:#0B0B0B;--card:#161616;--ink:#F5F5F5;--muted:#9C9C9
     --accent:#E0975F;
     --accent-soft:#33291F;
     --shadow:0 2px 12px rgba(0,0,0,.35);
+    --block:#1D1D1D;
+    --block-hi:#252525;
+    --block-line:#2E2E2E;
+    --inset:#242424;
+    --inset-hi:#2A2A2A;
   }
 }
 
@@ -309,6 +320,9 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
       <button class="info-btn" data-info="pm" aria-label="Как пользоваться блоком «Вечер»">i</button>
       <div class="slot-action" id="pm-action">→</div>
     </article>
+
+    <!-- v0.7.1: «Сегодня выполнено» — спойлер с прогрессом по задачам (монтирует v02.js) -->
+    <div id="donetoday-host"></div>
 
     <article class="card memory" id="memory-card" hidden>
       <div class="memory-label" id="memory-label">В этот день</div>
@@ -598,7 +612,7 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
   <button data-tab="settings"><span>⚙️</span>Настройки</button>
 </nav>
 
-<script defer src="js/bundle.js?v=024"></script>
-<script defer src="js/v02.js?v=028"></script>
+<script defer src="js/bundle.js?v=025"></script>
+<script defer src="js/v02.js?v=032"></script>
 </body>
 </html>
