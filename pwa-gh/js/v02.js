@@ -2733,8 +2733,14 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
   let newKind = "high";
 
   const GOAL_COUNT = 3;
-  const code6 = () => Math.random().toString(36).slice(2, 8).toUpperCase();
+  // v0.6.6: коды без неоднозначных символов (0/O/1/I) — конец путанице «О против нуля»
+  const CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const code6 = () => Array.from(crypto.getRandomValues(new Uint8Array(6)))
+    .map((b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join("");
   const esc = SixMin.esc;
+  // v0.6.6 рев.3: склонение валюты круга («20 баллов», а не «20 баллы»)
+  const pluralRu = (n, f) => { const a = Math.abs(n) % 100, b = a % 10; return (a > 10 && a < 20) ? f[2] : (b > 1 && b < 5) ? f[1] : (b === 1) ? f[0] : f[2]; };
+  const curWord = (currency, n) => { const w = String(currency || "баллы").toLowerCase(); return w.indexOf("балл") === 0 ? pluralRu(n, ["балл", "балла", "баллов"]) : (currency || "баллы"); };
 
   // 💬 комментарии и вложения общих задач (v0.6) — тот же компонент, что в личных задачах.
   // Файлы круга лежат в общей папке circles/<circle_id>/<user_id>/..., поэтому их
@@ -2876,7 +2882,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     if (!uid) { SixMin.toast("Сначала войдите: «Настройки» → создайте аккаунт и подтвердите письмо"); return; }
     const { data, error } = await SixMin.sb().rpc("circle_join_by_code", { p_code: code });
     if (error) { SixMin.toast("Ошибка: " + error.message); return; }
-    if (!data || !data.length) { SixMin.toast("Код не найден"); return; }
+    if (!data || !data.length) { SixMin.toast("Код не найден. Проверьте букву O и ноль 0, лишние пробелы"); return; }
     SixMin.toast("Вы в круге «" + data[0].circle_name + "» 🤝");
     await refresh();
   }
@@ -3023,8 +3029,10 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
         '<div class="sm-task-actions">' + CM.buttonHTML(t, "Обсуждение баунти") + acts + '</div></div>' +
         CM.panelHTML(t) + '</li>';
     };
+    const curN = (n) => curWord(c.bonus_currency, n);
     return '<div class="sm-cr-sec">🎁 Бонусы круга · ' + cur() + ' ' + INFO_BTN("bonuses") + '</div>' +
-      '<div class="sm-cr-bal"><div class="sm-cr-bal-me">Мой баланс: <b>' + balOf(D.uid) + '</b> ' + cur() + '</div>' +
+      '<div class="sm-cr-bal"><div class="sm-cr-bal-me">Мой баланс: <b>' + balOf(D.uid) + '</b> ' + curN(balOf(D.uid)) + '</div>' +
+      '<div class="sm-cr-bal-hint">Как зарабатывать: возьмите баунти («Взять» → сделать → «Готово ✅») или общую задачу круга — владелец одобрит, и ' + cur() + ' упадут в копилку.</div>' +
       '<div class="sm-cr-board">' + board.map((x, i) =>
         '<span class="sm-cr-member' + (x.u === D.uid ? " me" : "") + '">' + (i + 1) + '. ' + SixMin.esc(nameOf(x.u)) + ' · ' + x.b + '</span>').join("") + '</div></div>' +
       (isOwner ? '<form class="sm-cr-badd" data-role="bounty">' +
@@ -3036,9 +3044,11 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       '<ul class="sm-task-list">' + (live.map(row).join("") || '<li class="sm-tasks-empty">Баунти пока нет — создайте первое.</li>') + '</ul>' +
       '<div class="sm-cr-sec">Витрина наград</div>' +
       '<div class="sm-cr-shop">' + ((D.rewards || []).map((r) =>
-        '<span class="sm-cm-chip">' + SixMin.esc(r.title) + ' · ' + r.cost_points + ' ' + cur() + ' ' +
+        '<span class="sm-cm-chip">' + SixMin.esc(r.title) + ' · ' + r.cost_points + ' ' + curN(r.cost_points) + ' ' +
         (isOwner ? '<b data-bact="delreward" data-id="' + r.id + '">×</b>'
-                 : '<b data-bact="spend" data-id="' + r.id + '">списать</b>') + '</span>').join("") || '<p class="sm-cr-note">Витрина пуста.</p>') + '</div>' +
+                 : (balOf(D.uid) >= r.cost_points
+                    ? '<b data-bact="spend" data-id="' + r.id + '">списать</b>'
+                    : '<b class="sm-cr-spend-off" title="Не хватает ' + (r.cost_points - balOf(D.uid)) + ' ' + curN(r.cost_points - balOf(D.uid)) + '">нужно ещё ' + (r.cost_points - balOf(D.uid)) + '</b>')) + '</span>').join("") || '<p class="sm-cr-note">Витрина пуста.</p>') + '</div>' +
       (isOwner ? '<form class="sm-cr-badd" data-role="reward">' +
         '<input class="sm-cr-input" name="t" placeholder="Награда: кино-вечер, пицца…" maxlength="80">' +
         '<input class="sm-cr-input sm-cr-num" name="p" type="number" min="1" max="9999" value="20" title="Цена">' +
@@ -3061,7 +3071,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     if (act === "approve") {
       await sb.from("tasks").update({ bounty_status: "approved", completed: true, completed_at: new Date().toISOString() }).eq("id", id);
       await sb.from("bonus_ledger").insert({ circle_id: sel, user_id: t.assignee_id, delta: t.bounty_points, reason: "баунти: " + t.title, task_id: id });
-      SixMin.toast("Одобрено: +" + t.bounty_points + " " + (circles.find((c) => c.id === sel)?.bonus_currency || "баллов") + " → " + nameOf(t.assignee_id));
+      SixMin.toast("Одобрено: +" + t.bounty_points + " " + curWord(circles.find((c) => c.id === sel)?.bonus_currency, t.bounty_points) + " → " + nameOf(t.assignee_id));
     }
     await refresh();
   }
@@ -3069,7 +3079,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
   async function spendReward(r) {
     const c = circles.find((x) => x.id === sel);
     const bal = (D.ledger || []).filter((l) => l.user_id === D.uid).reduce((s2, l) => s2 + l.delta, 0);
-    if (bal < r.cost_points) { SixMin.toast("Не хватает " + (r.cost_points - bal) + " " + (c?.bonus_currency || "баллов")); return; }
+    if (bal < r.cost_points) { SixMin.toast("Не хватает " + (r.cost_points - bal) + " " + curWord(c?.bonus_currency, r.cost_points - bal)); return; }
     await SixMin.sb().from("bonus_ledger").insert({ circle_id: sel, user_id: D.uid, delta: -r.cost_points, reason: "награда: " + r.title, reward_id: r.id });
     SixMin.toast("Списано " + r.cost_points + " — наслаждайтесь 🎉");
     await refresh();
@@ -3158,10 +3168,15 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
         const inp = root.querySelector(".sm-cr-create input");
         if (inp.value.trim()) createCircle(inp.value);
       });
-      root.querySelector(".sm-cr-join").addEventListener("submit", (e) => {
+      root.querySelector(".sm-cr-join").addEventListener("submit", async (e) => {
         e.preventDefault();
-        const inp = root.querySelector(".sm-cr-join input");
-        if (inp.value.trim()) joinCircle(inp.value);
+        const form = e.currentTarget;
+        const inp = form.querySelector("input");
+        const btn = form.querySelector("button");
+        if (!inp.value.trim()) return;
+        // v0.6.6: лоадер на кнопке, пока код проверяется (чтобы «Код не найден» не мерещился при лаге)
+        if (btn) { btn.disabled = true; btn.textContent = "Проверяю…"; }
+        try { await joinCircle(inp.value); } finally { if (btn) { btn.disabled = false; btn.textContent = "Войти в круг"; } }
       });
       wireInfo();
       return;
@@ -3378,10 +3393,14 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       await refresh();
     });
     CM.wire(root);
-    root.querySelector(".sm-cr-join-more")?.addEventListener("submit", (e) => {
+    root.querySelector(".sm-cr-join-more")?.addEventListener("submit", async (e) => {
       e.preventDefault();
-      const inp = e.target.querySelector("input");
-      if (inp.value.trim()) joinCircle(inp.value);
+      const form = e.currentTarget;
+      const inp = form.querySelector("input");
+      const btn = form.querySelector("button");
+      if (!inp.value.trim()) return;
+      if (btn) { btn.disabled = true; btn.textContent = "Проверяю…"; }
+      try { await joinCircle(inp.value); } finally { if (btn) { btn.disabled = false; btn.textContent = "Войти"; } }
     });
     wireInfo();
   }
@@ -3473,6 +3492,8 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       .sm-cr-shop{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
       .sm-cr-shop b{color:var(--accent,#E30613);margin-left:6px;cursor:pointer;font-weight:800}
       .sm-cr-ledger{display:flex;flex-direction:column;gap:4px}
+      .sm-cr-bal-hint{font-size:11.5px;opacity:.65;margin-top:4px;line-height:1.4}
+      .sm-cr-spend-off{opacity:.55;font-size:11px;cursor:default}
       .sm-cr-led-row{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;opacity:.85}
       .sm-cr-led-row .plus{color:#30a46c;font-weight:800}
       .sm-cr-led-row .minus{color:#E30613;font-weight:800}
