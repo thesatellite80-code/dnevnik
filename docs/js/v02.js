@@ -15,6 +15,7 @@
 
 window.__v02stage = "v02-start";
 
+
 // app/js/sixmin-common.js — общие утилиты для модулей v0.2
 // Подключается ПЕРЕД остальными модулями v0.2.
 
@@ -1740,15 +1741,17 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
 // API: SixMinTasks.mount(container, { area: 'personal'|'work', stats: bool })
 
 (function () {
+  // v0.6.6: категории без «детсадовских» эмодзи — строгие цветные точки-маркеры
   const KINDS_PERSONAL = [
-    { id: "cream", emoji: "🍰", label: "Главное" },
-    { id: "cherry", emoji: "🍒", label: "Радости" },
-    { id: "fun", emoji: "🎈", label: "Отдых" },
+    { id: "cream", emoji: "", dot: "#E30613", label: "Первостепенные" },
+    { id: "cherry", emoji: "", dot: "#9A9A9A", label: "Второстепенные" },
+    { id: "fun", emoji: "", dot: "#E8B4B8", label: "Отдых" },
   ];
   const KINDS_WORK = [
     { id: "high", emoji: "⚡", label: "Приоритетные" },
     { id: "low", emoji: "📋", label: "Второстепенные" },
   ];
+  const kindMark = (k) => (k && k.dot) ? `<span class="sm-dot" style="background:${k.dot}"></span>` : ((k && k.emoji) || "");
 
   function createInstance(opts) {
     opts = opts || {};
@@ -1807,10 +1810,13 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
         </div>`;
     }
 
-    async function add(title) {
+    async function add(title, extra) {
+      extra = extra || {};
       const uid = await SixMin.uid();
       const { error } = await SixMin.sb().from("tasks").insert({
-        user_id: uid, title: title.trim(), due_date: todayKey, area: AREA,
+        user_id: uid, title: title.trim(), due_date: extra.due || todayKey,
+        due_time: extra.dueTime || null, remind_at: extra.remindAt || null,
+        area: AREA,
         kind: newKind, position: today.length,
       });
       if (error) { SixMin.toast("Ошибка: " + error.message); return; }
@@ -1896,8 +1902,9 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
       <div class="sm-task${t.completed ? " sm-task-done" : ""}">
         <div class="sm-task-main">
           <button class="sm-task-check" data-act="toggle" data-id="${t.id}">${t.completed ? "☑" : "☐"}</button>
-          <span class="sm-task-title" data-ren="${t.id}" title="Тапните, чтобы переименовать">${isUpcoming || isOverdue ? kindOf(t).emoji + " " : ""}${t.title && t.title.trim() ? SixMin.esc(t.title) : "<i style='opacity:.5'>(без названия)</i>"}${t.postpone_count ? ` <em class="sm-task-moved" title="Переносов: ${t.postpone_count}">↪${t.postpone_count}</em>` : ""}</span>
-          ${isOverdue ? `<span class="sm-task-overdue-badge">${t.due_date.slice(8)}.${t.due_date.slice(5, 7)}</span>` : ""}
+          <span class="sm-task-title" data-ren="${t.id}" title="Тапните, чтобы переименовать">${isUpcoming || isOverdue ? kindMark(kindOf(t)) + " " : ""}${t.title && t.title.trim() ? SixMin.esc(t.title) : "<i style='opacity:.5'>(без названия)</i>"}${t.postpone_count ? ` <em class="sm-task-moved" title="Переносов: ${t.postpone_count}">↪${t.postpone_count}</em>` : ""}</span>
+          ${t.remind_at && !t.remind_sent_at && !t.completed ? `<span class="sm-task-rem-badge">⏰ ${String(t.remind_at).slice(8, 10)}.${String(t.remind_at).slice(5, 7)} ${String(t.remind_at).slice(11, 16)}</span>` : ""}
+          ${isOverdue ? `<span class="sm-task-overdue-badge">${t.due_date.slice(8)}.${t.due_date.slice(5, 7)}${t.due_time ? " " + String(t.due_time).slice(0, 5) : ""}</span>` : ""}
         </div>
         <div class="sm-task-actions">
           ${!t.completed && !isUpcoming ? `<button class="sm-task-btn sm-task-postpone" data-act="postpone" data-id="${t.id}" title="Перенести на завтра">→ завтра</button>` : ""}
@@ -1934,17 +1941,21 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
         ${KINDS.map((k) => {
           const rows = today.filter((t) => (t.kind || KINDS[0].id) === k.id);
           if (!rows.length) return "";
-          return `<div class="sm-kind-head">${k.emoji} ${k.label}</div>
+          return `<div class="sm-kind-head">${kindMark(k)} ${k.label}</div>
             <ul class="sm-task-list">${rows.map((t) => taskRow(t, false, false)).join("")}</ul>`;
         }).join("") ||
           `<ul class="sm-task-list"><li class="sm-tasks-empty">Список пуст. Добавьте первую задачу 👇<br><small>Свайпните задачу влево или нажмите «→ завтра», чтобы перенести.</small></li></ul>`}
         ${upcomingHTML()}
         <div class="sm-kind-row">
-          ${KINDS.map((k) => `<button type="button" class="sm-kind-chip${newKind === k.id ? " on" : ""}" data-kind="${k.id}">${k.emoji} ${k.label}</button>`).join("")}
+          ${KINDS.map((k) => `<button type="button" class="sm-kind-chip${newKind === k.id ? " on" : ""}" data-kind="${k.id}">${kindMark(k)} ${k.label}</button>`).join("")}
         </div>
         <form class="sm-task-add">
-          <input class="sm-task-add-input" maxlength="120" placeholder="${ph}" autocomplete="off">
+          <textarea class="sm-task-add-input" rows="1" maxlength="120" placeholder="${ph}" autocomplete="off"></textarea>
           <button class="sm-task-add-btn" type="submit">+</button>
+          <div class="sm-task-add-opts">
+            <label class="sm-add-lbl">Дедлайн<input type="date" class="sm-add-due"><input type="time" class="sm-add-duetime"></label>
+            <label class="sm-add-lbl">Напоминание<input type="datetime-local" class="sm-add-remind"></label>
+          </div>
         </form>
       </div>`;
 
@@ -1963,26 +1974,62 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
         AREA === "work" ? "Рабочие задачи" : "Задачи",
         (AREA === "work"
           ? "<p>Рабочий список <b>не смешивается</b> с личным. Задачи делятся на <b>⚡ Приоритетные</b> и <b>📋 Второстепенные</b> — переключатель над формой добавления. Быстро поймать задачу можно из Telegram: <code>/work текст</code> (попадёт в приоритетные на сегодня).</p><p>Карточки сверху — рабочая статистика: сделано сегодня и за неделю, 🔥 серия дней с выполненными задачами, ↪ суммарные переносы.</p>"
-          : "<p>Чек-лист на сегодня в трёх категориях, по образцу бумажного блокнота: <b>🍰 Главное</b>, <b>🍒 Радости</b>, <b>🎈 Отдых</b> — переключатель над формой. Квадратик слева — выполнить; «→ завтра» или свайп влево — перенести (↪N — сколько раз переносили: больше двух — пора разбить задачу или удалить).</p>") +
+          : "<p>Чек-лист на сегодня в трёх категориях, по образцу бумажного блокнота: <b>Первостепенные</b>, <b>Второстепенные</b> и <b>Отдых</b> (цветные точки-маркеры) — переключатель над формой. Квадратик слева — выполнить; «→ завтра» или свайп влево — перенести (↪N — сколько раз переносили: больше двух — пора разбить задачу или удалить).</p><p>В форме добавления можно задать <b>дедлайн</b> (дата и время) и <b>напоминание</b> (дата и время): бот пришлёт напоминание о задаче в Telegram в назначенный час (значок ⏰ у задачи).</p>") +
         "<p><b>💬 у каждой задачи</b> — комментарии и вложения: 📎 фото/документ и 🎙 голосовое (хранятся в вашем приватном облаке, видите только вы). Блок <b>«Запланировано впереди»</b> показывает все будущие задачи по датам, включая перенесённые; «→ сегодня» возвращает задачу в сегодняшний список.</p>"));
 
       root.querySelectorAll("[data-ren]").forEach((sp) =>
-      sp.addEventListener("click", async (e) => {
+      sp.addEventListener("click", (e) => {
         e.stopPropagation();
         const t = [...today, ...overdue, ...upcoming].find((x) => x.id === sp.dataset.ren);
-        if (!t) return;
-        const nt = prompt("Новое название задачи:", t.title || "");
-        if (nt === null || !nt.trim()) return;
-        t.title = nt.trim();
-        render();
-        await SixMin.sb().from("tasks").update({ title: t.title }).eq("id", t.id);
+        if (!t || sp.querySelector("input")) return;
+        // v0.6.6: инлайн-переименование вместо системного prompt (удобно для длинных текстов)
+        const input = document.createElement("input");
+        input.className = "sm-task-ren";
+        input.value = t.title || "";
+        input.maxLength = 120;
+        sp.replaceWith(input);
+        input.focus();
+        input.select();
+        let done = false;
+        const save = async () => {
+          if (done) return;
+          done = true;
+          const v = input.value.trim();
+          if (v && v !== t.title) {
+            t.title = v;
+            await SixMin.sb().from("tasks").update({ title: v }).eq("id", t.id);
+          }
+          render();
+        };
+        input.addEventListener("blur", save);
+        input.addEventListener("keydown", (ev) => {
+          if (ev.key === "Enter") { ev.preventDefault(); input.blur(); }
+          if (ev.key === "Escape") { done = true; render(); }
+        });
       }));
     root.querySelectorAll("[data-kind]").forEach((b) =>
         b.addEventListener("click", () => { newKind = b.dataset.kind; render(); }));
-      root.querySelector(".sm-task-add")?.addEventListener("submit", (e) => {
+      const addForm = root.querySelector(".sm-task-add");
+      const addInp = root.querySelector(".sm-task-add-input");
+      // v0.6.6: авторесайз поля новой задачи (до ~4 строк)
+      addInp?.addEventListener("input", () => {
+        addInp.style.height = "auto";
+        addInp.style.height = Math.min(addInp.scrollHeight, 96) + "px";
+      });
+      addForm?.addEventListener("submit", (e) => {
         e.preventDefault();
-        const inp = root.querySelector(".sm-task-add-input");
-        if (inp.value.trim()) { inp.value = ""; add(inp.value); inp.focus(); }
+        // v0.6.6: FIX — значение захватывается ДО очистки (раньше задача создавалась пустой)
+        const v = addInp.value;
+        if (!v.trim()) return;
+        const due = root.querySelector(".sm-add-due")?.value || "";
+        const dueTime = root.querySelector(".sm-add-duetime")?.value || "";
+        const remind = root.querySelector(".sm-add-remind")?.value || "";
+        addInp.value = "";
+        addInp.style.height = "auto";
+        const dt = root.querySelector(".sm-add-duetime"); if (dt) dt.value = "";
+        const rm = root.querySelector(".sm-add-remind"); if (rm) rm.value = "";
+        add(v, { due, dueTime, remindAt: remind ? new Date(remind).toISOString() : null });
+        addInp.focus();
       });
 
       // комментарии и вложения (общий компонент v0.6)
@@ -2054,7 +2101,10 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
       .sm-cm-send{color:var(--accent,#E30613);font-weight:700}
       .sm-task-main{display:flex;align-items:center;gap:10px;flex:1;min-width:0}
       .sm-task-check{border:0;background:transparent;font-size:20px;cursor:pointer;color:var(--accent,#E30613);line-height:1;padding:0}
-      .sm-task-title{font-size:14.5px;line-height:1.35;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;word-break:break-word}
+      .sm-task-title{font-size:14.5px;line-height:1.35;white-space:normal;word-wrap:break-word;overflow-wrap:break-word;overflow:visible;flex:1;min-width:0}
+      .sm-dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle}
+      .sm-task-rem-badge{font-size:10px;background:rgba(227,6,19,.15);color:#E30613;padding:2px 6px;border-radius:6px;font-weight:700;white-space:nowrap;margin-left:6px}
+      .sm-task-ren{flex:1;font:inherit;font-size:14.5px;background:var(--inset,#1c1c1c);border:1px solid var(--line,#333);border-radius:8px;padding:4px 8px;color:inherit;min-width:0}
       .sm-task-done .sm-task-title{text-decoration:line-through;opacity:.5}
       .sm-task-moved{font-style:normal;font-size:11px;color:var(--accent,#E30613);font-weight:700}
       .sm-task-overdue-badge{font-size:10px;background:var(--accent-soft,#FDE9E9);color:#E30613;padding:2px 6px;border-radius:6px;font-weight:700;white-space:nowrap}
@@ -2077,10 +2127,14 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
                     background:transparent;color:inherit;cursor:pointer;opacity:.7}
       .sm-kind-chip.on{background:var(--accent,#E30613);border-color:var(--accent,#E30613);color:#fff;opacity:1}
       .sm-kind-head{font-size:12px;font-weight:700;opacity:.6;margin:10px 0 4px}
-      .sm-task-add{display:flex;gap:8px;margin-top:8px}
+      .sm-task-add{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+      .sm-task-add-opts{display:flex;gap:8px;flex-wrap:wrap;width:100%}
+      .sm-add-lbl{display:flex;align-items:center;gap:4px;font-size:11px;opacity:.85}
+      .sm-add-lbl input{background:var(--inset,#1c1c1c);border:1px solid var(--line,#333);border-radius:8px;color:inherit;padding:4px 6px;font-size:12px;color-scheme:dark}
       .sm-task-add-input{flex:1;padding:11px 14px;border-radius:12px;border:1px solid var(--bg);
                          background:transparent;color:inherit;font-size:14px;outline:none}
       .sm-task-add-input:focus{border-color:var(--accent,#E30613)}
+      textarea.sm-task-add-input{resize:none;overflow:hidden;font:inherit;line-height:1.3}
       .sm-task-add-btn{width:44px;border-radius:12px;border:0;background:var(--accent,#E30613);color:#fff;font-size:22px;cursor:pointer}`;
       document.head.appendChild(css);
     }
@@ -2679,8 +2733,33 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
   let newKind = "high";
 
   const GOAL_COUNT = 3;
-  const code6 = () => Math.random().toString(36).slice(2, 8).toUpperCase();
+  // v0.6.6: коды без неоднозначных символов (0/O/1/I) — конец путанице «О против нуля»
+  const CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const code6 = () => Array.from(crypto.getRandomValues(new Uint8Array(6)))
+    .map((b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join("");
   const esc = SixMin.esc;
+  // v0.6.6 рев.3: склонение валюты круга («20 баллов», а не «20 баллы»)
+  const pluralRu = (n, f) => { const a = Math.abs(n) % 100, b = a % 10; return (a > 10 && a < 20) ? f[2] : (b > 1 && b < 5) ? f[1] : (b === 1) ? f[0] : f[2]; };
+  const curWord = (currency, n) => { const w = String(currency || "баллы").toLowerCase(); return w.indexOf("балл") === 0 ? pluralRu(n, ["балл", "балла", "баллов"]) : (currency || "баллы"); };
+  // v0.6.6 rev.4: автообновление круга каждые 20 сек стирало несохранённый ввод в формах
+  // (владелец не мог вписать название награды длиннее ~20 символов набора) — сохраняем и возвращаем.
+  function formKey(el) {
+    const f = el.closest("form");
+    return (f ? (f.dataset.role || f.className) : "noform:") + "|" + (el.name || el.placeholder || el.type);
+  }
+  function snapForms() {
+    const m = new Map();
+    if (!root) return m;
+    root.querySelectorAll("input,textarea,select").forEach((el) => m.set(formKey(el), el.value));
+    return m;
+  }
+  function restoreForms(m) {
+    if (!m || !m.size || !root) return;
+    root.querySelectorAll("input,textarea,select").forEach((el) => {
+      const k = formKey(el);
+      if (m.has(k) && document.activeElement !== el) el.value = m.get(k);
+    });
+  }
 
   // 💬 комментарии и вложения общих задач (v0.6) — тот же компонент, что в личных задачах.
   // Файлы круга лежат в общей папке circles/<circle_id>/<user_id>/..., поэтому их
@@ -2815,14 +2894,15 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
   }
 
   async function joinCircle(code) {
-    const uid = await SixMin.uid();
-    const { data: c } = await SixMin.sb().from("circles").select("*")
-      .eq("invite_code", code.trim().toUpperCase()).maybeSingle();
-    if (!c) { SixMin.toast("Код не найден"); return; }
-    const { error } = await SixMin.sb().from("circle_members")
-      .insert({ circle_id: c.id, user_id: uid, role: "member" });
-    if (error && error.code !== "23505") { SixMin.toast("Ошибка: " + error.message); return; }
-    SixMin.toast("Вы в круге «" + c.name + "» 🤝");
+    // v0.6.5: вступление через серверный RPC circle_join_by_code — политика circles
+    // прячет круги от не-участников, поэтому клиентский поиск по коду возвращал пусто.
+    let uid;
+    try { uid = await SixMin.uid(); } catch (e) { uid = null; }
+    if (!uid) { SixMin.toast("Сначала войдите: «Настройки» → создайте аккаунт и подтвердите письмо"); return; }
+    const { data, error } = await SixMin.sb().rpc("circle_join_by_code", { p_code: code });
+    if (error) { SixMin.toast("Ошибка: " + error.message); return; }
+    if (!data || !data.length) { SixMin.toast("Код не найден. Проверьте букву O и ноль 0, лишние пробелы"); return; }
+    SixMin.toast("Вы в круге «" + data[0].circle_name + "» 🤝");
     await refresh();
   }
 
@@ -2968,8 +3048,10 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
         '<div class="sm-task-actions">' + CM.buttonHTML(t, "Обсуждение баунти") + acts + '</div></div>' +
         CM.panelHTML(t) + '</li>';
     };
+    const curN = (n) => curWord(c.bonus_currency, n);
     return '<div class="sm-cr-sec">🎁 Бонусы круга · ' + cur() + ' ' + INFO_BTN("bonuses") + '</div>' +
-      '<div class="sm-cr-bal"><div class="sm-cr-bal-me">Мой баланс: <b>' + balOf(D.uid) + '</b> ' + cur() + '</div>' +
+      '<div class="sm-cr-bal"><div class="sm-cr-bal-me">Мой баланс: <b>' + balOf(D.uid) + '</b> ' + curN(balOf(D.uid)) + '</div>' +
+      '<div class="sm-cr-bal-hint">Как зарабатывать: возьмите баунти («Взять» → сделать → «Готово ✅») или общую задачу круга — владелец одобрит, и ' + cur() + ' упадут в копилку.</div>' +
       '<div class="sm-cr-board">' + board.map((x, i) =>
         '<span class="sm-cr-member' + (x.u === D.uid ? " me" : "") + '">' + (i + 1) + '. ' + SixMin.esc(nameOf(x.u)) + ' · ' + x.b + '</span>').join("") + '</div></div>' +
       (isOwner ? '<form class="sm-cr-badd" data-role="bounty">' +
@@ -2981,9 +3063,11 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       '<ul class="sm-task-list">' + (live.map(row).join("") || '<li class="sm-tasks-empty">Баунти пока нет — создайте первое.</li>') + '</ul>' +
       '<div class="sm-cr-sec">Витрина наград</div>' +
       '<div class="sm-cr-shop">' + ((D.rewards || []).map((r) =>
-        '<span class="sm-cm-chip">' + SixMin.esc(r.title) + ' · ' + r.cost_points + ' ' + cur() + ' ' +
+        '<span class="sm-cm-chip">' + SixMin.esc(r.title) + ' · ' + r.cost_points + ' ' + curN(r.cost_points) + ' ' +
         (isOwner ? '<b data-bact="delreward" data-id="' + r.id + '">×</b>'
-                 : '<b data-bact="spend" data-id="' + r.id + '">списать</b>') + '</span>').join("") || '<p class="sm-cr-note">Витрина пуста.</p>') + '</div>' +
+                 : (balOf(D.uid) >= r.cost_points
+                    ? '<b data-bact="spend" data-id="' + r.id + '">списать</b>'
+                    : '<b class="sm-cr-spend-off" title="Не хватает ' + (r.cost_points - balOf(D.uid)) + ' ' + curN(r.cost_points - balOf(D.uid)) + '">нужно ещё ' + (r.cost_points - balOf(D.uid)) + '</b>')) + '</span>').join("") || '<p class="sm-cr-note">Витрина пуста.</p>') + '</div>' +
       (isOwner ? '<form class="sm-cr-badd" data-role="reward">' +
         '<input class="sm-cr-input" name="t" placeholder="Награда: кино-вечер, пицца…" maxlength="80">' +
         '<input class="sm-cr-input sm-cr-num" name="p" type="number" min="1" max="9999" value="20" title="Цена">' +
@@ -2999,14 +3083,31 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     const t = (D.bounties || []).find((x) => x.id === id);
     if (!t) return;
     const sb = SixMin.sb();
-    if (act === "claim") await sb.from("tasks").update({ assignee_id: D.uid, bounty_status: "claimed" }).eq("id", id);
-    if (act === "done") await sb.from("tasks").update({ bounty_status: "done" }).eq("id", id);
-    if (act === "reject") { await sb.from("tasks").update({ bounty_status: "claimed" }).eq("id", id); SixMin.toast("Возвращено в работу с комментарием… (отклонено)"); }
-    if (act === "cancel") await sb.from("tasks").delete().eq("id", id);
+    // v0.6.6 rev.4: все действия баунти — через серверные функции circle_bounty_*.
+    // Раньше update задач делался с клиента, и RLS молча запрещал участнику
+    // трогать чужую (баунти-)задачу: «Взять» и «Готово» не работали ни у кого, кроме владельца.
+    const rpc = (name) => sb.rpc("circle_bounty_" + name, { p_task: id });
+    if (act === "claim") {
+      const { data, error } = await rpc("claim");
+      if (error || !data) { SixMin.toast(error ? "Ошибка: " + error.message : "Не удалось взять: баунти уже занято или вы не в круге"); await refresh(); return; }
+    }
+    if (act === "done") {
+      const { data, error } = await rpc("done");
+      if (error || !data) { SixMin.toast(error ? "Ошибка: " + error.message : "Отметить готовым может только исполнитель"); await refresh(); return; }
+      SixMin.toast("Отправлено владельцу круга на одобрение");
+    }
+    if (act === "reject") {
+      const { data } = await rpc("reject");
+      SixMin.toast(data ? "Возвращено в работу с комментарием… (отклонено)" : "Не удалось отклонить");
+    }
+    if (act === "cancel") {
+      const { data } = await rpc("cancel");
+      if (!data) SixMin.toast("Не удалось удалить: владелец и только пока баунти не взято");
+    }
     if (act === "approve") {
-      await sb.from("tasks").update({ bounty_status: "approved", completed: true, completed_at: new Date().toISOString() }).eq("id", id);
-      await sb.from("bonus_ledger").insert({ circle_id: sel, user_id: t.assignee_id, delta: t.bounty_points, reason: "баунти: " + t.title, task_id: id });
-      SixMin.toast("Одобрено: +" + t.bounty_points + " " + (circles.find((c) => c.id === sel)?.bonus_currency || "баллов") + " → " + nameOf(t.assignee_id));
+      const { data, error } = await rpc("approve");
+      if (error || !data) { SixMin.toast(error ? "Ошибка: " + error.message : "Одобрить может только владелец круга и только после «Готово»"); await refresh(); return; }
+      SixMin.toast("Одобрено: +" + t.bounty_points + " " + curWord(circles.find((c) => c.id === sel)?.bonus_currency, t.bounty_points) + " → " + nameOf(t.assignee_id));
     }
     await refresh();
   }
@@ -3014,7 +3115,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
   async function spendReward(r) {
     const c = circles.find((x) => x.id === sel);
     const bal = (D.ledger || []).filter((l) => l.user_id === D.uid).reduce((s2, l) => s2 + l.delta, 0);
-    if (bal < r.cost_points) { SixMin.toast("Не хватает " + (r.cost_points - bal) + " " + (c?.bonus_currency || "баллов")); return; }
+    if (bal < r.cost_points) { SixMin.toast("Не хватает " + (r.cost_points - bal) + " " + curWord(c?.bonus_currency, r.cost_points - bal)); return; }
     await SixMin.sb().from("bonus_ledger").insert({ circle_id: sel, user_id: D.uid, delta: -r.cost_points, reason: "награда: " + r.title, reward_id: r.id });
     SixMin.toast("Списано " + r.cost_points + " — наслаждайтесь 🎉");
     await refresh();
@@ -3083,6 +3184,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
 
   function render() {
     if (!root) return;
+    const snap = snapForms();
     if (!circles.length) {
       root.innerHTML = `
         <div class="sm-circles">
@@ -3103,12 +3205,18 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
         const inp = root.querySelector(".sm-cr-create input");
         if (inp.value.trim()) createCircle(inp.value);
       });
-      root.querySelector(".sm-cr-join").addEventListener("submit", (e) => {
+      root.querySelector(".sm-cr-join").addEventListener("submit", async (e) => {
         e.preventDefault();
-        const inp = root.querySelector(".sm-cr-join input");
-        if (inp.value.trim()) joinCircle(inp.value);
+        const form = e.currentTarget;
+        const inp = form.querySelector("input");
+        const btn = form.querySelector("button");
+        if (!inp.value.trim()) return;
+        // v0.6.6: лоадер на кнопке, пока код проверяется (чтобы «Код не найден» не мерещился при лаге)
+        if (btn) { btn.disabled = true; btn.textContent = "Проверяю…"; }
+        try { await joinCircle(inp.value); } finally { if (btn) { btn.disabled = false; btn.textContent = "Войти в круг"; } }
       });
       wireInfo();
+      restoreForms(snap);
       return;
     }
 
@@ -3270,7 +3378,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
         const g = D.goals.find((x) => x.goal_index === i);
         if (!g || !g.id) return;
         const pos = (D.goals || []).map((x) => x.goal_index).indexOf(i);
-        if (!confirm(`Delete goal #${pos + 1}${g.title ? " «" + g.title + "»" : ""} along with its subtasks?`)) return;
+        if (!confirm(`Удалить цель круга №${pos + 1}${g.title ? " «" + g.title + "»" : ""} вместе с подзадачами? Отменить нельзя.`)) return;
         await SixMin.sb().from("circle_goals").delete().eq("id", g.id);
         D.goals = D.goals.filter((x) => x.goal_index !== i);
         render();
@@ -3323,12 +3431,17 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       await refresh();
     });
     CM.wire(root);
-    root.querySelector(".sm-cr-join-more")?.addEventListener("submit", (e) => {
+    root.querySelector(".sm-cr-join-more")?.addEventListener("submit", async (e) => {
       e.preventDefault();
-      const inp = e.target.querySelector("input");
-      if (inp.value.trim()) joinCircle(inp.value);
+      const form = e.currentTarget;
+      const inp = form.querySelector("input");
+      const btn = form.querySelector("button");
+      if (!inp.value.trim()) return;
+      if (btn) { btn.disabled = true; btn.textContent = "Проверяю…"; }
+      try { await joinCircle(inp.value); } finally { if (btn) { btn.disabled = false; btn.textContent = "Войти"; } }
     });
     wireInfo();
+    restoreForms(snap);
   }
 
   async function refresh() { await loadCircles(); await loadData(); render(); }
@@ -3418,6 +3531,8 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       .sm-cr-shop{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
       .sm-cr-shop b{color:var(--accent,#E30613);margin-left:6px;cursor:pointer;font-weight:800}
       .sm-cr-ledger{display:flex;flex-direction:column;gap:4px}
+      .sm-cr-bal-hint{font-size:11.5px;opacity:.65;margin-top:4px;line-height:1.4}
+      .sm-cr-spend-off{opacity:.55;font-size:11px;cursor:default}
       .sm-cr-led-row{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;opacity:.85}
       .sm-cr-led-row .plus{color:#30a46c;font-weight:800}
       .sm-cr-led-row .minus{color:#E30613;font-weight:800}
