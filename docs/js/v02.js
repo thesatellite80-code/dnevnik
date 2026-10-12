@@ -1918,14 +1918,32 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
     }
 
 
+    // v0.6.6 rev.5: ввод в форме добавления не должен стираться при перерисовке
+    // (переключение категории, автообновление) — снимаем и возвращаем значения.
+    function formKeyT(el) { const f = el.closest("form"); return (f ? f.className : "noform:") + "|" + (el.name || el.placeholder || el.type); }
+    function snapFormsT() { const m = new Map(); if (!root) return m; root.querySelectorAll("input,textarea,select").forEach((el) => m.set(formKeyT(el), el.value)); return m; }
+    function restoreFormsT(m) { if (!m || !m.size || !root) return; root.querySelectorAll("input,textarea,select").forEach((el) => { const k = formKeyT(el); if (m.has(k) && document.activeElement !== el) el.value = m.get(k); }); }
+
     function render() {
       if (!root) return;
+      const snap = snapFormsT();
       const doneCount = today.filter((t) => t.completed).length;
       const headLabel = AREA === "work" ? "Рабочие задачи на сегодня" : "Задачи на сегодня";
       const ph = AREA === "work" ? "Новая рабочая задача…" : "Новая задача…";
       root.innerHTML = `
       <div class="sm-tasks">
         ${SHOW_STATS ? statsHTML() : ""}
+        <div class="sm-kind-row">
+          ${KINDS.map((k) => `<button type="button" class="sm-kind-chip${newKind === k.id ? " on" : ""}" data-kind="${k.id}">${kindMark(k)} ${k.label}</button>`).join("")}
+        </div>
+        <form class="sm-task-add">
+          <textarea class="sm-task-add-input" rows="1" maxlength="120" placeholder="${ph}" autocomplete="off"></textarea>
+          <button class="sm-task-add-btn" type="submit">+</button>
+          <div class="sm-task-add-opts">
+            <label class="sm-add-lbl">Дедлайн<input type="date" class="sm-add-due"><input type="time" class="sm-add-duetime"></label>
+            <label class="sm-add-lbl">Напоминание<input type="datetime-local" class="sm-add-remind"></label>
+          </div>
+        </form>
         ${overdue.length ? `
         <div class="sm-overdue">
           <div class="sm-overdue-head">⚠️ Не завершено раньше (${overdue.length})
@@ -1946,17 +1964,6 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
         }).join("") ||
           `<ul class="sm-task-list"><li class="sm-tasks-empty">Список пуст. Добавьте первую задачу 👇<br><small>Свайпните задачу влево или нажмите «→ завтра», чтобы перенести.</small></li></ul>`}
         ${upcomingHTML()}
-        <div class="sm-kind-row">
-          ${KINDS.map((k) => `<button type="button" class="sm-kind-chip${newKind === k.id ? " on" : ""}" data-kind="${k.id}">${kindMark(k)} ${k.label}</button>`).join("")}
-        </div>
-        <form class="sm-task-add">
-          <textarea class="sm-task-add-input" rows="1" maxlength="120" placeholder="${ph}" autocomplete="off"></textarea>
-          <button class="sm-task-add-btn" type="submit">+</button>
-          <div class="sm-task-add-opts">
-            <label class="sm-add-lbl">Дедлайн<input type="date" class="sm-add-due"><input type="time" class="sm-add-duetime"></label>
-            <label class="sm-add-lbl">Напоминание<input type="datetime-local" class="sm-add-remind"></label>
-          </div>
-        </form>
       </div>`;
 
       root.querySelectorAll("[data-act]").forEach((b) => b.addEventListener("click", (e) => {
@@ -2034,6 +2041,7 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
 
       // комментарии и вложения (общий компонент v0.6)
       CM.wire(root);
+      restoreFormsT(snap);
 
     // свайп влево = перенести на завтра
       root.querySelectorAll(".sm-task-wrap").forEach((li) => {
@@ -2740,7 +2748,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
   const esc = SixMin.esc;
   // v0.6.6 рев.3: склонение валюты круга («20 баллов», а не «20 баллы»)
   const pluralRu = (n, f) => { const a = Math.abs(n) % 100, b = a % 10; return (a > 10 && a < 20) ? f[2] : (b > 1 && b < 5) ? f[1] : (b === 1) ? f[0] : f[2]; };
-  const curWord = (currency, n) => { const w = String(currency || "баллы").toLowerCase(); return w.indexOf("балл") === 0 ? pluralRu(n, ["балл", "балла", "баллов"]) : (currency || "баллы"); };
+  const curWord = (currency, n) => { const w = String(currency || "баллы").toLowerCase(); return w.indexOf("бал") === 0 ? pluralRu(n, ["балл", "балла", "баллов"]) : (currency || "баллы"); };
   // v0.6.6 rev.4: автообновление круга каждые 20 сек стирало несохранённый ввод в формах
   // (владелец не мог вписать название награды длиннее ~20 символов набора) — сохраняем и возвращаем.
   function formKey(el) {
@@ -2795,7 +2803,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
         .eq("period_type", "month").eq("period_key", mk).order("goal_index"),
       sb.from("circle_habits").select("*").eq("circle_id", sel)
         .eq("archived", false).order("position"),
-      sb.from("circle_habit_logs").select("*").eq("user_id", uid).in("day", week),
+      sb.from("circle_habit_logs").select("circle_habit_id, day, user_id, completed").in("day", week),
       sb.from("circle_habit_logs").select("circle_habit_id, user_id").eq("day", today),
       sb.from("tasks").select("*").eq("circle_id", sel).neq("completed", true)
         .is("bounty_points", null)
@@ -2809,11 +2817,12 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     D = {
       uid, today,
       goals: g.data || [], habits: h.data || [],
-      myLogs: Object.fromEntries((myLogs.data || []).map((l) => [l.circle_habit_id + "|" + l.day, l.completed])),
-      todayBy: {}, tasks: t.data || [], members: m || [],
+      myLogs: Object.fromEntries((myLogs.data || []).filter((l) => l.user_id === uid).map((l) => [l.circle_habit_id + "|" + l.day, l.completed])),
+      weekBy: {}, todayBy: {}, tasks: t.data || [], members: m || [],
       rewards: rw.data || [], ledger: lg.data || [], bounties: bn.data || [],
     };
     for (const l of todayLogs.data || []) (D.todayBy[l.circle_habit_id] = D.todayBy[l.circle_habit_id] || []).push(l.user_id);
+    for (const l of myLogs.data || []) if (l.completed) (D.weekBy[l.circle_habit_id] = D.weekBy[l.circle_habit_id] || new Set()).add(l.day);
     await ensureMyProfile(sb, uid);
     await CM.loadCounts([...D.tasks, ...D.bounties].map((x) => x.id));
   }
@@ -3004,11 +3013,28 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
   }
 
   async function toggleShared(t) {
-    t.completed = !t.completed;
-    t.completed_at = t.completed ? new Date().toISOString() : null;
+    // v0.6.6 rev.6: отметку общей задачи ставит серверная функция (RLS запрещал
+    // участнику менять чужую строку задачи — «не могу поставить галочку»).
+    const now = !t.completed;
+    t.completed = now;
+    t.completed_at = now ? new Date().toISOString() : null;
     render();
-    await SixMin.sb().from("tasks")
-      .update({ completed: t.completed, completed_at: t.completed_at }).eq("id", t.id);
+    const { data, error } = await SixMin.sb().rpc("circle_task_toggle", { p_task: t.id });
+    if (error || data !== "ok") {
+      t.completed = !now;
+      t.completed_at = null;
+      render();
+      SixMin.toast(error ? "Ошибка: " + error.message : "Отметить общую задачу может только участник круга");
+      return;
+    }
+    await refresh();
+  }
+
+  async function delHabit(h) {
+    // v0.6.6 rev.6: удаление общей привычки (владелец круга) — раньше кнопки не было вовсе
+    if (!confirm("Удалить общую привычку «" + h.name + "» вместе с историей отметок? Отменить нельзя.")) return;
+    const { data, error } = await SixMin.sb().rpc("circle_habit_del", { p_habit: h.id });
+    if (error || data !== "ok") { SixMin.toast(error ? "Ошибка: " + error.message : "Удалить общую привычку может только владелец круга"); return; }
     await refresh();
   }
 
@@ -3087,13 +3113,16 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     // Раньше update задач делался с клиента, и RLS молча запрещал участнику
     // трогать чужую (баунти-)задачу: «Взять» и «Готово» не работали ни у кого, кроме владельца.
     const rpc = (name) => sb.rpc("circle_bounty_" + name, { p_task: id });
+    const friendly = (error) => /Could not find the function/.test(error?.message || "")
+      ? "Сервис обновляется: база ещё не получила обновление. Попробуйте через пару минут или сообщите владельцу."
+      : "Ошибка: " + error.message;
     if (act === "claim") {
       const { data, error } = await rpc("claim");
-      if (error || !data) { SixMin.toast(error ? "Ошибка: " + error.message : "Не удалось взять: баунти уже занято или вы не в круге"); await refresh(); return; }
+      if (error || !data) { SixMin.toast(error ? friendly(error) : "Не удалось взять: баунти уже занято или вы не в круге"); await refresh(); return; }
     }
     if (act === "done") {
       const { data, error } = await rpc("done");
-      if (error || !data) { SixMin.toast(error ? "Ошибка: " + error.message : "Отметить готовым может только исполнитель"); await refresh(); return; }
+      if (error || !data) { SixMin.toast(error ? friendly(error) : "Отметить готовым может только исполнитель"); await refresh(); return; }
       SixMin.toast("Отправлено владельцу круга на одобрение");
     }
     if (act === "reject") {
@@ -3106,7 +3135,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     }
     if (act === "approve") {
       const { data, error } = await rpc("approve");
-      if (error || !data) { SixMin.toast(error ? "Ошибка: " + error.message : "Одобрить может только владелец круга и только после «Готово»"); await refresh(); return; }
+      if (error || !data) { SixMin.toast(error ? friendly(error) : "Одобрить может только владелец круга и только после «Готово»"); await refresh(); return; }
       SixMin.toast("Одобрено: +" + t.bounty_points + " " + curWord(circles.find((c) => c.id === sel)?.bonus_currency, t.bounty_points) + " → " + nameOf(t.assignee_id));
     }
     await refresh();
@@ -3226,16 +3255,21 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     const goalIdxs = (D.goals || []).length ? D.goals.map((g) => g.goal_index) : [0];
     const goals = goalIdxs.map(goalHTML).join("") +
       `<button class="sm-sub-add sm-cr-goal-add" type="button" data-gnew="1">+ добавить цель</button>`;
+    const weekKeys7 = SixMin.weekKeys(0);
     const habits = D.habits.map((h) => {
       const done = !!D.myLogs[h.id + "|" + D.today];
       const who = (D.todayBy[h.id] || []);
+      const wkSet = D.weekBy[h.id] || new Set();
       return `
         <div class="sm-cr-habit" style="--hc:${h.color}">
           <button class="sm-cell ${done ? "sm-done" : "sm-empty"}" data-hab="${h.id}">${done ? "●" : "○"}</button>
           <span class="sm-cr-habit-name">${esc(h.name)}</span>
+          <span class="sm-cr-habit-week" title="Неделя: дни, когда круг отмечал привычку">${weekKeys7.map((k) => `<i class="${wkSet.has(k) ? "on" : ""}"></i>`).join("")}</span>
+          <em class="sm-cr-habit-wk" title="Дней с отметками за неделю">${wkSet.size}/7</em>
           <span class="sm-cr-habit-who" title="Кто отметил сегодня">
             ${who.length ? who.map((u) => `<i>${esc(nameOf(u).slice(0, 1).toUpperCase())}</i>`).join("") : "<em>сегодня никто</em>"}
           </span>
+          ${canDelete() ? `<button class="sm-cr-del" data-hdel="${h.id}" title="Удалить общую привычку">×</button>` : ""}
         </div>`;
     }).join("");
 
@@ -3385,6 +3419,8 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       }));
     root.querySelectorAll("[data-hab]").forEach((b) =>
       b.addEventListener("click", () => toggleHabit(D.habits.find((h) => h.id === b.dataset.hab))));
+    root.querySelectorAll("[data-hdel]").forEach((b) =>
+      b.addEventListener("click", () => delHabit(D.habits.find((h) => h.id === b.dataset.hdel))));
     root.querySelector(".sm-cr-hadd")?.addEventListener("submit", (e) => {
       e.preventDefault();
       const inp = e.target.querySelector("input");
@@ -3505,7 +3541,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       .sm-cr-goal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
       .sm-cr-goal-cap{font-size:12px;font-weight:800;opacity:.7;text-transform:uppercase}
       .sm-cr-goal-btns{display:flex;gap:8px;align-items:center}
-      .sm-cr-goal-del{border:0;background:transparent;color:inherit;opacity:.35;cursor:pointer;
+      .sm-cr-goal-del{border:0;background:transparent;color:inherit;opacity:.7;font-size:18px;cursor:pointer;
                       font-size:17px;line-height:1;padding:2px 4px}
       .sm-cr-goal-del:hover{opacity:1;color:#E30613}
       .sm-cr-goal-add{margin:0 0 8px}
@@ -3517,6 +3553,12 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       .sm-cr-habit-who i{font-style:normal;width:22px;height:22px;border-radius:50%;background:var(--accent-soft,#FDE9E9);color:#30a46c;
                          font-size:11px;font-weight:800;display:inline-flex;align-items:center;justify-content:center}
       .sm-cr-habit-who em{font-style:normal;font-size:11px;opacity:.45}
+      .sm-cr-habit-week{display:flex;gap:2px;align-items:center}
+      .sm-cr-habit-week i{width:6px;height:6px;border-radius:50%;background:var(--inset,#333)}
+      .sm-cr-habit-week i.on{background:var(--hc,var(--accent,#E65100))}
+      .sm-cr-habit-wk{font-style:normal;font-size:11px;opacity:.55;min-width:26px;text-align:right}
+      .sm-cr-del{border:0;background:transparent;color:inherit;opacity:.7;cursor:pointer;font-size:18px;line-height:1;padding:4px 6px;border-radius:8px}
+      .sm-cr-del:hover{color:var(--accent,#E65100);opacity:1;background:var(--inset,#242424)}
       .sm-cr-by{font-style:normal;font-size:11px;opacity:.55;font-weight:500}
       .sm-cr-bounty{background:var(--accent-soft,#FDE9E9);color:var(--accent,#E30613);font-weight:800;font-size:12px;border-radius:8px;
                     padding:3px 7px;flex-shrink:0}
