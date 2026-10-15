@@ -1788,6 +1788,7 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
 
     // ---------- статистика области (для рабочего экрана) ----------
     function statsHTML() {
+      if (!todayKey) return ""; // rev.9: первый рендер до загрузки не должен падать
       const doneDates = all.filter((t) => t.completed && t.completed_at)
         .map((t) => SixMin.fmtKey(new Date(t.completed_at)));
       const doneSet = {};
@@ -3298,6 +3299,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     const goals = goalIdxs.map(goalHTML).join("") +
       `<button class="sm-sub-add sm-cr-goal-add" type="button" data-gnew="1">+ добавить цель</button>`;
     const weekKeys7 = SixMin.weekKeys(0);
+    const isOwnerCircle = circles.find((c) => c.id === sel)?.owner_id === D?.uid;
     const habits = D.habits.map((h) => {
       const done = !!D.myLogs[h.id + "|" + D.today];
       const who = (D.todayBy[h.id] || []);
@@ -3311,7 +3313,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
           <span class="sm-cr-habit-who" title="Кто отметил сегодня">
             ${who.length ? who.map((u) => `<i>${esc(nameOf(u).slice(0, 1).toUpperCase())}</i>`).join("") : "<em>сегодня никто</em>"}
           </span>
-          ${canDelete() ? `<button class="sm-cr-del" data-hdel="${h.id}" title="Удалить общую привычку">×</button>` : ""}
+          ${isOwnerCircle ? `<button class="sm-cr-del" data-hdel="${h.id}" title="Удалить общую привычку">×</button>` : ""}
         </div>`;
     }).join("");
 
