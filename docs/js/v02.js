@@ -249,7 +249,7 @@ window.SixMinComments = (function () {
       .sm-cm-input{flex:1;padding:9px 12px;border-radius:10px;border:1px solid rgba(128,128,128,.25);
                    background:transparent;color:inherit;font-size:13.5px;outline:none;min-width:0}
       .sm-cm-input:focus{border-color:var(--accent,#E30613)}
-      .sm-cm-btn{border:0;background:transparent;font-size:17px;cursor:pointer;padding:6px;border-radius:8px;
+      .sm-cm-btn{border:0;background:transparent;font-size:15px;cursor:pointer;padding:4px;border-radius:8px;
                  color:inherit;line-height:1}
       .sm-cm-send{color:var(--accent,#E30613);font-weight:700}
       .sm-cm-hint{font-size:11px;opacity:.5;margin-top:6px;line-height:1.4}
@@ -2116,7 +2116,19 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
       .sm-task-done .sm-task-title{text-decoration:line-through;opacity:.5}
       .sm-task-moved{font-style:normal;font-size:11px;color:var(--accent,#E30613);font-weight:700}
       .sm-task-overdue-badge{font-size:10px;background:var(--accent-soft,#FDE9E9);color:#E30613;padding:2px 6px;border-radius:6px;font-weight:700;white-space:nowrap}
-      .sm-task-actions{display:flex;gap:4px;flex-shrink:0}
+      .sm-task-actions{display:flex;gap:3px;flex-shrink:0}
+      /* v0.6.6 rev.7: на узких экранах заголовок задачи получает всю ширину,
+         а компактные кнопки уходят на вторую строку справа */
+      @media (max-width:480px){
+        .sm-task{flex-wrap:wrap}
+        .sm-task-main{flex:1 1 100%;order:1}
+        .sm-task-actions{order:2;margin-left:auto}
+        .sm-task-btn{padding:4px 7px;font-size:11px}
+        .sm-task-check{font-size:18px}
+        .sm-task-overdue-badge{font-size:9px;padding:1px 5px}
+        .sm-cm-btn{font-size:14px;padding:3px}
+        .sm-task-del{font-size:14px}
+      }
       .sm-task-btn{border:0;border-radius:8px;cursor:pointer;font-size:12px;padding:6px 8px;background:transparent;color:inherit}
       .sm-task-postpone{color:var(--accent,#E30613);font-weight:700;background:var(--accent-soft,#FDE9E9)}
       .sm-task-del{opacity:.4;font-size:15px}
