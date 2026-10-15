@@ -1940,8 +1940,8 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
           <textarea class="sm-task-add-input" rows="1" maxlength="120" placeholder="${ph}" autocomplete="off"></textarea>
           <button class="sm-task-add-btn" type="submit">+</button>
           <div class="sm-task-add-opts">
-            <label class="sm-add-lbl">Дедлайн<input type="date" class="sm-add-due"><input type="time" class="sm-add-duetime"></label>
-            <label class="sm-add-lbl">Напоминание<input type="datetime-local" class="sm-add-remind"></label>
+            <label class="sm-add-lbl">Дедлайн<span class="sm-add-wrap"><input type="date" class="sm-add-due"><i class="sm-add-hint">Укажите дату</i></span><span class="sm-add-wrap"><input type="time" class="sm-add-duetime"><i class="sm-add-hint">Укажите время</i></span></label>
+            <label class="sm-add-lbl">Напоминание<span class="sm-add-wrap"><input type="datetime-local" class="sm-add-remind"><i class="sm-add-hint">Укажите дату и время</i></span></label>
           </div>
         </form>
         ${overdue.length ? `
@@ -2022,6 +2022,14 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
       addInp?.addEventListener("input", () => {
         addInp.style.height = "auto";
         addInp.style.height = Math.min(addInp.scrollHeight, 96) + "px";
+      });
+      // rev.8: прозрачные подсказки в полях даты/времени гаснут, когда значение выбрано
+      root.querySelectorAll(".sm-add-wrap").forEach((w) => {
+        const inp = w.querySelector("input");
+        const set = () => w.classList.toggle("filled", !!inp.value);
+        inp.addEventListener("input", set);
+        inp.addEventListener("change", set);
+        set();
       });
       addForm?.addEventListener("submit", (e) => {
         e.preventDefault();
@@ -2151,6 +2159,9 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
       .sm-task-add-opts{display:flex;gap:8px;flex-wrap:wrap;width:100%}
       .sm-add-lbl{display:flex;align-items:center;gap:4px;font-size:11px;opacity:.85}
       .sm-add-lbl input{background:var(--inset,#1c1c1c);border:1px solid var(--line,#333);border-radius:8px;color:inherit;padding:4px 6px;font-size:12px;color-scheme:dark}
+      .sm-add-wrap{position:relative;display:inline-block}
+      .sm-add-hint{position:absolute;left:8px;top:50%;transform:translateY(-50%);font-style:normal;font-size:12px;opacity:.45;pointer-events:none;white-space:nowrap}
+      .sm-add-wrap.filled .sm-add-hint{display:none}
       .sm-task-add-input{flex:1;padding:11px 14px;border-radius:12px;border:1px solid var(--bg);
                          background:transparent;color:inherit;font-size:14px;outline:none}
       .sm-task-add-input:focus{border-color:var(--accent,#E30613)}
@@ -2792,8 +2803,13 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     canDelete: () => circles.find((c) => c.id === sel)?.owner_id === D?.uid,
   });
 
+  let loggedIn = true;
   async function loadCircles() {
-    const uid = await SixMin.uid();
+    // v0.6.6 rev.8: без сессии не падаем в пустой экран, а показываем карточку входа
+    let uid;
+    try { uid = await SixMin.uid(); } catch (e) { uid = null; }
+    loggedIn = !!uid;
+    if (!uid) { circles = []; sel = null; return; }
     const { data: ms } = await SixMin.sb().from("circle_members")
       .select("circle_id").eq("user_id", uid);
     const ids = (ms || []).map((m) => m.circle_id);
@@ -3226,6 +3242,20 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
   function render() {
     if (!root) return;
     const snap = snapForms();
+    if (!loggedIn) {
+      root.innerHTML = `
+        <div class="sm-circles">
+          <div class="sm-cr-head">🤝 Круги ${INFO_BTN("circles")}</div>
+          <p class="sm-cr-note">Круги живут в облаке: общие цели, привычки и задачи «на всех»
+             с семьёй или командой. Войдите в аккаунт или создайте новый — и сможете
+             создавать круги, входить по коду и видеть общие.</p>
+          <button class="btn auth-compact" data-goto-settings>Открыть «Настройки» и войти</button>
+        </div>`;
+      root.querySelector("[data-goto-settings]")?.addEventListener("click", () =>
+        document.querySelector('[data-tab="settings"]')?.click());
+      restoreForms(snap);
+      return;
+    }
     if (!circles.length) {
       root.innerHTML = `
         <div class="sm-circles">
