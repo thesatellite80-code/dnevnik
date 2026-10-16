@@ -2873,7 +2873,11 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     const { error } = await SixMin.sb().from("shift_profiles").upsert(row, { onConflict: "user_id" });
     if (error) { SixMin.toast("Ошибка: " + error.message); return; }
     SixMin.toast(insert ? "График сохранён — теперь он ваш личный" : "Настройки смен сохранены");
-    await load(); render();
+    // v0.6.13 (Video 17, баг 1): сперва перерисовка из памяти — экран показывает новый
+    // график сразу; затем синхронизация из БД, ошибка load() экран не блокирует
+    render(); renderBday();
+    await load().catch((e) => console.error("shifts reload after save:", e));
+    render(); renderBday();
   }
 
   // v0.6.11: редактор цепочки: тип якорного дня + слоты с добавлением/удалением (Video 16, приоритет 1)
@@ -2887,9 +2891,22 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
         '<span class="sm-sh-slot"><select data-cyc="' + i + '">' + Object.keys(SHIFT_NAMES).map((s) =>
           '<option value="' + s + '"' + (s === c ? " selected" : "") + ">" + SHIFT_NAMES[s] + "</option>").join("") + "</select>" +
         (cycle.length > 2 ? '<button type="button" class="sm-sh-del" data-cycdel="' + i + '" title="Убрать этот день">×</button>' : "") + "</span>").join("") +
-      '</div><div class="sm-sh-lbl"><button class="sm-add-btn" type="button" data-cycadd="1">+ Добавить день в цикл</button></div>';
+      '</div><div class="sm-sh-lbl"><button class="sm-sh-cycadd" type="button" data-cycadd="1">+ Добавить день</button></div>' +
+      '<p class="sm-sh-note sm-sh-preview"></p>';
   }
   const cycleEditor = (cycle) => '<div class="sm-sh-editor">' + cycleEditorInner(cycle) + "</div>";
+  function updatePreview(ed) {
+    const pv = ed && ed.querySelector(".sm-sh-preview");
+    if (!pv) return;
+    const anchorEl = root && root.querySelector(".sm-sh-anchor");
+    const cyc = Array.from(ed.querySelectorAll("[data-cyc]")).map((s) => s.value);
+    const a = parse((anchorEl && anchorEl.value) || anchorOf());
+    if (!a || !cyc.length) { pv.textContent = ""; return; }
+    const idxOf = (d) => { const n = Math.round((d - a) / 86400000); return ((n % cyc.length) + cyc.length) % cyc.length; };
+    const t = new Date(); t.setHours(0, 0, 0, 0);
+    pv.textContent = "Сегодня по этому циклу: " + SHIFT_NAMES[cyc[idxOf(t)]] +
+      ", завтра: " + SHIFT_NAMES[cyc[idxOf(new Date(t.getTime() + 86400000))]] + ".";
+  }
   function cycleOk(cycle) {
     if (!cycle || cycle.length < 2) { SixMin.toast("Цикл: минимум 2 дня"); return false; }
     if (!cycle.some((c) => c === "night" || c === "day")) { SixMin.toast("Нужна хотя бы одна рабочая смена: ночь или день"); return false; }
@@ -3037,6 +3054,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       };
       await saveProfile(true);
     });
+    updatePreview(root.querySelector(".sm-sh-editor"));
   }
   function wire() {
     root.querySelector("[data-shedit]")?.addEventListener("click", () => {
@@ -3093,9 +3111,10 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       P.shared = root.querySelector(".sm-sh-shared").checked;
       await saveProfile(false);
     });
+    updatePreview(root.querySelector(".sm-sh-editor"));
   }
 
-  async function refresh() { await load(); render(); renderBday(); }
+  async function refresh() { await load().catch((e) => console.error("shifts load:", e)); render(); renderBday(); }
   function injectStyles() {
     if (document.getElementById("sm-shifts-css")) return;
     const st = document.createElement("style");
@@ -3133,7 +3152,10 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       .sm-sh-cycle{display:flex;gap:4px;flex-wrap:wrap}
       .sm-sh-cycle select{background:var(--inset,#1c1c1c);border:1px solid var(--line,#333);border-radius:8px;color:inherit;padding:5px;font-size:12px}
       .sm-sh-save{margin-top:8px;border:0;border-radius:10px;background:var(--accent,#E30613);color:#fff;font-weight:700;padding:8px 14px;cursor:pointer}
-      .sm-sh-slot{display:inline-flex;align-items:center;gap:2px}
+      .sm-sh-slot{display:inline-flex;align-items:center;gap:2px;padding:2px 6px 2px 0;border-right:1px dashed var(--line,#333);margin-right:4px}
+      .sm-sh-slot:last-child{border-right:0;margin-right:0}
+      .sm-sh-cycadd{white-space:nowrap;border:0;border-radius:10px;background:var(--accent,#E30613);color:#fff;font-weight:700;padding:7px 12px;cursor:pointer;font-size:12px}
+      .sm-sh-cfg .sm-sh-save{position:sticky;bottom:12px;box-shadow:0 6px 14px rgba(0,0,0,.45)}
       .sm-sh-editor{margin:6px 0}
       .sm-sh-days summary{list-style:none;cursor:pointer}
       .sm-sh-days summary::-webkit-details-marker{display:none}
@@ -3186,6 +3208,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       else if (cyc.length > 2) cyc.splice(parseInt(del.dataset.cycdel, 10), 1);
       else return;
       ed.innerHTML = cycleEditorInner(cyc);
+      updatePreview(ed);
     });
     root.addEventListener("change", (e) => {
       const ed = e.target.closest(".sm-sh-editor");
@@ -3194,6 +3217,13 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
         const s0 = ed.querySelector('[data-cyc="0"]'); if (s0) s0.value = e.target.value;
       } else if (e.target.dataset.cyc === "0") {
         const at = ed.querySelector(".sm-sh-atype"); if (at) at.value = e.target.value;
+      }
+      updatePreview(ed);
+    });
+    root.addEventListener("change", (e) => {
+      if (e.target.classList && e.target.classList.contains("sm-sh-anchor")) {
+        const ed = root.querySelector(".sm-sh-editor");
+        if (ed) updatePreview(ed);
       }
     });
     mountBdayCard();
