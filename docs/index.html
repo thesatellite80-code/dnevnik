@@ -491,14 +491,14 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
     <div class="card">
       <h3>👤 Облако (Supabase)</h3>
       <p class="muted" id="auth-status">Не подключено — записи хранятся только на этом устройстве.</p>
-      <div id="auth-box">
+      <form id="auth-box" onsubmit="return false">
         <input type="email" id="auth-email" placeholder="ваша@почта.ру" autocomplete="email" inputmode="email">
         <input type="password" id="auth-pass" placeholder="Пароль (минимум 6 символов)" autocomplete="current-password">
         <div class="auth-actions">
           <button class="btn auth-compact" id="btn-login-pass">Войти с паролем</button>
           <button class="auth-link" id="btn-login" title="Magic link: на почту придёт одноразовая ссылка для входа без пароля">или войти по ссылке на почту</button>
         </div>
-      </div>
+      </form>
       <button class="btn ghost" id="btn-logout" hidden>Выйти</button>
       <p class="hint-text">«Ссылка на почту» — magic link: письмо с одноразовой ссылкой, пароль не нужен. Если письмо не доходит (спа-фильтры ya.ru) — войдите с паролем.</p>
     </div>
@@ -625,6 +625,6 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
 </nav>
 
 <script defer src="js/bundle.js?v=025"></script>
-<script defer src="js/v02.js?v=044"></script>
+<script defer src="js/v02.js?v=046"></script>
 </body>
 </html>

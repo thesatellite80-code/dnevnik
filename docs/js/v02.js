@@ -5,9 +5,10 @@
   d.style.cssText = "position:fixed;left:8px;bottom:84px;z-index:99999;background:#111;color:#7CFC00;" +
     "font:11px/1.45 ui-monospace,monospace;padding:6px 9px;border-radius:8px;opacity:.95;max-width:94vw;white-space:pre-wrap";
   d.textContent = "v02: start";
+  d.style.display = "none";
   (document.body || document.documentElement).appendChild(d);
   window.__v02banner = d;
-  window.__v02say = function (t) { if (window.__v02banner) window.__v02banner.textContent = t; };
+  window.__v02say = function (t) { if (window.__v02banner) { window.__v02banner.textContent = t; window.__v02banner.style.display = String(t).indexOf("v02 ERR") === 0 ? "block" : "none"; } };
   window.addEventListener("error", function (e) {
     window.__v02say("v02 ERR: " + (e.message || "?") + " @line " + (e.lineno || "?"));
   });
@@ -1217,8 +1218,11 @@ window.__v02stage = "after-sixmin-voice"; if (window.__v02say) window.__v02say("
   async function refresh() {
     try { await load(); render(); }
     catch (e) {
-      if (root) root.innerHTML = '<p style="font-size:13px;opacity:.7">Не удалось загрузить записи: ' +
-        SixMin.esc(e.message || e) + '</p>';
+      if (root) root.innerHTML = '<p style="font-size:13px;opacity:.7">' +
+        (/auth|session/i.test(String(e.message || e))
+          ? "Войдите в облако, чтобы видеть голосовые записи со всех устройств."
+          : "Не удалось загрузить записи: " + SixMin.esc(e.message || e)) +
+        '</p>';
     }
   }
 
@@ -2168,8 +2172,13 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
       .sm-add-lbl{display:flex;align-items:center;gap:4px;font-size:11px;opacity:.85}
       .sm-add-lbl input{background:var(--inset,#1c1c1c);border:1px solid var(--line,#333);border-radius:8px;color:inherit;padding:4px 6px;font-size:12px;color-scheme:dark}
       .sm-add-wrap{position:relative;display:inline-block}
-      .sm-add-hint{position:absolute;left:8px;top:50%;transform:translateY(-50%);font-style:normal;font-size:12px;opacity:.45;pointer-events:none;white-space:nowrap}
-      .sm-add-wrap.filled .sm-add-hint{display:none}
+      .sm-add-hint{display:none;position:absolute;left:8px;top:50%;transform:translateY(-50%);font-style:normal;font-size:12px;opacity:.45;pointer-events:none;white-space:nowrap}
+      /* rev.11: подсказки видны только на сенсорных устройствах (там нативной подсказки нет);
+         на десктопе её показывает сам браузер (дд.мм.гггг) — без наложения текстов */
+      @media (hover:none) and (pointer:coarse){
+        .sm-add-hint{display:block}
+        .sm-add-wrap.filled .sm-add-hint{display:none}
+      }
       .sm-task-add-input{flex:1;padding:11px 14px;border-radius:12px;border:1px solid var(--bg);
                          background:transparent;color:inherit;font-size:14px;outline:none}
       .sm-task-add-input:focus{border-color:var(--accent,#E30613)}
@@ -3100,6 +3109,15 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     const live = (D.bounties || []).filter((t) => ["open", "claimed", "done"].includes(t.bounty_status));
     const board = (D.members || []).map((m) => ({ u: m.user_id, b: balOf(m.user_id) })).sort((a, b) => b.b - a.b);
     const myLedger = (D.ledger || []).filter((l) => l.user_id === D.uid).slice(0, 8);
+    // rev.11: «Мои баунти» — участник видит свои взятые задания и их статус
+    const myB = (D.bounties || []).filter((t) => t.assignee_id === D.uid && ["claimed", "done"].includes(t.bounty_status));
+    const myBHTML = myB.length
+      ? '<div class="sm-cr-sec">Мои баунти</div><div class="sm-cr-ledger">' +
+        myB.map((t) => '<div class="sm-cr-led-row"><span>' + esc(t.title) + '</span><b class="' +
+          (t.bounty_status === "done" ? "plus" : "minus") + '">' +
+          (t.bounty_status === "done" ? "ждёт одобрения владельца" : "в работе") + '</b></div>').join("") +
+        '</div>'
+      : "";
     const btn = (act, id, label, cls) =>
       '<button class="sm-task-btn ' + (cls || "sm-task-postpone") + '" data-bact="' + act + '" data-id="' + id + '">' + label + '</button>';
     const row = (t) => {
@@ -3129,6 +3147,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
         D.members.filter((m) => m.user_id !== D.uid).map((m) => '<option value="' + m.user_id + '">' + SixMin.esc(nameOf(m.user_id)) + '</option>').join("") +
         '</select><button class="sm-add-btn" type="submit">+</button></form>' : '') +
       '<ul class="sm-task-list">' + (live.map(row).join("") || '<li class="sm-tasks-empty">Баунти пока нет — создайте первое.</li>') + '</ul>' +
+      myBHTML +
       '<div class="sm-cr-sec">Витрина наград</div>' +
       '<div class="sm-cr-shop">' + ((D.rewards || []).map((r) =>
         '<span class="sm-cm-chip">' + SixMin.esc(r.title) + ' · ' + r.cost_points + ' ' + curN(r.cost_points) + ' ' +
@@ -3661,8 +3680,9 @@ window.__v02stage = "after-sixmin-circles"; if (window.__v02say) window.__v02say
   function mount() {
     const box = document.getElementById("auth-box");
     if (!box || document.getElementById("sm-signup")) return;
-    const wrap = document.createElement("div");
+    const wrap = document.createElement("form");
     wrap.id = "sm-signup";
+    wrap.onsubmit = () => false; // rev.11: поля пароля живут в form — браузер не ругается
     wrap.style.cssText = "margin-top:14px;border-top:1px dashed rgba(128,128,128,.3);padding-top:12px";
     wrap.innerHTML =
       '<div style="font-size:13px;font-weight:700;margin-bottom:8px;opacity:.85">Создать аккаунт (для семьи и друзей)</div>' +
