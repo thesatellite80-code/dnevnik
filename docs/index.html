@@ -304,6 +304,7 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
       <div class="streak" id="today-streak">🔥 0</div>
     </div>
     <button class="ghost-btn" id="btn-quick" title="Быстрая запись">⚡ Быстро</button>
+    <button class="ghost-btn" id="btn-wisdom" title="Мудрость «6 минут»">📖</button>
   </header>
 
   <div id="flash" class="flash" hidden></div>
@@ -563,7 +564,17 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
       </div>
     </div>
 
-    <p class="version"><span id="build-info">v0.7.9</span> · данные на устройстве + Supabase</p>
+    <p class="version"><span id="build-info">v0.8.1</span> · данные на устройстве + Supabase</p>
+  </main>
+</section>
+
+<!-- ══════════════ МУДРОСТЬ ══════════════ -->
+<section id="screen-wisdom" class="screen">
+  <header class="head"><h1 class="page-title">📖 Мудрость «6 минут»</h1></header>
+  <main class="content">
+    <div id="wisdom-daily"></div>
+    <div id="wisdom-host"></div>
+    <div style="margin-top:12px"><button class="btn ghost" id="btn-wisdom-close">Вернуться</button></div>
   </main>
 </section>
 
@@ -585,7 +596,6 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
     <div class="card"><div id="habits-host"></div></div>
     <div class="card"><div id="focus-host"></div></div>
     <div class="card"><div id="tasks-host"></div></div>
-    <div class="card"><div id="theory-host"></div></div>
   </main>
 </section>
 
@@ -626,7 +636,7 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
   <button data-tab="settings"><span>⚙️</span>Настройки</button>
 </nav>
 
-<script defer src="js/bundle.js?v=030"></script>
-<script defer src="js/v02.js?v=065"></script>
+<script defer src="js/bundle.js?v=031"></script>
+<script defer src="js/v02.js?v=067"></script>
 </body>
 </html>

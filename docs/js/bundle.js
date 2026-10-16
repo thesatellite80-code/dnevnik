@@ -22,7 +22,7 @@ window.SIXMIN_CONFIG = {
 
   // ── 3. ПРОЧЕЕ ──────────────────────────────────────────────────────
   defaultTimezone: "Europe/Moscow",
-  version: "0.7.9"
+  version: "0.8.1"
 };
 
 /* ── Контент: вопросы (свои формулировки, пул вариантов для ротации) ── */
@@ -31,68 +31,67 @@ window.QUESTIONS = {
   am: [
     {
       id: "a1",
-      main: "За что ты благодарен(на) прямо сейчас?",
-      variants: [
-        "Что хорошего уже есть в твоей жизни?",
-        "Что для тебя сегодня ценно?",
-        "Что маленькое тебя сейчас радует?"
+      main: "Чему ты сегодня предвкушаешь?"
+      , variants: [
+        "Какую маленькую радость ты себе запланировал(а)?",
+        "Какой момент дня хочется растянуть?"
       ],
-      hint: "Конкретно: не «всё хорошо», а «кофе в тишине до всеобщего подъёма»"
+      hint: "Предвкушение — топливо: назови одно «хочу», а не десять «надо»"
     },
     {
       id: "a2",
-      main: "Что сделает сегодняшний день удачным?",
+      main: "Что одно сделает сегодня день «не зря» — и что может помешать?",
       variants: [
-        "Какие 1–2 действия дадут ощущение, что день прожит не зря?",
-        "Что ты сегодня хочешь успеть для себя?"
+        "Если день удастся — благодаря чему?",
+        "Твой план «если — то»: если помешает X, то я сделаю Y?"
       ],
-      hint: "Одно-два реальных действия, а не список из десяти"
+      hint: "Предвиденное препятствие — наполовину обезвреженное"
     },
     {
       id: "a3",
-      main: "Каким человеком ты хочешь быть сегодня?",
+      main: "Каким ты хочешь прийти к вечеру?",
       variants: [
-        "Что ты себе напоминаешь о себе?",
-        "Какое качество ты сегодня включаешь?"
+        "Какое настроение ты сегодня надеваешь, как одежду?",
+        "Одно слово-состояние на сегодня?"
       ],
-      hint: "Спокойным. Внимательным. Решительным. Добрым к себе."
+      hint: "Одно слово: спокойный / бодрый / цепкий / нежный — это твой компас на день"
     }
   ],
   pm: [
     {
       id: "e1",
-      main: "Что хорошего ты сегодня сделал(а) — для себя или других?",
+      main: "Что сегодня сдвинулось с места — даже чуть-чуть?",
       variants: [
-        "Чем ты сегодня можешь гордиться?",
-        "Где ты был(а) полезен(на)?"
+        "Какую маленькую победу ты записываешь себе?",
+        "Что можно отметить «сделано», не скромничая?"
       ],
-      hint: "Считается и мелочь: вовремя лёг спать, не сорвался, помог"
+      hint: "«Позвонил(а) туда, где неделю откладывал(а)» — это тоже прогресс"
     },
     {
       id: "e2",
-      main: "Что сегодня тебя порадовало или удивило?",
+      main: "Что забрало силы — и чему это научило?",
       variants: [
-        "Какой момент дня ты бы сохранил(а)?",
-        "Что было приятным, даже совсем мелкое?"
+        "Посмотри на день со стороны, как добрый наблюдатель: почему всё сложилось так?",
+        "Какой момент ты бы повторил(а)? А какой — нет?"
       ],
-      hint: "Момент, а не оценка дня"
+      hint: "Без самобичевания: наблюдение → вывод → одно действие"
     },
     {
       id: "e3",
-      main: "Что можно было сделать лучше — и что берёшь в завтра?",
+      main: "Что ты берёшь в завтра, а что оставляешь здесь?",
       variants: [
-        "Какой урок сегодня?",
-        "Что завтра сделаешь иначе?"
+        "Если бы ты встретил(а) себя утреннего(юю) — что сказал(а) бы ему/ей?",
+        "Одна фраза, которой заканчивается сегодня?"
       ],
-      hint: "Без самобичевания: факт → вывод → действие"
+      hint: "По одному пункту на «беру» и «оставляю» — достаточно"
     }
   ],
   weekly: [
-    { id: "w1", main: "Какой момент недели был самым ценным?", variants: [], hint: "" },
-    { id: "w2", main: "Что ты сделал(а) на этой неделе для своих целей?", variants: [], hint: "" },
-    { id: "w3", main: "Что забирало энергию — и как это изменить?", variants: [], hint: "" },
-    { id: "w4", main: "Кому и за что хочешь сказать спасибо?", variants: [], hint: "" },
-    { id: "w5", main: "Один главный приоритет следующей недели.", variants: [], hint: "" }
+    { id: "w1", main: "Что было главным «не зря» этой недели?", variants: [], hint: "Не самое громкое, а самое двигающее" },
+    { id: "w2", main: "Что повторялось трижды и больше — уже как узор, а не случайность?", variants: [], hint: "Узоры — это то, из чего строятся графики и привычки" },
+    { id: "w3", main: "Где утекала энергия — и что из этого убрать, делегировать или упростить?", variants: [], hint: "Один кандидат на вылет из следующей недели" },
+    { id: "w4", main: "Кто сделал твою неделю легче — и знает ли он об этом?", variants: [], hint: "Спасибо, сказанное вслух, считается вдвойне" },
+    { id: "w5", main: "Одно обещание следующей неделе — и первый шаг к нему?", variants: [], hint: "Обещание без первого шага — просто мечта" }
   ]
 };
 
@@ -763,14 +762,21 @@ const ICS = (() => {
   }
 
   function esc(s) { return String(s).replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n"); }
+  function ymdPlus(ymd, days) {
+    const y = +ymd.slice(0, 4), m = +ymd.slice(4, 6), d = +ymd.slice(6, 8);
+    const dt = new Date(y, m - 1, d + days);
+    const p = (n) => String(n).padStart(2, "0");
+    return dt.getFullYear() + p(dt.getMonth() + 1) + p(dt.getDate());
+  }
 
   function vevent(o) {
     const lines = [
       "BEGIN:VEVENT",
       "UID:" + o.uid,
       "DTSTAMP:" + fmtUTC(new Date()),
-      "DTSTART:" + fmtUTC(o.start),
-      "DTEND:" + fmtUTC(new Date(o.start.getTime() + (o.minutes || 6) * 60000)),
+      ...(o.allday
+        ? ["DTSTART;VALUE=DATE:" + o.dateYMD, "DTEND;VALUE=DATE:" + o.endDateYMD]
+        : ["DTSTART:" + fmtUTC(o.start), "DTEND:" + fmtUTC(new Date(o.start.getTime() + (o.minutes || 6) * 60000))]),
       "RRULE:" + o.rrule,
       "SUMMARY:" + esc(o.title),
       "DESCRIPTION:" + esc(o.description || ""),
@@ -822,6 +828,41 @@ const ICS = (() => {
         title: "📊 Обзор недели (5 вопросов)", description: desc, url: appUrl || null
       })
     ];
+
+    // v0.8.1: смены, события кругов, отпуска и ДР — из модуля смен
+    const xd = (window.SixMinShifts && window.SixMinShifts.icsData) ? window.SixMinShifts.icsData() : null;
+    if (xd) {
+      const mk = (ymd, hhmm) => {
+        const y = +ymd.slice(0, 4), m = +ymd.slice(5, 7), d = +ymd.slice(8, 10);
+        const p2 = String(hhmm || "09:00").split(":");
+        return new Date(y, m - 1, d, +p2[0], +p2[1]);
+      };
+      const dur = (date, from, to) => {
+        let mins = Math.round((mk(date, to) - mk(date, from)) / 60000);
+        if (mins <= 0) mins += 1440;
+        return mins;
+      };
+      xd.shifts.forEach((s, n) => {
+        events.push(s.from && s.to
+          ? vevent({ uid: "sixmin-shift-" + s.date + "-" + n + "@local", start: mk(s.date, s.from), minutes: dur(s.date, s.from, s.to), title: "🏭 " + s.title, description: desc })
+          : vevent({ uid: "sixmin-shift-" + s.date + "-" + n + "@local", allday: true, dateYMD: s.date.replace(/-/g, ""), endDateYMD: ymdPlus(s.date.replace(/-/g, ""), 1), title: "🏭 " + s.title, description: desc }));
+      });
+      xd.events.forEach((ev, n) => {
+        events.push(ev.from
+          ? vevent({ uid: "sixmin-ev-" + ev.date + "-" + n + "@local", start: mk(ev.date, ev.from), minutes: ev.to ? dur(ev.date, ev.from, ev.to) : 60, title: "📅 " + ev.title, description: desc })
+          : vevent({ uid: "sixmin-ev-" + ev.date + "-" + n + "@local", allday: true, dateYMD: ev.date.replace(/-/g, ""), endDateYMD: ymdPlus(ev.date.replace(/-/g, ""), 1), title: "📅 " + ev.title, description: desc }));
+      });
+      (xd.vacations || []).forEach((v) => {
+        events.push(vevent({ uid: "sixmin-vac-" + v.id + "@local", allday: true, dateYMD: String(v.start_date).replace(/-/g, ""), endDateYMD: ymdPlus(String(v.start_date).replace(/-/g, ""), v.days || 1), title: "🏖 Отпуск", description: desc }));
+      });
+      if (xd.birthday) {
+        const b = String(xd.birthday).slice(0, 10);
+        const yy = new Date().getFullYear();
+        const md = b.slice(5);
+        const start = (yy + "-" + md >= b.slice(0, 4) && yy + "-" + md >= new Date().toISOString().slice(0, 10)) ? yy + "-" + md : (yy + 1) + "-" + md;
+        events.push(vevent({ uid: "sixmin-bday@local", allday: true, dateYMD: start.replace(/-/g, ""), endDateYMD: ymdPlus(start.replace(/-/g, ""), 1), rrule: "FREQ=YEARLY", title: "🎂 День рождения", description: desc }));
+      }
+    }
 
     return [
       "BEGIN:VCALENDAR",
@@ -897,7 +938,7 @@ const App = (() => {
     const target = $("screen-" + name);
     if (target) target.classList.add("active");
     const tabbar = $("tabbar");
-    tabbar.style.display = (name === "form" || name === "quick" || name === "done") ? "none" : "flex";
+    tabbar.style.display = (name === "form" || name === "quick" || name === "done" || name === "wisdom") ? "none" : "flex";
     document.querySelectorAll("#tabbar button").forEach(b =>
       b.classList.toggle("active", b.dataset.tab === name));
     window.scrollTo(0, 0);
@@ -1562,6 +1603,8 @@ const App = (() => {
     $("btn-login").onclick = login;
     $("btn-login-pass").onclick = loginPass;
     const bf = $("btn-forgot"); if (bf) bf.onclick = forgotPass;
+    const bw = $("btn-wisdom"); if (bw) bw.onclick = () => show("wisdom");
+    const bwc = $("btn-wisdom-close"); if (bwc) bwc.onclick = () => show(lastMainTab());
     $("btn-logout").onclick = async () => { await Cloud.signOut(); renderAuth(); flash("Вы вышли из облака"); };
     $("btn-gen-code").onclick = genLinkCode;
     $("btn-ics").onclick = async () => {

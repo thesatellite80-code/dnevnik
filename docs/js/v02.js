@@ -2590,6 +2590,26 @@ window.__v02stage = "after-sixmin-analytics"; if (window.__v02say) window.__v02s
     { emoji: "🧘", title: "Пауза — часть работы", text: "Осознанность — это не ещё одна задача в списке. Это пауза между стимулом и реакцией. 6 минут тишины учат выбирать реакцию, а не действовать на автопилоте." },
   ];
 
+  // v0.8.1: принципы под новые возможности + тематические группы
+  const PRINCIPLES_MORE = [
+    { g: "work", emoji: "🏭", title: "График — договор, а не приговор", text: "Сменная сетка — не судьба, а договор с собой и семьёй. Поменялся договор — меняется цепочка дней, а не человек." },
+    { g: "work", emoji: "⏳", title: "Пересечения считаются в минутах", text: "«Занят весь день» — лень мысли. Завод до 19:30 и бассейн с 20:30 — две жизни в один вечер. Точность уважает обе." },
+    { g: "work", emoji: "🛌", title: "Отсыпной — не выходной", text: "Тело не врёт: после ночной смены отдых — это производственное время. Не планируйте подвигов на отсыпной." },
+    { g: "family", emoji: "🤝", title: "Семья — это расписание, которое договорилось", text: "Любовь живёт не в намерениях, а в найденных общих вечерах. Общие свободные дни — любовь, которую положили в календарь." },
+    { g: "family", emoji: "🎁", title: "Договор лучше нотации", text: "Баунти: взял — сделал — сдал — автор одобрил — баллы в копилку. Правила, видимые обеим сторонам, растят человека, а не обиду." },
+    { g: "family", emoji: "📅", title: "Приглашение — забота по часам", text: "Событие с приглашением — способ сказать «ты мне важен» не словом, а слотом календаря. Ответ «иду» — это обещание, которое видно всем." },
+    { g: "family", emoji: "🎂", title: "Помнить хорошо — не забывать лучше", text: "Память о днях рождения делегируется кругу: утренний пуш близким приходит сам. Внимание, которое не зависит от вашей загруженности." },
+    { g: "voice", emoji: "🎙️", title: "Проговорённое — значит записанное", text: "Руки, занятые поводком или коляской, — не повод терять день. Диктовка сохраняет честность мысли на скорости 90 км/ч." },
+    { g: "voice", emoji: "🧊", title: "Заморозка — тоже забота", text: "Болезнь, дорога, тяжёлая неделя: день можно заморозить без вины. Серия не прервана — она поставлена на паузу вместе с вами." },
+  ];
+  const PRINCIPLES_ALL = PRINCIPLES.map((p) => Object.assign({ g: "self" }, p)).concat(PRINCIPLES_MORE);
+  const GROUPS = [
+    { id: "self", emoji: "🕰️", title: "Время и себя" },
+    { id: "work", emoji: "🏭", title: "Работа и смены" },
+    { id: "family", emoji: "🤝", title: "Семья и круги" },
+    { id: "voice", emoji: "🎙️", title: "Голос и забота" },
+  ];
+
   // ---------- Цитаты: пул v0.1 (quotes.js, 36 шт.) + новые, с дедупликацией ----------
   const QUOTES_V01 = [
     { text: "Сделанное — всегда лучше, чем идеальное.", author: "Шерил Сэндберг" },
@@ -2709,14 +2729,19 @@ window.__v02stage = "after-sixmin-analytics"; if (window.__v02say) window.__v02s
       <details class="sm-theory-wrap">
         <summary>
           <span class="sm-card-emoji">📖</span> Мудрость «6 минут»
-          <em class="sm-theory-count">${PRINCIPLES.length} принципа</em>
+          <em class="sm-theory-count">${PRINCIPLES_ALL.length} принципа</em>
           <button class="sm-ib" data-info="theory" aria-label="Как это работает">i</button>
         </summary>
         <div class="sm-theory">
-          ${PRINCIPLES.map((p, i) => `
-          <details class="sm-card" ${i === 0 ? "open" : ""}>
-            <summary><span class="sm-card-emoji">${p.emoji}</span> ${SixMin.esc(p.title)}</summary>
-            <p>${SixMin.esc(p.text)}</p>
+          ${GROUPS.map((g, gi) => `
+          <details class="sm-card sm-card-group" ${gi === 0 ? "open" : ""}>
+            <summary><span class="sm-card-emoji">${g.emoji}</span> ${g.title}
+              <em class="sm-theory-count">${PRINCIPLES_ALL.filter((p) => p.g === g.id).length}</em></summary>
+            ${PRINCIPLES_ALL.filter((p) => p.g === g.id).map((p) => `
+            <details class="sm-card">
+              <summary><span class="sm-card-emoji">${p.emoji}</span> ${SixMin.esc(p.title)}</summary>
+              <p>${SixMin.esc(p.text)}</p>
+            </details>`).join("")}
           </details>`).join("")}
         </div>
       </details>`;
@@ -2764,7 +2789,16 @@ window.__v02stage = "after-sixmin-analytics"; if (window.__v02say) window.__v02s
     document.head.appendChild(css);
   }
 
-  window.SixMinTheory = { mountCards, randomQuote, getRandomQuote, showSuccessQuote, QUOTES, PRINCIPLES };
+  function mountDaily(container) {
+    const root = typeof container === "string" ? document.querySelector(container) : container;
+    if (!root) return;
+    const now = new Date();
+    const doy = Math.floor((now - new Date(now.getFullYear(), 0, 0)) / 86400000);
+    const p = PRINCIPLES_ALL[doy % PRINCIPLES_ALL.length];
+    root.innerHTML = '<details class="sm-card" open style="margin-bottom:8px"><summary><span class="sm-card-emoji">' + p.emoji +
+      '</span> Принцип дня: ' + SixMin.esc(p.title) + '</summary><p>' + SixMin.esc(p.text) + "</p></details>";
+  }
+  window.SixMinTheory = { mountCards, mountDaily, randomQuote, getRandomQuote, showSuccessQuote, QUOTES, PRINCIPLES: PRINCIPLES_ALL };
 })();
 window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say("v02 stage: after-sixmin-theory");
 
@@ -2784,10 +2818,10 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     "2026-05-11": "11 Мая", "2026-06-12": "12 Июня", "2026-11-04": "4 Ноября",
   };
   const DEF = { anchor: "2026-04-27", cycle: ["night", "rest", "off", "day", "off"], hours: 12, name: "Мой график" };
-  const SHIFT_NAMES = { night: "🌙 Ночь", rest: "💤 Отсыпной", off: "🏠 Выходной", day: "☀️ День" };
+  const SHIFT_NAMES = { night: "🌙 Ночь", rest: "💤 Отсыпной", off: "🏠 Выходной", day: "☀️ День", hol: "🎉 Праздник", bday: "🎂 День рождения" };
   // v0.7.0: графиков может быть НЕСКОЛЬКО (офис + завод): у каждого свой цикл.
   // J — списки работ; P — личные настройки человека (день рождения, видимость для кругов).
-  let root = null, P = null, J = [], V = [], loggedOut = false, resCache = null, CIRC = [], editing = null;
+  let root = null, P = null, J = [], V = [], loggedOut = false, resCache = null, CIRC = [], editing = null, E = [];
   let editingTypes = {}; // v0.7.8: кастомные типы дней редактируемого графика
   const plRu = (n, f) => { const a = Math.abs(n) % 100, b = a % 10; return (a > 10 && a < 20) ? f[2] : (b > 1 && b < 5) ? f[1] : (b === 1) ? f[0] : f[2]; };
 
@@ -2874,6 +2908,13 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
         (freeAfter ? " · свободен после " + freeAfter : "");
       return { loc: "🏭 смена", free: false, msg, dot: "#E30613", kind: jobShift(k, act[0].j) };
     }
+    const sp = (J || []).map((j) => ({ j, tp: jobShift(k, j) })).find((x) => x.tp === "bday" || x.tp === "hol");
+    if (sp) return {
+      loc: sp.tp === "bday" ? "🎂 день рождения" : "🎉 праздник",
+      free: true,
+      msg: (sp.tp === "bday" ? "день рождения" : "праздничный день") + " · полностью свободен" + ((J || []).length > 1 ? " · " + sp.j.name : ""),
+      dot: "#f9ab00", kind: sp.tp,
+    };
     const rests = (J || []).some((j) => jobShift(k, j) === "rest");
     return { loc: "🏢 свободен", free: true, msg: rests ? "💤 отсыпной · полностью свободен" : "выходной · полностью свободен", dot: "#30a46c", kind: rests ? "rest" : "off" };
   }
@@ -2946,6 +2987,13 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
           const rj = await sb.rpc("circle_jobs", { p_circle: c.id });
           CIRC.push({ id: c.id, name: c.name, members: rows || [], jobs: (rj.error ? [] : (rj.data || [])) });
         }
+        // v0.8.0: мероприятия с приглашениями (мои круги, неделя назад и дальше)
+        const { data: ev } = await sb.from("shift_events")
+          .select("*, shift_event_rsvp(user_id,status)")
+          .in("circle_id", ids)
+          .gte("date", key(new Date(Date.now() - 7 * 86400000)))
+          .order("date");
+        E = ev || [];
       }
     }
   }
@@ -3173,6 +3221,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       '<div class="sm-sh-sec">Мои графики (' + (J || []).length + ')</div>' + jobsRows + editorHtml +
       '<div class="sm-sh-lbl"><button class="sm-sh-cycadd" type="button" data-jadd="1">+ Добавить график</button></div>' +
       circlesHTML(today) +
+      eventsHTML() + eventFormHTML() +
       '<details class="sm-sh-secwrap"' + (resCache ? " open" : "") + '><summary>🔍 Найти свободные дни</summary>' +
       '<form class="sm-sh-find"><input type="date" class="sm-sh-from" value="' + today + '"><input type="date" class="sm-sh-to" value="' +
       key(new Date(now.getTime() + 30 * 86400000)) + '"><button class="sm-add-btn" type="submit">🧮</button></form>' +
@@ -3206,6 +3255,11 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     if (HOLIDAYS[k]) rows.push("🎉 " + esc(HOLIDAYS[k]));
     const bday = circleBirthdaysOn(k);
     if (bday) rows.push("🎂 день рождения: " + esc(bday));
+    for (const ev of (E || []).filter((x) => String(x.date) === k)) {
+      const yes = (ev.shift_event_rsvp || []).filter((r) => r.status === "yes").length;
+      rows.push("📅 событие " + (ev.time_from ? String(ev.time_from).slice(0, 5) + " " : "") + "«" + esc(ev.title) + "» · хозяин: " +
+        esc(memberName(ev.owner_id)) + " · идут: " + yes);
+    }
     let tasksNote = "";
     try {
       const uid = await SixMin.uid();
@@ -3224,6 +3278,54 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       (rows.length ? "<ul>" + rows.map((r) => "<li>" + r + "</li>").join("") + "</ul>"
         : "<p>Ни смен, ни задач — день полностью свободен.</p>") + tasksNote;
     SixMin.info(k.slice(8, 10) + "." + k.slice(5, 7) + " " + wd, html);
+  }
+  function memberName(uid) {
+    if (P && uid === P.user_id) return "вы";
+    for (const c of CIRC) for (const m of c.members) if (m.user_id === uid) return m.name;
+    return "участник";
+  }
+  function pickOptions() {
+    const today = key(new Date());
+    const opts = [];
+    for (const k of Object.keys(HOLIDAYS)) if (k >= today) opts.push('<option value="' + k + '">🎉 ' + esc(HOLIDAYS[k]) + "</option>");
+    const bds = [];
+    if (P && P.birthday) bds.push({ name: "у вас", b: P.birthday });
+    for (const c of CIRC) for (const m of c.members) if (m.birthday && m.user_id !== (P && P.user_id)) bds.push({ name: m.name, b: m.birthday });
+    const seen = new Set();
+    for (const x of bds) {
+      const bi = bdayInfo(x.b, today);
+      if (bi && !seen.has(bi.key)) { seen.add(bi.key); opts.push('<option value="' + bi.key + '">🎂 ' + esc(x.name) + "</option>"); }
+    }
+    return opts.join("");
+  }
+  function eventsHTML() {
+    if (!E.length) return "";
+    const rows = (E || []).map((ev) => {
+      const rsvps = ev.shift_event_rsvp || [];
+      const yes = rsvps.filter((r) => r.status === "yes").length;
+      const mine = rsvps.find((r) => r.user_id === (P && P.user_id));
+      const circ = (CIRC.find((c) => c.id === ev.circle_id) || {}).name || "";
+      const when = String(ev.date).slice(8, 10) + "." + String(ev.date).slice(5, 7) + (ev.time_from ? " " + String(ev.time_from).slice(0, 5) : "");
+      return '<div class="sm-sh-row"><span>📅 ' + when + " · " + esc(ev.title) + " · " + esc(circ) + " · 👥 идут: " + yes +
+        (ev.owner_id === (P && P.user_id) ? " · вы хозяин" : "") + "</span>" +
+        (ev.owner_id === (P && P.user_id)
+          ? '<b class="sm-sh-del" data-evdel="' + ev.id + '" title="Отменить событие">×</b>'
+          : '<span><button class="sm-sh-icbtn" type="button" data-rsvp="' + ev.id + '" data-s="yes"' + (mine && mine.status === "yes" ? ' style="border-color:var(--accent,#E30613)"' : "") + '>иду</button> ' +
+            '<button class="sm-sh-icbtn" type="button" data-rsvp="' + ev.id + '" data-s="no"' + (mine && mine.status === "no" ? ' style="border-color:var(--accent,#E30613)"' : "") + '>не могу</button></span>') +
+        "</div>";
+    }).join("");
+    return '<div class="sm-sh-sec">📅 События моих кругов</div>' + rows;
+  }
+  function eventFormHTML() {
+    if (!CIRC.length) return "";
+    return '<details class="sm-sh-secwrap"><summary>📅 Событие с приглашением круга</summary>' +
+      '<form class="sm-sh-ev" data-role="event">' +
+      '<input class="sm-sh-ev-i" name="t" placeholder="Что: баня, кино, торт…" maxlength="60">' +
+      '<select class="sm-sh-ev-i sm-sh-evpick" name="pick"><option value="">дата: выбрать из списка…</option>' + pickOptions() + '</select>' +
+      '<input type="date" class="sm-sh-ev-i" name="d">' +
+      '<input type="time" class="sm-sh-ev-i" name="f" value="19:00"><input type="time" class="sm-sh-ev-i" name="tt">' +
+      '<select class="sm-sh-ev-i" name="c">' + CIRC.map((c) => '<option value="' + c.id + '">' + esc(c.name) + "</option>").join("") + '</select>' +
+      '<button class="sm-sh-cycadd" type="submit">+ пригласить круг</button></form></details>';
   }
   function circleBirthdaysOn(k) {
     const names = new Set();
@@ -3336,6 +3438,36 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     };
     root.querySelectorAll("[data-jup]").forEach((b) => b.addEventListener("click", () => moveJob(b.dataset.jup, -1)));
     root.querySelectorAll("[data-jdown]").forEach((b) => b.addEventListener("click", () => moveJob(b.dataset.jdown, 1)));
+    root.querySelector('form[data-role="event"]')?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const f = e.target;
+      const title = f.t.value.trim(), date = f.d.value, circle = f.c.value;
+      if (!title || !date || !circle) { SixMin.toast("Нужны название, дата и круг"); return; }
+      const uid = await SixMin.uid();
+      const { error } = await SixMin.sb().from("shift_events").insert({
+        owner_id: uid, circle_id: circle, title, date,
+        time_from: f.f.value || null, time_to: f.tt.value || null,
+      });
+      if (error) { SixMin.toast("Ошибка: " + error.message); return; }
+      SixMin.toast("Событие создано: круг увидит его в «Мои смены» и в деталях дня");
+      await load().catch(() => {}); render();
+    });
+    root.querySelector(".sm-sh-evpick")?.addEventListener("change", (e) => {
+      const d = root.querySelector('form[data-role="event"] [name="d"]');
+      if (d && e.target.value) d.value = e.target.value;
+    });
+    root.querySelectorAll("[data-rsvp]").forEach((b) => b.addEventListener("click", async () => {
+      const uid = await SixMin.uid();
+      const { error } = await SixMin.sb().from("shift_event_rsvp")
+        .upsert({ event_id: b.dataset.rsvp, user_id: uid, status: b.dataset.s }, { onConflict: "event_id,user_id" });
+      if (error) { SixMin.toast("Ошибка: " + error.message); return; }
+      await load().catch(() => {}); render();
+    }));
+    root.querySelectorAll("[data-evdel]").forEach((b) => b.addEventListener("click", async () => {
+      if (!confirm("Отменить событие и убрать приглашения?")) return;
+      await SixMin.sb().from("shift_events").delete().eq("id", b.dataset.evdel);
+      await load().catch(() => {}); render();
+    }));
     root.querySelector("[data-perjob]")?.addEventListener("click", (e) => {
       try { localStorage.setItem("sm-sh-perjob", e.currentTarget.dataset.perjob); } catch (err) {}
       render();
@@ -3381,6 +3513,8 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       .sm-sh-perjob{font-size:11.5px;opacity:.85;margin:-4px 0 10px;display:flex;flex-direction:column;gap:2px}
       .sm-sh-perjob-tgl{align-self:flex-start;background:none;border:0;color:var(--accent,#E30613);font-size:11.5px;cursor:pointer;padding:2px 0}
       .sm-sh-types{margin:8px 0;padding:8px;border:1px dashed var(--line,#333);border-radius:10px}
+      .sm-sh-ev{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+      .sm-sh-ev-i{background:var(--inset,#1c1c1c);border:1px solid var(--line,#333);border-radius:8px;color:inherit;padding:6px;font-size:12px;color-scheme:dark}
       .sm-sh-strip{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px}
       .sm-sh-dot{width:14px;height:14px;border-radius:50%;display:inline-block;opacity:.85;cursor:pointer}
       .sm-sh-dayrow{cursor:pointer}
@@ -3461,6 +3595,22 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       '<p class="sm-sh-note">Поздравления придут участникам ваших кругов; при выключенной галочке круг не видит ни графиков, ни дня рождения.</p>';
   }
 
+  // v0.8.1: данные для экспорта .ics: смены на 90 дней, события, отпуска, ДР
+  function icsData() {
+    const out = { shifts: [], events: [], vacations: (V || []).slice(), birthday: (P && P.birthday) || null };
+    const t0 = new Date(); t0.setHours(0, 0, 0, 0);
+    for (let i = 0; i < 90; i++) {
+      const k = key(new Date(t0.getTime() + i * 86400000));
+      for (const j of (J || [])) {
+        const tp = jobShift(k, j);
+        if (!isWorkType(j, tp)) continue;
+        const tm = timesOfType(j, tp) || [];
+        out.shifts.push({ date: k, from: tm[0] || null, to: tm[1] || null, title: "Смена: " + j.name + " (" + (namesOf(j)[tp] || tp) + ")" });
+      }
+    }
+    for (const ev of (E || [])) out.events.push({ date: String(ev.date), from: ev.time_from || null, to: ev.time_to || null, title: ev.title });
+    return out;
+  }
   function mount(container) {
     root = typeof container === "string" ? document.querySelector(container) : container;
     injectStyles();
@@ -3520,7 +3670,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     if (!nowTimer) nowTimer = setInterval(updateNow, 30000);
     refresh();
   }
-  window.SixMinShifts = { mount };
+  window.SixMinShifts = { mount, icsData };
 })();
 window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say("v02 stage: after-sixmin-shifts");
 
@@ -4638,7 +4788,8 @@ window.__v02stage = "after-sixmin-swipe"; if (window.__v02say) window.__v02say("
       [window.SixMinShifts, "mount", "#shifts-host", "shifts", undefined],
       [window.SixMinDoneToday, "mount", "#donetoday-host", "donetoday", undefined],
       [window.SixMinAnalytics, "mount", "#stats-host", "analytics", undefined],
-      [window.SixMinTheory, "mountCards", "#theory-host", "theory", undefined],
+      [window.SixMinTheory, "mountCards", "#wisdom-host", "theory", undefined],
+      [window.SixMinTheory, "mountDaily", "#wisdom-daily", "theory-daily", undefined],
       [window.SixMinVoice, "mount", "#voice-host", "voice", { slot: "quick" }],
       [window.SixMinVoiceList, "mount", "#voicelist-host", "voicelist", undefined],
       [window.SixMinCircles, "mount", "#circles-host", "circles", undefined]
