@@ -22,7 +22,7 @@ window.SIXMIN_CONFIG = {
 
   // ── 3. ПРОЧЕЕ ──────────────────────────────────────────────────────
   defaultTimezone: "Europe/Moscow",
-  version: "0.7.0"
+  version: "0.7.2"
 };
 
 /* ── Контент: вопросы (свои формулировки, пул вариантов для ротации) ── */
@@ -544,6 +544,13 @@ const Cloud = (() => {
     if (error) throw error;
     return true;
   }
+  // v0.7.2: сброс пароля письмом (кнопка «забыли пароль?» в карточке облака)
+  async function resetPassword(email) {
+    const c = await ensureClient();
+    const { error } = await c.auth.resetPasswordForEmail(email.trim(), { redirectTo: CFG.appUrl });
+    if (error) throw error;
+    return true;
+  }
 
   async function signOut() {
     if (!client) return;
@@ -702,7 +709,7 @@ const Cloud = (() => {
 
   return {
     configured,
-    init, state, onChange, signIn, signInPassword, signOut, sync,
+    init, state, onChange, signIn, signInPassword, resetPassword, signOut, sync,
     pushSettings, pullSettings, createLinkCode, telegramLinked,
     ensureClient,
     get client() { return client; },
@@ -1408,6 +1415,23 @@ const App = (() => {
     }
   }
 
+  // v0.7.2: переводим типовые ошибки auth на человеческий русский
+  function authRu(e) {
+    const m = String((e && e.message) || e);
+    if (/Invalid login credentials/i.test(m))
+      return "неверная пара почта+пароль, либо аккаунт ещё не создан. " +
+        "Если не регистрировались в дневнике — нажмите «Создать аккаунт» ниже. " +
+        "Если пароль забыт — «забыли пароль?». Пароль здесь — от дневника, а не от почты.";
+    if (/Email not confirmed/i.test(m))
+      return "почта аккаунта не подтверждена: найдите письмо «Confirm your email» (возможно, в «Спам») или попросите владельца подтвердить вход в Supabase → Authentication → Users.";
+    if (/already registered/i.test(m))
+      return "эта почта уже зарегистрирована: войдите с паролем или сбросьте пароль.";
+    if (/rate limit/i.test(m)) return "слишком много попыток подряд: подождите минуту и повторите.";
+    if (/Password should be/i.test(m)) return "пароль должен быть не короче 6 символов.";
+    if (/Unable to validate email/i.test(m)) return "похоже, в почте опечатка: проверьте адрес.";
+    return m;
+  }
+
   async function login() {
     const email = $("auth-email").value;
     if (!email || email.indexOf("@") < 0) { flash("Введите корректную почту", "err"); return; }
@@ -1415,7 +1439,7 @@ const App = (() => {
       await Cloud.signIn(email);
       flash("Письмо со ссылкой отправлено на " + email + ". Откройте его на этом же устройстве.", "ok");
     } catch (e) {
-      flash("Ошибка входа: " + e.message, "err");
+      flash("Ошибка входа: " + authRu(e), "err");
     }
   }
 
@@ -1429,7 +1453,18 @@ const App = (() => {
       flash("Вход выполнен ✓", "ok");
       renderAuth(); renderSyncState();
     } catch (e) {
-      flash("Ошибка входа: " + e.message, "err");
+      flash("Ошибка входа: " + authRu(e), "err");
+    }
+  }
+
+  async function forgotPass() {
+    const email = $("auth-email").value.trim();
+    if (!email || email.indexOf("@") < 0) { flash("Введите почту, для которой сбросить пароль", "err"); return; }
+    try {
+      await Cloud.resetPassword(email);
+      flash("Если аккаунт на " + email + " существует, письмо со ссылкой сброса уже отправлено (загляните в «Спам»).", "ok");
+    } catch (e) {
+      flash("Не удалось отправить сброс: " + authRu(e), "err");
     }
   }
 
@@ -1523,6 +1558,7 @@ const App = (() => {
     $("btn-save-settings").onclick = saveSettings;
     $("btn-login").onclick = login;
     $("btn-login-pass").onclick = loginPass;
+    const bf = $("btn-forgot"); if (bf) bf.onclick = forgotPass;
     $("btn-logout").onclick = async () => { await Cloud.signOut(); renderAuth(); flash("Вы вышли из облака"); };
     $("btn-gen-code").onclick = genLinkCode;
     $("btn-ics").onclick = async () => {

@@ -3009,13 +3009,13 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     const prev = monthStats(prevD.getFullYear(), prevD.getMonth());
     const mName = (d) => d.toLocaleString("ru-RU", { month: "long", year: "numeric" });
     const jobsRows = (J || []).map((j) =>
-      '<div class="sm-sh-row"><span><b>' + esc(j.name) + "</b> · цикл " + (jobCycle(j).length) + " дн · сегодня " +
-      esc(SHIFT_NAMES[jobShift(today, j)] || "") + '</span><span><b class="sm-sh-del" data-jedit="' + j.id +
-      '" title="Редактировать график">✏️</b> <b class="sm-sh-del" data-jdel="' + j.id + '" title="Удалить график">×</b></span></div>').join("");
+      '<div class="sm-sh-row"><span><b>' + esc(j.name) + "</b> · цикл " + (jobCycle(j).length) + " дн · якорь " +
+      String(j.anchor_date || "").slice(8, 10) + "." + String(j.anchor_date || "").slice(5, 7) +
+      " · " + (parseInt(j.shift_hours, 10) || 0) + " ч · сегодня " + esc(SHIFT_NAMES[jobShift(today, j)] || "") +
+      '</span><span><button class="sm-sh-icbtn" type="button" data-jedit="' + j.id + '" title="Редактировать график">✏️</button> ' +
+      '<button class="sm-sh-icbtn" type="button" data-jdel="' + j.id + '" title="Удалить график">×</button></span></div>').join("");
     const editJob = (editing && editing !== "__new") ? (J || []).find((j) => j.id === editing) : null;
-    const editorHtml = (editing === "__new" || editJob)
-      ? jobEditorHTML(editJob || null)
-      : '<p class="sm-sh-note">Нажмите ✏️ у графика, чтобы изменить его цикл, или добавьте новый график.</p>';
+    const editorHtml = (editing === "__new" || editJob) ? jobEditorHTML(editJob || null) : "";
     const vacRows = (V || []).map((v) =>
       '<div class="sm-sh-row"><span>' + v.start_date.slice(8, 10) + "." + v.start_date.slice(5, 7) + "." + v.start_date.slice(0, 4) +
       " · " + v.days + " дн · " + esc(v.kind === "harm" ? "вредность (+7)" : v.kind === "extra" ? "дополнительный" : "основной") +
@@ -3043,30 +3043,29 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       '<div class="sm-sh-stat"><b>🏢 ' + cur.free + ' дн.</b><span>' + esc(mName(now)) + '</span><em>🏭 ' + cur.hours + ' ч.</em></div>' +
       '<div class="sm-sh-stat"><b>🏢 ' + prev.free + ' дн.</b><span>' + esc(mName(prevD)) + '</span><em>🏭 ' + prev.hours + ' ч.</em></div>' +
       '</div>' +
-      '<div class="sm-sh-sec">Мои графики (' + (J || []).length + ')</div>' + jobsRows +
+      '<div class="sm-sh-sec">Мои графики (' + (J || []).length + ')</div>' + jobsRows + editorHtml +
       '<div class="sm-sh-lbl"><button class="sm-sh-cycadd" type="button" data-jadd="1">+ Добавить график</button></div>' +
       circlesHTML(today) +
-      '<div class="sm-sh-sec">Найти свободные дни</div>' +
+      '<details class="sm-sh-secwrap"' + (resCache ? " open" : "") + '><summary>🔍 Найти свободные дни</summary>' +
       '<form class="sm-sh-find"><input type="date" class="sm-sh-from" value="' + today + '"><input type="date" class="sm-sh-to" value="' +
       key(new Date(now.getTime() + 30 * 86400000)) + '"><button class="sm-add-btn" type="submit">🧮</button></form>' +
-      resHtml +
-      '<div class="sm-sh-sec">Отпуски</div>' +
+      resHtml + '</details>' +
+      '<details class="sm-sh-secwrap"><summary>🏖 Отпуски</summary>' +
       '<form class="sm-sh-vac"><input type="date" class="sm-sh-vstart"><input type="number" class="sm-sh-vdays" min="1" max="366" value="14" title="Дней">' +
       '<select class="sm-sh-vkind"><option value="main">основной</option><option value="harm">вредность (+7)</option><option value="extra">дополнительный</option></select>' +
       '<button class="sm-add-btn" type="submit">+</button></form>' +
-      (vacRows || '<p class="sm-sh-note">Отпусков не запланировано.</p>') +
-      '<div class="sm-sh-sec">Праздники 2026</div>' + holRows +
-      '<details class="sm-sh-cfg"' + (editing ? " open" : "") + '><summary>✏️ Настроить графики работ</summary>' + editorHtml + '</details>' +
+      (vacRows || '<p class="sm-sh-note">Отпусков не запланировано.</p>') + '</details>' +
+      '<details class="sm-sh-secwrap"><summary>🎉 Праздники 2026</summary>' + holRows + '</details>' +
       '</div>';
     wire();
   }
 
   function circleBirthdaysOn(k) {
-    const names = [];
+    const names = new Set();
     for (const c of CIRC) for (const m of c.members) {
-      if (m.birthday && String(m.birthday).slice(5, 10) === k.slice(5, 10)) names.push(m.name);
+      if (m.birthday && String(m.birthday).slice(5, 10) === k.slice(5, 10)) names.add(m.name);
     }
-    return names.join(", ");
+    return Array.from(names).join(", ");
   }
   function circlesHTML(today) {
     if (!CIRC.length) return "";
@@ -3223,6 +3222,13 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       .sm-sh-dayslist{display:flex;flex-wrap:wrap;gap:4px;padding:6px 8px}
       .sm-sh-day{background:var(--inset,#1c1c1c);border:1px solid var(--line,#333);border-radius:8px;padding:4px 8px;font-size:12px}
       .sm-sh-editor{margin:6px 0}
+      .sm-sh-icbtn{background:var(--inset,#1c1c1c);border:1px solid var(--line,#333);border-radius:8px;padding:2px 9px;cursor:pointer;font-size:14px;color:inherit}
+      .sm-sh-icbtn:hover{border-color:var(--accent,#E30613)}
+      .sm-sh-secwrap{margin:10px 0}
+      .sm-sh-secwrap summary{cursor:pointer;font-weight:700;font-size:13px;opacity:.85;list-style:none;padding:4px 0}
+      .sm-sh-secwrap summary::-webkit-details-marker{display:none}
+      .sm-sh-secwrap summary::before{content:"▶ ";font-size:10px;opacity:.6}
+      .sm-sh-secwrap[open] summary::before{content:"▼ ";font-size:10px;opacity:.6}
     `;
     document.head.appendChild(st);
   }
@@ -3234,12 +3240,14 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     const card = document.createElement("div");
     card.className = "card"; card.id = "sm-bday-card";
     card.innerHTML = '<h3>🎂 День рождения и видимость</h3><div class="sm-bd-host"></div>';
-    content.appendChild(card);
+    const foot = content.querySelector("p.version");
+    content.insertBefore(card, foot || null);
     bhost = card.querySelector(".sm-bd-host");
     bhost.addEventListener("click", async (e) => {
       if (!e.target.closest("[data-bdsave]")) return;
       if (!P) { const uid = await SixMin.uid(); P = { user_id: uid, birthday: null, shared: true }; }
-      P.birthday = bhost.querySelector(".sm-bd-input").value || null;
+      const bv = bhost.querySelector(".sm-bd-input").value || null;
+      P.birthday = (bv && bv.slice(0, 4) >= "1900") ? bv : null;
       P.shared = bhost.querySelector(".sm-bd-shared").checked;
       await savePerson();
     });
@@ -4240,7 +4248,15 @@ window.__v02stage = "after-sixmin-circles"; if (window.__v02say) window.__v02say
         email, password: pass,
         options: { data: { display_name: name || null } },
       });
-      if (error) { msg.textContent = "Ошибка: " + error.message; return; }
+      if (error) {
+        const m = String(error.message || error);
+        msg.textContent = /already registered/i.test(m)
+          ? "Эта почта уже зарегистрирована: войдите с паролем выше или нажмите «забыли пароль?»."
+          : /rate limit/i.test(m) ? "Слишком много попыток: подождите минуту и повторите."
+          : /Unable to validate email/i.test(m) ? "Похоже, в почте опечатка: проверьте адрес."
+          : "Ошибка: " + m;
+        return;
+      }
       // v0.6.1: сразу пишем имя в profiles, чтобы в кругах человек был не «участник».
       if (name) {
         if (data.session) {
