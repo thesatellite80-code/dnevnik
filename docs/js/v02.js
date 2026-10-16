@@ -2954,7 +2954,8 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       : "";
     root.innerHTML =
       '<div class="sm-sh">' +
-      '<div class="sm-sh-head">🔥 Мои смены <button class="sm-ib" data-shinfo="1">i</button></div>' +
+      '<div class="sm-sh-head">🔥 Мои смены <button class="sm-ib" data-shinfo="1">i</button>' +
+      ' <button class="sm-add-btn" type="button" data-shedit="1">✏️ Изменить график</button></div>' +
       '<div class="sm-sh-today">' + esc(ti.loc) + ' · ' + esc(ti.msg) + esc(bdaysMine) + '</div>' +
       '<div class="sm-sh-strip">' + strip.join("") + '</div>' +
       '<div class="sm-sh-legend"><span><i style="background:#E30613"></i>на заводе</span><span><i style="background:#30a46c"></i>в офисе (свободен)</span><span><i style="background:#f9ab00"></i>праздник/отпуск</span></div>' +
@@ -2973,7 +2974,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       '<button class="sm-add-btn" type="submit">+</button></form>' +
       (vacRows || '<p class="sm-sh-note">Отпусков не запланировано.</p>') +
       '<div class="sm-sh-sec">Праздники 2026</div>' + holRows +
-      '<details class="sm-sh-cfg"><summary>Настройки смен</summary>' +
+      '<details class="sm-sh-cfg"><summary>✏️ Настройки смен — график, цикл, отпуска</summary>' +
       '<label class="sm-sh-lbl">Якорная дата — день №1 цепочки ниже <input type="date" class="sm-sh-anchor" value="' + anchorOf() + '"></label>' +
       '<label class="sm-sh-lbl">Длительность смены, ч <input type="number" class="sm-sh-hours" min="1" max="24" value="' + hoursOf() + '"></label>' +
       '<label class="sm-sh-lbl"><input type="checkbox" class="sm-sh-shared"' + (P.shared ? " checked" : "") + '> показывать график и ДР участникам моих кругов</label>' +
@@ -3038,6 +3039,10 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     });
   }
   function wire() {
+    root.querySelector("[data-shedit]")?.addEventListener("click", () => {
+      const d = root.querySelector(".sm-sh-cfg");
+      if (d) { d.open = true; d.scrollIntoView({ behavior: "smooth", block: "start" }); }
+    });
     root.querySelector("[data-shinfo]")?.addEventListener("click", () => SixMin.info("Мои смены",
       "<p>Цикл любой длины: ваша цепочка дней от якорной даты — дня №1 цепочки (тип этого дня выбираете вы). " +
       "<b>🏭 На заводе</b> — только рабочие смены; <b>🏢 В офисе</b> — все свободные дни, включая отсыпные. " +
