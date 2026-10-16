@@ -2794,6 +2794,13 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
   const esc = SixMin.esc;
 
   const jobCycle = (job) => (Array.isArray(job.cycle) && job.cycle.length >= 2) ? job.cycle : DEF.cycle;
+  // v0.7.4: начало/конец смены по типам дня (день/ночь) у каждого графика
+  const DEF_TIMES = { day: ["07:30", "19:30"], night: ["19:30", "07:30"] };
+  function timesOf(job) {
+    const st = (job && job.shift_times) || {};
+    const g = (tp) => (Array.isArray(st[tp]) && st[tp][0] && st[tp][1]) ? [String(st[tp][0]), String(st[tp][1])] : DEF_TIMES[tp];
+    return { day: g("day"), night: g("night") };
+  }
   function jobShift(k, job) {
     const cyc = jobCycle(job);
     const a = parse(job.anchor_date || DEF.anchor);
@@ -2801,6 +2808,9 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     return cyc[((diff % cyc.length) + cyc.length) % cyc.length];
   }
   const workJobsOn = (k) => (J || []).filter((j) => { const s = jobShift(k, j); return s === "day" || s === "night"; });
+  // v0.7.5: если смены разных графиков попадают в один день — работает только ВЕРХНИЙ
+  // в списке «Мои графики» (порядок = приоритет, меняется стрелками ↑↓); остальные «перекрываются».
+  const topWorkJob = (k) => workJobsOn(k)[0] || null;
 
   function vacSet() {
     const s = new Set();
@@ -2816,13 +2826,18 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     if (HOLIDAYS[k]) return { loc: "🏖 праздник", free: true, msg: "праздник • полностью свободен", dot: "#f9ab00", kind: "hol" };
     const wj = workJobsOn(k);
     if (wj.length) {
-      const parts = wj.map((j) => (jobShift(k, j) === "night" ? "🌙 ночь" : "☀️ день") + ((J || []).length > 1 ? " · " + j.name : "")).join(" + ");
-      return { loc: "🏭 смена", free: false, msg: parts, dot: "#E30613", kind: wj.length > 1 ? "multi" : jobShift(k, wj[0], ) };
+      const w = wj[0];
+      const tp = jobShift(k, w);
+      const tm = timesOf(w)[tp] || [];
+      const overl = wj.slice(1).map((j) => j.name);
+      const msg = (tp === "night" ? "🌙 ночь" : "☀️ день") + (tm.length ? " " + tm[0] + "–" + tm[1] : "") +
+        ((J || []).length > 1 ? " · " + w.name : "") +
+        (overl.length ? " · перекрывает: " + overl.join(", ") : "") +
+        (tp === "day" && tm[1] ? " · свободен после " + tm[1] : "");
+      return { loc: "🏭 смена", free: false, msg, dot: "#E30613", kind: tp };
     }
     const rests = (J || []).some((j) => jobShift(k, j) === "rest");
-    const dow = parse(k).getDay();
-    const t2 = (dow >= 1 && dow <= 4) ? "свободен после 17:00" : dow === 5 ? "свободен после 19:30" : "полностью свободен";
-    return { loc: "🏢 свободен", free: true, msg: (rests ? "💤 отсыпной · " : "выходной · ") + t2, dot: "#30a46c", kind: rests ? "rest" : "off" };
+    return { loc: "🏢 свободен", free: true, msg: rests ? "💤 отсыпной · полностью свободен" : "выходной · полностью свободен", dot: "#30a46c", kind: rests ? "rest" : "off" };
   }
   function monthStats(y, m) {
     const vs = vacSet();
@@ -2831,7 +2846,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     while (d.getMonth() === m) {
       const k = key(d);
       const wj = (vs.has(k) || HOLIDAYS[k]) ? [] : workJobsOn(k);
-      if (wj.length) hours += wj.reduce((s, j) => s + (parseInt(j.shift_hours, 10) || 0), 0);
+      if (wj.length) hours += parseInt(wj[0].shift_hours, 10) || 0;
       else free++;
       d.setDate(d.getDate() + 1);
     }
@@ -2881,7 +2896,8 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     const uid = await SixMin.uid();
     const row = {
       user_id: uid, name: job.name, anchor_date: job.anchor_date,
-      cycle: job.cycle, shift_hours: job.shift_hours, updated_at: new Date().toISOString(),
+      cycle: job.cycle, shift_hours: job.shift_hours,
+      shift_times: job.shift_times || DEF_TIMES, updated_at: new Date().toISOString(),
     };
     if (!insert) row.id = job.id;
     const { error } = await SixMin.sb().from("shift_jobs").upsert(row, { onConflict: "id" });
@@ -2892,7 +2908,8 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     const chk = q.data;
     const same = chk && String(chk.anchor_date) === String(row.anchor_date) &&
       JSON.stringify(chk.cycle) === JSON.stringify(row.cycle) &&
-      parseInt(chk.shift_hours, 10) === parseInt(row.shift_hours, 10) && chk.name === row.name;
+      parseInt(chk.shift_hours, 10) === parseInt(row.shift_hours, 10) && chk.name === row.name &&
+      JSON.stringify(chk.shift_times || DEF_TIMES) === JSON.stringify(row.shift_times);
     if (!same) {
       console.error("shift_jobs readback mismatch:", chk, row);
       SixMin.toast("⚠️ Запись ушла в облако, но вернулись другие данные — обновите страницу и проверьте");
@@ -2955,13 +2972,19 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       anchor_date: (anchorEl && anchorEl.value) || DEF.anchor,
       cycle: Array.from(ed.querySelectorAll("[data-cyc]")).map((s) => s.value),
       shift_hours: parseInt((hoursEl && hoursEl.value), 10) || DEF.hours,
+      shift_times: {
+        day: [(root.querySelector(".sm-sh-dayfrom") || {}).value || DEF_TIMES.day[0], (root.querySelector(".sm-sh-dayto") || {}).value || DEF_TIMES.day[1]],
+        night: [(root.querySelector(".sm-sh-nightfrom") || {}).value || DEF_TIMES.night[0], (root.querySelector(".sm-sh-nightto") || {}).value || DEF_TIMES.night[1]],
+      },
     };
   }
   function jobEditorHTML(job) {
     return '<div class="sm-sh-editor">' +
       '<label class="sm-sh-lbl">Название графика <input type="text" class="sm-sh-name" maxlength="40" value="' + esc((job && job.name) || DEF.name) + '"></label>' +
       '<label class="sm-sh-lbl">Дата, про которую точно знаете (например, последняя смена) <input type="date" class="sm-sh-anchor" value="' + ((job && job.anchor_date) || DEF.anchor) + '"></label>' +
-      cycleEditorInner(jobCycle(job || {})) +
+      '<div class="sm-sh-cycwrap">' + cycleEditorInner(jobCycle(job || {})) + "</div>" +
+      '<label class="sm-sh-lbl">☀️ День: с <input type="time" class="sm-sh-dayfrom" value="' + timesOf(job).day[0] + '"> до <input type="time" class="sm-sh-dayto" value="' + timesOf(job).day[1] + '"></label>' +
+      '<label class="sm-sh-lbl">🌙 Ночь: с <input type="time" class="sm-sh-nightfrom" value="' + timesOf(job).night[0] + '"> до <input type="time" class="sm-sh-nightto" value="' + timesOf(job).night[1] + '"></label>' +
       '<label class="sm-sh-lbl">Смена, часов <input type="number" class="sm-sh-hours" min="1" max="24" value="' + ((job && job.shift_hours) || DEF.hours) + '"></label>' +
       '<div class="sm-sh-lbl"><button class="sm-sh-save" type="button" data-jsave="1">' + (job ? "Сохранить график" : "Создать график") + "</button>" +
       (job ? ' <button class="sm-sh-cycadd" type="button" data-jcancel="1">Отмена</button>' : "") +
@@ -3012,7 +3035,9 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       '<div class="sm-sh-row"><span><b>' + esc(j.name) + "</b> · цикл " + (jobCycle(j).length) + " дн · якорь " +
       String(j.anchor_date || "").slice(8, 10) + "." + String(j.anchor_date || "").slice(5, 7) +
       " · " + (parseInt(j.shift_hours, 10) || 0) + " ч · сегодня " + esc(SHIFT_NAMES[jobShift(today, j)] || "") +
-      '</span><span><button class="sm-sh-icbtn" type="button" data-jedit="' + j.id + '" title="Редактировать график">✏️</button> ' +
+      '</span><span><button class="sm-sh-icbtn" type="button" data-jup="' + j.id + '" title="Выше приоритетом">↑</button> ' +
+      '<button class="sm-sh-icbtn" type="button" data-jdown="' + j.id + '" title="Ниже приоритетом">↓</button> ' +
+      '<button class="sm-sh-icbtn" type="button" data-jedit="' + j.id + '" title="Редактировать график">✏️</button> ' +
       '<button class="sm-sh-icbtn" type="button" data-jdel="' + j.id + '" title="Удалить график">×</button></span></div>').join("");
     const editJob = (editing && editing !== "__new") ? (J || []).find((j) => j.id === editing) : null;
     const editorHtml = (editing === "__new" || editJob) ? jobEditorHTML(editJob || null) : "";
@@ -3118,6 +3143,8 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     root.querySelector("[data-shinfo]")?.addEventListener("click", () => SixMin.info("Мои смены",
       "<p>Графиков может быть несколько (например, офис и завод): у каждого свой цикл дней от своей якорной даты. " +
       "День считается <b>🏭 сменой</b>, если занята хотя бы одна работа; <b>🏢 свободен</b> — если свободны все. " +
+      "Если смены нескольких графиков попадают в один день, работает только верхний в списке «Мои графики» " +
+      "(порядок = приоритет, меняйте стрелками ↑↓), остальные помечаются «перекрывает»." +
       "Приоритет: отпуск → праздник → смена. Графики видят участники ваших кругов, если в «Настройках» " +
       "включена видимость; дни рождения приходят из кругов и попадают в подсказки и поиск.</p>"));
     root.querySelector(".sm-sh-reswrap .sm-sh-hide")?.addEventListener("click", (e) => {
@@ -3156,8 +3183,26 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       await SixMin.sb().from("shift_vacations").delete().eq("id", b.dataset.vdel);
       await load().catch(() => {}); render();
     }));
-    root.querySelector("[data-jadd]")?.addEventListener("click", () => { editing = "__new"; render(); });
-    root.querySelectorAll("[data-jedit]").forEach((b) => b.addEventListener("click", () => { editing = b.dataset.jedit; render(); }));
+    const moveJob = async (id, dir) => {
+      const arr = (J || []).slice();
+      const i = arr.findIndex((j) => j.id === id);
+      const t = i + dir;
+      if (i < 0 || t < 0 || t >= arr.length) return;
+      [arr[i], arr[t]] = [arr[t], arr[i]];
+      const sb = SixMin.sb();
+      for (let k2 = 0; k2 < arr.length; k2++) await sb.from("shift_jobs").update({ sort: k2 }).eq("id", arr[k2].id);
+      await load().catch(() => {}); render();
+    };
+    root.querySelectorAll("[data-jup]").forEach((b) => b.addEventListener("click", () => moveJob(b.dataset.jup, -1)));
+    root.querySelectorAll("[data-jdown]").forEach((b) => b.addEventListener("click", () => moveJob(b.dataset.jdown, 1)));
+    root.querySelector("[data-jadd]")?.addEventListener("click", () => {
+      editing = "__new"; render();
+      root.querySelector(".sm-sh-editor")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    root.querySelectorAll("[data-jedit]").forEach((b) => b.addEventListener("click", () => {
+      editing = b.dataset.jedit; render();
+      root.querySelector(".sm-sh-editor")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }));
     root.querySelectorAll("[data-jdel]").forEach((b) => b.addEventListener("click", async () => {
       if (!confirm("Удалить этот график? Остальные графики останутся.")) return;
       await SixMin.sb().from("shift_jobs").delete().eq("id", b.dataset.jdel);
@@ -3276,7 +3321,9 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       if (add) cyc.push("off");
       else if (cyc.length > 2) cyc.splice(parseInt(del.dataset.cycdel, 10), 1);
       else return;
-      ed.innerHTML = cycleEditorInner(cyc);
+      // v0.7.5: перезаписываем ТОЛЬКО блок цепочки, иначе исчезают название/якорь/часы/«Сохранить»
+      const cw = ed.querySelector(".sm-sh-cycwrap");
+      if (cw) cw.innerHTML = cycleEditorInner(cyc); else ed.innerHTML = cycleEditorInner(cyc);
       updatePreview(ed);
     });
     root.addEventListener("change", (e) => {
@@ -3665,7 +3712,7 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
       let acts = "";
       if (t.bounty_status === "open") acts = btn("claim", t.id, "Взять") + (isOwner ? btn("cancel", t.id, "×", "sm-task-del") : "");
       if (t.bounty_status === "claimed" && t.assignee_id === D.uid) acts = btn("done", t.id, "Готово ✅");
-      if (t.bounty_status === "done" && isOwner) acts = btn("approve", t.id, "Одобрить +" + t.bounty_points) + btn("reject", t.id, "↩");
+      if (t.bounty_status === "done" && (isOwner || D.uid === t.user_id)) acts = btn("approve", t.id, "Одобрить +" + t.bounty_points) + btn("reject", t.id, "↩");
       const status = t.bounty_status === "open" ? (who ? "делегировано: " + who : "ждёт героя") + " · автор: " + SixMin.esc(nameOf(t.user_id))
         : t.bounty_status === "claimed" ? "в работе: " + who : "ждёт одобрения: " + who;
       return '<li class="sm-task-wrap" data-id="' + t.id + '"><div class="sm-task"><div class="sm-task-main">' +
@@ -3680,12 +3727,14 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
       '<div class="sm-cr-bal-hint">Как зарабатывать: возьмите задание с наградой («Взять» → сделать → «Готово ✅») или общую задачу круга — владелец одобрит, и ' + cur() + ' упадут в копилку.</div>' +
       '<div class="sm-cr-board">' + board.map((x, i) =>
         '<span class="sm-cr-member' + (x.u === D.uid ? " me" : "") + '">' + (i + 1) + '. ' + SixMin.esc(nameOf(x.u)) + ' · ' + x.b + '</span>').join("") + '</div></div>' +
-      (isOwner ? '<form class="sm-cr-badd" data-role="bounty">' +
+      '<form class="sm-cr-badd" data-role="bounty">' +
         '<input class="sm-cr-input" name="t" placeholder="Задание с наградой: что сделать" maxlength="120">' +
         '<input class="sm-cr-input sm-cr-num" name="p" type="number" min="1" max="999" value="10" title="Награда">' +
         '<select class="sm-cr-input sm-cr-sel" name="w"><option value="">кто возьмёт</option>' +
         D.members.filter((m) => m.user_id !== D.uid).map((m) => '<option value="' + m.user_id + '">' + SixMin.esc(nameOf(m.user_id)) + '</option>').join("") +
-        '</select><button class="sm-add-btn" type="submit">+</button></form>' : '') +
+        '</select><button class="sm-add-btn" type="submit">+</button></form>' +
+      '<p class="sm-cr-note">Задание с наградой может предложить любой участник круга: ' +
+        'выплату одобряет автор задания (или владелец круга) при приёмке «Готово ✅».</p>' +
       '<ul class="sm-task-list">' + (live.map(row).join("") || '<li class="sm-tasks-empty">Заданий с наградой пока нет — создайте первое.</li>') + '</ul>' +
       myBHTML +
       '<div class="sm-cr-sec">Витрина наград</div>' +
@@ -3724,7 +3773,7 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
     if (act === "done") {
       const { data, error } = await rpc("done");
       if (error || !data) { SixMin.toast(error ? friendly(error) : "Отметить готовым может только исполнитель"); await refresh(); return; }
-      SixMin.toast("Отправлено владельцу круга на одобрение");
+      SixMin.toast("Отправлено автору задания на одобрение");
     }
     if (act === "reject") {
       const { data } = await rpc("reject");
@@ -4070,10 +4119,10 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
       const f = e.target, title = f.t.value.trim(), pts = parseInt(f.p.value, 10) || 10, who = f.w.value || null;
       if (!title) return;
       f.t.value = ""; f.p.value = "10"; f.w.value = ""; // rev.10: очищаем ДО перерисовки
-      await SixMin.sb().from("tasks").insert({
-        user_id: D.uid, title, due_date: D.today, area: "personal", kind: "high",
-        circle_id: sel, bounty_points: pts, assignee_id: who, bounty_status: who ? "claimed" : "open",
+      const r = await SixMin.sb().rpc("circle_bounty_add", {
+        p_circle: sel, p_title: title, p_points: pts, p_assignee: who,
       });
+      if (r.error) { SixMin.toast("Не удалось создать задание: " + r.error.message); return; }
       await refresh();
     });
     root.querySelector('form[data-role="reward"]')?.addEventListener("submit", async (e) => {
