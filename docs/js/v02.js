@@ -1933,8 +1933,8 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
       const own = el.dataset.gidx || el.dataset.gsubin || el.name || el.id || el.placeholder || el.type;
       return scopeKey + "|" + own;
     }
-    function snapFormsT() { const m = new Map(); if (!root) return m; root.querySelectorAll("input,textarea,select").forEach((el) => m.set(formKeyT(el), el.value)); return m; }
-    function restoreFormsT(m) { if (!m || !m.size || !root) return; root.querySelectorAll("input,textarea,select").forEach((el) => { const k = formKeyT(el); if (m.has(k) && document.activeElement !== el) el.value = m.get(k); }); }
+    function snapFormsT() { const m = new Map(); if (!root) return m; root.querySelectorAll("input,textarea,select").forEach((el) => { if (el.hasAttribute("data-cminput")) return; m.set(formKeyT(el), el.value); }); return m; }
+    function restoreFormsT(m) { if (!m || !m.size || !root) return; root.querySelectorAll("input,textarea,select").forEach((el) => { if (el.hasAttribute("data-cminput")) return; const k = formKeyT(el); if (m.has(k) && document.activeElement !== el) el.value = m.get(k); }); }
 
     function render() {
       if (!root) return;
@@ -2768,6 +2768,246 @@ window.__v02stage = "after-sixmin-analytics"; if (window.__v02say) window.__v02s
 })();
 window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say("v02 stage: after-sixmin-theory");
 
+// app/js/sixmin-shifts.js — v0.6.9: модуль смен (порт ShiftMeet, MWM studio)
+//  - цикл 5 дней ["night","rest","off","day","off"] от якорной даты (по умолч. 27.04.2026 = night);
+//  - строгая терминология владельца: «🏭 На заводе» только рабочие смены,
+//    «🏢 В офисе» — все свободные дни (отсыпные, выходные, праздники);
+//  - приоритет: отпуск > заводская смена > офис/выходной/праздник;
+//  - праздники РФ 2026; статистика «дни в офисе / часы на заводе» за текущий и прошлый месяц;
+//  - планировщик отпусков (основной / вредность (+7) / дополнительный), поиск свободных дней,
+//    табло праздников; настройки якоря, длительности смены и цикла.
+//  Хранение: Supabase (shift_profiles, shift_vacations), приватно (RLS self).
+// API: SixMinShifts.mount(container)
+(function () {
+  const HOLIDAYS = {
+    "2026-05-01": "1 Мая", "2026-05-04": "4 Мая", "2026-05-09": "9 Мая",
+    "2026-05-11": "11 Мая", "2026-06-12": "12 Июня", "2026-11-04": "4 Ноября",
+  };
+  const DEF = { anchor: "2026-04-27", cycle: ["night", "rest", "off", "day", "off"], hours: 12 };
+  const SHIFT_NAMES = { night: "🌙 Ночь", rest: "💤 Отсыпной", off: "🏠 Выходной", day: "☀️ День" };
+  let root = null, P = null, V = [], loggedOut = false, resCache = null;
+
+  const parse = (k) => SixMin.parseKey(k);
+  const key = (d) => SixMin.fmtKey(d);
+  const esc = SixMin.esc;
+
+  function cycleOf() { return (P && Array.isArray(P.cycle) && P.cycle.length === 5) ? P.cycle : DEF.cycle; }
+  function anchorOf() { return (P && P.anchor_date) || DEF.anchor; }
+  function hoursOf() { return (P && P.shift_hours) || DEF.hours; }
+
+  function shiftFor(k) {
+    const cyc = cycleOf();
+    const diff = Math.round((parse(k) - parse(anchorOf())) / 86400000);
+    return cyc[((diff % cyc.length) + cyc.length) % cyc.length];
+  }
+  function vacSet() {
+    const s = new Set();
+    for (const v of V || []) {
+      let d = parse(v.start_date);
+      for (let i = 0; i < v.days; i++) { s.add(key(d)); d = new Date(d.getTime() + 86400000); }
+    }
+    return s;
+  }
+  function info(k, vs) {
+    if (vs.has(k)) return { loc: "🏖 отпуск", free: true, msg: "отпуск · полностью свободен", dot: "#f9ab00", kind: "vac" };
+    if (HOLIDAYS[k]) return { loc: "🏖 праздник", free: true, msg: "праздник • полностью свободен", dot: "#f9ab00", kind: "hol" };
+    const sh = shiftFor(k);
+    if (sh === "day" || sh === "night")
+      return { loc: "🏭 на заводе", free: false, msg: sh === "day" ? "☀️ дневная смена" : "🌙 ночная смена", dot: "#E30613", kind: sh };
+    const dow = parse(k).getDay();
+    const t = (dow >= 1 && dow <= 4) ? "свободен после 17:00" : dow === 5 ? "свободен после 19:30" : "полностью свободен";
+    return { loc: "🏢 в офисе", free: true, msg: (sh === "rest" ? "💤 отсыпной · " : "выходной · ") + t, dot: "#30a46c", kind: sh };
+  }
+  function monthStats(y, m) {
+    const vs = vacSet();
+    let office = 0, factory = 0;
+    const d = new Date(y, m, 1, 12);
+    while (d.getMonth() === m) {
+      const inf = info(key(d), vs);
+      if (inf.kind === "day" || inf.kind === "night") factory += hoursOf(); else office++;
+      d.setDate(d.getDate() + 1);
+    }
+    return { office, factory };
+  }
+
+  async function load() {
+    let uid = null;
+    try { uid = await SixMin.uid(); } catch (e) { uid = null; }
+    loggedOut = !uid;
+    if (!uid) { P = null; V = []; return; }
+    const sb = SixMin.sb();
+    const { data: pr } = await sb.from("shift_profiles").select("*").eq("user_id", uid).maybeSingle();
+    P = pr || { ...DEF, user_id: uid };
+    const { data: vc } = await sb.from("shift_vacations").select("*").eq("user_id", uid).order("start_date");
+    V = vc || [];
+  }
+  async function saveProfile() {
+    if (loggedOut) return;
+    const uid = await SixMin.uid();
+    await SixMin.sb().from("shift_profiles").upsert({
+      user_id: uid, anchor_date: P.anchor_date, cycle: P.cycle, shift_hours: P.shift_hours,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "user_id" });
+    SixMin.toast("Настройки смен сохранены");
+    render();
+  }
+
+  function render() {
+    if (!root) return;
+    if (loggedOut) {
+      root.innerHTML = '<div class="sm-sh"><div class="sm-sh-head">🔥 Мои смены</div>' +
+        '<p class="sm-sh-note">Смены, отпуска и поиск свободных дней живут в облаке. ' +
+        'Войдите в аккаунт — и карточка появится здесь.</p></div>';
+      return;
+    }
+    if (!P) { root.innerHTML = '<div class="sm-sh"><p class="sm-sh-note">Загружаю смены…</p></div>'; return; }
+    const vs = vacSet();
+    const today = key(new Date());
+    const ti = info(today, vs);
+    const strip = [];
+    for (let i = 0; i < 14; i++) {
+      const d = new Date(parse(today).getTime() + i * 86400000);
+      const k = key(d);
+      const inf = info(k, vs);
+      strip.push('<i class="sm-sh-dot' + (k === today ? " now" : "") + '" style="background:' + inf.dot +
+        '" title="' + k.slice(8) + "." + k.slice(5, 7) + " · " + esc(inf.loc) + " · " + esc(inf.msg) + '"></i>');
+    }
+    const now = new Date();
+    const cur = monthStats(now.getFullYear(), now.getMonth());
+    const prevD = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const prev = monthStats(prevD.getFullYear(), prevD.getMonth());
+    const mName = (d) => d.toLocaleString("ru-RU", { month: "long", year: "numeric" });
+    const vacRows = (V || []).map((v) =>
+      '<div class="sm-sh-row"><span>' + v.start_date.slice(8, 10) + "." + v.start_date.slice(5, 7) + "." + v.start_date.slice(0, 4) +
+      " · " + v.days + " дн · " + esc(v.kind === "harm" ? "вредность (+7)" : v.kind === "extra" ? "дополнительный" : "основной") +
+      '</span><b class="sm-sh-del" data-vdel="' + v.id + '" title="Удалить отпуск">×</b></div>').join("");
+    const holRows = Object.keys(HOLIDAYS).map((k) => {
+      const inf = info(k, vs);
+      return '<div class="sm-sh-row"><span>' + esc(HOLIDAYS[k]) + " · " + esc(inf.kind === "vac" ? "отпуск" : (shiftFor(k) === "day" ? "☀️ День" : shiftFor(k) === "night" ? "🌙 Ночь" : SHIFT_NAMES[shiftFor(k)])) +
+        '</span><b style="color:' + (inf.free ? "#30a46c" : "#E30613") + '">' + (inf.free ? "свободен ✅" : "занят 🔴") + "</b></div>";
+    }).join("");
+    const resHtml = resCache ? '<div class="sm-sh-res">' + resCache.map((r) =>
+      '<div class="sm-sh-row' + (r.inf.free ? " free" : "") + '"><span>' + r.k.slice(8, 10) + "." + r.k.slice(5, 7) +
+      " " + r.wd + '</span><b>' + esc(r.inf.loc) + '</b><i class="sm-sh-msg">' + esc(r.inf.msg) + "</i></div>").join("") + "</div>" : "";
+    root.innerHTML =
+      '<div class="sm-sh">' +
+      '<div class="sm-sh-head">🔥 Мои смены <button class="sm-ib" data-shinfo="1">i</button></div>' +
+      '<div class="sm-sh-today">' + esc(ti.loc) + ' · ' + esc(ti.msg) + '</div>' +
+      '<div class="sm-sh-strip">' + strip.join("") + '</div>' +
+      '<div class="sm-sh-legend"><span><i style="background:#E30613"></i>на заводе</span><span><i style="background:#30a46c"></i>в офисе (свободен)</span><span><i style="background:#f9ab00"></i>праздник/отпуск</span></div>' +
+      '<div class="sm-sh-stats">' +
+      '<div class="sm-sh-stat"><b>🏢 ' + cur.office + ' дн.</b><span>' + esc(mName(now)) + '</span><em>🏭 ' + cur.factory + ' ч.</em></div>' +
+      '<div class="sm-sh-stat"><b>🏢 ' + prev.office + ' дн.</b><span>' + esc(mName(prevD)) + '</span><em>🏭 ' + prev.factory + ' ч.</em></div>' +
+      '</div>' +
+      '<div class="sm-sh-sec">Найти свободные дни</div>' +
+      '<form class="sm-sh-find"><input type="date" class="sm-sh-from" value="' + today + '"><input type="date" class="sm-sh-to" value="' +
+      key(new Date(now.getTime() + 30 * 86400000)) + '"><button class="sm-add-btn" type="submit">🧮</button></form>' +
+      resHtml +
+      '<div class="sm-sh-sec">Отпуски</div>' +
+      '<form class="sm-sh-vac"><input type="date" class="sm-sh-vstart"><input type="number" class="sm-sh-vdays" min="1" max="366" value="14" title="Дней">' +
+      '<select class="sm-sh-vkind"><option value="main">основной</option><option value="harm">вредность (+7)</option><option value="extra">дополнительный</option></select>' +
+      '<button class="sm-add-btn" type="submit">+</button></form>' +
+      (vacRows || '<p class="sm-sh-note">Отпусков не запланировано.</p>') +
+      '<div class="sm-sh-sec">Праздники 2026</div>' + holRows +
+      '<details class="sm-sh-cfg"><summary>Настройки смен</summary>' +
+      '<label class="sm-sh-lbl">Якорная дата (это «ночь») <input type="date" class="sm-sh-anchor" value="' + anchorOf() + '"></label>' +
+      '<label class="sm-sh-lbl">Длительность смены, ч <input type="number" class="sm-sh-hours" min="1" max="24" value="' + hoursOf() + '"></label>' +
+      '<div class="sm-sh-cycle">' + cycleOf().map((c, i) =>
+        '<select data-cyc="' + i + '">' + Object.keys(SHIFT_NAMES).map((s) =>
+          '<option value="' + s + '"' + (s === c ? " selected" : "") + '>' + SHIFT_NAMES[s] + "</option>").join("") + "</select>").join("") + "</div>" +
+      '<button class="sm-sh-save" type="button">Сохранить настройки</button>' +
+      '</details>' +
+      '</div>';
+
+    root.querySelector("[data-shinfo]")?.addEventListener("click", () => SixMin.info("Мои смены",
+      "<p>Цикл из пяти дней: ночь → отсыпной → выходной → день → выходной, от якорной даты (её можно поменять в настройках ниже). " +
+      "<b>🏭 На заводе</b> — только рабочие смены; <b>🏢 В офисе</b> — все свободные дни, включая отсыпные: «в отсыпные я не отсыпаюсь, сплю на работе». " +
+      "Приоритет: отпуск → завод → офис/праздник. Часы завода: 12 за смену.</p>"));
+    root.querySelector(".sm-sh-find")?.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const a = root.querySelector(".sm-sh-from").value, b = root.querySelector(".sm-sh-to").value;
+      if (!a || !b) { SixMin.toast("Выберите даты"); return; }
+      const wd = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
+      resCache = [];
+      let d = parse(a);
+      const end = parse(b);
+      while (d <= end && resCache.length < 90) {
+        const k = key(d);
+        resCache.push({ k, wd: wd[d.getDay()], inf: info(k, vs) });
+        d = new Date(d.getTime() + 86400000);
+      }
+      render();
+    });
+    root.querySelector(".sm-sh-vac")?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const s = root.querySelector(".sm-sh-vstart").value;
+      const days = parseInt(root.querySelector(".sm-sh-vdays").value, 10) || 0;
+      const kind = root.querySelector(".sm-sh-vkind").value;
+      if (!s || days < 1) { SixMin.toast("Укажите дату начала и число дней"); return; }
+      const uid = await SixMin.uid();
+      const { error } = await SixMin.sb().from("shift_vacations").insert({ user_id: uid, start_date: s, days, kind });
+      if (error) { SixMin.toast("Ошибка: " + error.message); return; }
+      SixMin.toast("Отпуск добавлен");
+      await load(); render();
+    });
+    root.querySelectorAll("[data-vdel]").forEach((b) => b.addEventListener("click", async () => {
+      if (!confirm("Удалить этот отпуск из плана?")) return;
+      await SixMin.sb().from("shift_vacations").delete().eq("id", b.dataset.vdel);
+      await load(); render();
+    }));
+    root.querySelector(".sm-sh-save")?.addEventListener("click", async () => {
+      P.anchor_date = root.querySelector(".sm-sh-anchor").value || DEF.anchor;
+      P.shift_hours = parseInt(root.querySelector(".sm-sh-hours").value, 10) || DEF.hours;
+      P.cycle = Array.from(root.querySelectorAll("[data-cyc]")).map((s) => s.value);
+      await saveProfile();
+    });
+  }
+
+  async function refresh() { await load(); render(); }
+  function injectStyles() {
+    if (document.getElementById("sm-shifts-css")) return;
+    const st = document.createElement("style");
+    st.id = "sm-shifts-css";
+    st.textContent = `
+      .sm-sh{font-size:14px}
+      .sm-sh-head{font-weight:800;font-size:16px;margin-bottom:8px;display:flex;gap:8px;align-items:center}
+      .sm-sh-today{font-size:15px;font-weight:700;margin-bottom:8px}
+      .sm-sh-strip{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px}
+      .sm-sh-dot{width:14px;height:14px;border-radius:50%;display:inline-block;opacity:.85}
+      .sm-sh-dot.now{outline:2px solid var(--accent,#E30613);outline-offset:2px}
+      .sm-sh-legend{display:flex;gap:12px;font-size:11px;opacity:.75;margin-bottom:10px;flex-wrap:wrap}
+      .sm-sh-legend i{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:4px}
+      .sm-sh-stats{display:flex;gap:8px;margin-bottom:10px}
+      .sm-sh-stat{flex:1;background:var(--inset,#1c1c1c);border:1px solid var(--line,#333);border-radius:10px;padding:8px;display:flex;flex-direction:column;gap:2px}
+      .sm-sh-stat b{font-size:15px}.sm-sh-stat span{font-size:11px;opacity:.65}.sm-sh-stat em{font-style:normal;font-size:12px;color:var(--accent,#E30613)}
+      .sm-sh-sec{font-weight:700;font-size:13px;margin:10px 0 6px;opacity:.85}
+      .sm-sh-find,.sm-sh-vac{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+      .sm-sh-find input,.sm-sh-vac input,.sm-sh-vac select{background:var(--inset,#1c1c1c);border:1px solid var(--line,#333);border-radius:8px;color:inherit;padding:6px;font-size:12px;color-scheme:dark}
+      .sm-sh-row{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:6px 8px;border-radius:8px;background:var(--inset,#1c1c1c);margin-bottom:4px;font-size:13px;flex-wrap:wrap}
+      .sm-sh-row.free{border-left:3px solid #30a46c}
+      .sm-sh-msg{font-style:normal;font-size:11px;opacity:.7;width:100%}
+      .sm-sh-del{cursor:pointer;opacity:.7;font-size:16px}
+      .sm-sh-del:hover{color:var(--accent,#E30613);opacity:1}
+      .sm-sh-note{font-size:12.5px;opacity:.7;line-height:1.5}
+      .sm-sh-cfg{margin-top:10px;font-size:13px}
+      .sm-sh-cfg summary{cursor:pointer;opacity:.85}
+      .sm-sh-lbl{display:flex;gap:8px;align-items:center;margin:8px 0;font-size:12px}
+      .sm-sh-lbl input{background:var(--inset,#1c1c1c);border:1px solid var(--line,#333);border-radius:8px;color:inherit;padding:6px;font-size:12px;color-scheme:dark}
+      .sm-sh-cycle{display:flex;gap:4px;flex-wrap:wrap}
+      .sm-sh-cycle select{background:var(--inset,#1c1c1c);border:1px solid var(--line,#333);border-radius:8px;color:inherit;padding:5px;font-size:12px}
+      .sm-sh-save{margin-top:8px;border:0;border-radius:10px;background:var(--accent,#E30613);color:#fff;font-weight:700;padding:8px 14px;cursor:pointer}
+    `;
+    document.head.appendChild(st);
+  }
+  function mount(container) {
+    root = typeof container === "string" ? document.querySelector(container) : container;
+    injectStyles();
+    refresh();
+  }
+  window.SixMinShifts = { mount };
+})();
+window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say("v02 stage: after-sixmin-shifts");
+
 // app/js/sixmin-circles.js — v0.4: КРУГИ (семья, друзья, фокус-группы)
 //  Общие цели месяца (с подзадачами и чекбоксами), общие привычки
 //  (своя отметка + видно, кто сегодня отметил), задачи «на всех»,
@@ -2804,12 +3044,18 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
   function snapForms() {
     const m = new Map();
     if (!root) return m;
-    root.querySelectorAll("input,textarea,select").forEach((el) => m.set(formKey(el), el.value));
+    // rev.12: поля комментариев не трогаем — у них свой черновик в модуле комментариев,
+    // из-за снапшота текст оставался в поле после отправки (баг из видео 15)
+    root.querySelectorAll("input,textarea,select").forEach((el) => {
+      if (el.hasAttribute("data-cminput")) return;
+      m.set(formKey(el), el.value);
+    });
     return m;
   }
   function restoreForms(m) {
     if (!m || !m.size || !root) return;
     root.querySelectorAll("input,textarea,select").forEach((el) => {
+      if (el.hasAttribute("data-cminput")) return;
       const k = formKey(el);
       if (m.has(k) && document.activeElement !== el) el.value = m.get(k);
     });
@@ -3112,7 +3358,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     // rev.11: «Мои баунти» — участник видит свои взятые задания и их статус
     const myB = (D.bounties || []).filter((t) => t.assignee_id === D.uid && ["claimed", "done"].includes(t.bounty_status));
     const myBHTML = myB.length
-      ? '<div class="sm-cr-sec">Мои баунти</div><div class="sm-cr-ledger">' +
+      ? '<div class="sm-cr-sec">Мои задания с наградой</div><div class="sm-cr-ledger">' +
         myB.map((t) => '<div class="sm-cr-led-row"><span>' + esc(t.title) + '</span><b class="' +
           (t.bounty_status === "done" ? "plus" : "minus") + '">' +
           (t.bounty_status === "done" ? "ждёт одобрения владельца" : "в работе") + '</b></div>').join("") +
@@ -3130,23 +3376,23 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
         : t.bounty_status === "claimed" ? "в работе: " + who : "ждёт одобрения: " + who;
       return '<li class="sm-task-wrap" data-id="' + t.id + '"><div class="sm-task"><div class="sm-task-main">' +
         '<span class="sm-cr-bounty">🎁' + t.bounty_points + '</span>' +
-        '<span class="sm-task-title">' + SixMin.esc(t.title) + '<em class="sm-cr-by"> · ' + status + '</em></span></div>' +
-        '<div class="sm-task-actions">' + CM.buttonHTML(t, "Обсуждение баунти") + acts + '</div></div>' +
+        '<span class="sm-task-title">' + SixMin.esc(t.title) + '<span class="sm-cr-status">' + status + '</span></span></div>' +
+        '<div class="sm-task-actions">' + CM.buttonHTML(t, "Обсуждение задания") + acts + '</div></div>' +
         CM.panelHTML(t) + '</li>';
     };
     const curN = (n) => curWord(c.bonus_currency, n);
     return '<div class="sm-cr-sec">🎁 Бонусы круга · ' + cur() + ' ' + INFO_BTN("bonuses") + '</div>' +
       '<div class="sm-cr-bal"><div class="sm-cr-bal-me">Мой баланс: <b>' + balOf(D.uid) + '</b> ' + curN(balOf(D.uid)) + '</div>' +
-      '<div class="sm-cr-bal-hint">Как зарабатывать: возьмите баунти («Взять» → сделать → «Готово ✅») или общую задачу круга — владелец одобрит, и ' + cur() + ' упадут в копилку.</div>' +
+      '<div class="sm-cr-bal-hint">Как зарабатывать: возьмите задание с наградой («Взять» → сделать → «Готово ✅») или общую задачу круга — владелец одобрит, и ' + cur() + ' упадут в копилку.</div>' +
       '<div class="sm-cr-board">' + board.map((x, i) =>
         '<span class="sm-cr-member' + (x.u === D.uid ? " me" : "") + '">' + (i + 1) + '. ' + SixMin.esc(nameOf(x.u)) + ' · ' + x.b + '</span>').join("") + '</div></div>' +
       (isOwner ? '<form class="sm-cr-badd" data-role="bounty">' +
-        '<input class="sm-cr-input" name="t" placeholder="Баунти: задача за награду" maxlength="120">' +
+        '<input class="sm-cr-input" name="t" placeholder="Задание с наградой: что сделать" maxlength="120">' +
         '<input class="sm-cr-input sm-cr-num" name="p" type="number" min="1" max="999" value="10" title="Награда">' +
         '<select class="sm-cr-input sm-cr-sel" name="w"><option value="">кто возьмёт</option>' +
         D.members.filter((m) => m.user_id !== D.uid).map((m) => '<option value="' + m.user_id + '">' + SixMin.esc(nameOf(m.user_id)) + '</option>').join("") +
         '</select><button class="sm-add-btn" type="submit">+</button></form>' : '') +
-      '<ul class="sm-task-list">' + (live.map(row).join("") || '<li class="sm-tasks-empty">Баунти пока нет — создайте первое.</li>') + '</ul>' +
+      '<ul class="sm-task-list">' + (live.map(row).join("") || '<li class="sm-tasks-empty">Заданий с наградой пока нет — создайте первое.</li>') + '</ul>' +
       myBHTML +
       '<div class="sm-cr-sec">Витрина наград</div>' +
       '<div class="sm-cr-shop">' + ((D.rewards || []).map((r) =>
@@ -3179,7 +3425,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       : "Ошибка: " + error.message;
     if (act === "claim") {
       const { data, error } = await rpc("claim");
-      if (error || !data) { SixMin.toast(error ? friendly(error) : "Не удалось взять: баунти уже занято или вы не в круге"); await refresh(); return; }
+      if (error || !data) { SixMin.toast(error ? friendly(error) : "Не удалось взять: задание уже взято или вы не в круге"); await refresh(); return; }
     }
     if (act === "done") {
       const { data, error } = await rpc("done");
@@ -3192,7 +3438,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     }
     if (act === "cancel") {
       const { data } = await rpc("cancel");
-      if (!data) SixMin.toast("Не удалось удалить: владелец и только пока баунти не взято");
+      if (!data) SixMin.toast("Не удалось удалить: владелец и только пока задание не взято");
     }
     if (act === "approve") {
       const { data, error } = await rpc("approve");
@@ -3251,9 +3497,9 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       "<p><b>Как позвать близких:</b> нажмите «код: XXXXXX ⧉» — код скопируется, пришлите его. " +
       "Человек открывает приложение, создаёт аккаунт (Настройки → Облако → Создать аккаунт), входит, " +
       "открывает «Круги», вставляет код в поле «Код приглашения другого круга» и жмёт «Войти».</p>" +
-      "<p><b>💬 Переписка:</b> у общих задач и баунти есть комментарии с фото, документами и голосовыми — " +
+      "<p><b>💬 Переписка:</b> у общих задач и заданий с наградой есть комментарии с фото, документами и голосовыми — " +
       "файлы видны всем участникам круга, их можно просмотреть, прослушать и скачать.</p>" +
-      "<p>👑 — владелец круга: одобряет баунти и управляет наградами. Кругов может быть несколько — переключение чипами сверху.</p>"));
+      "<p>👑 — владелец круга: одобряет задания с наградой и управляет наградами. Кругов может быть несколько — переключение чипами сверху.</p>"));
     root.querySelector('[data-info="shared"]')?.addEventListener("click", () => SixMin.info("Задачи «на всех» и переписка",
       "<p>Общая задача видна всем участникам круга: кто создал — подписано именем. " +
       "Квадратик слева — выполнить (отметка общая для всех), «×» — удалить.</p>" +
@@ -3262,11 +3508,11 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       "Вложения круга хранятся в общей папке, поэтому их видят и могут скачать все участники.</p>" +
       "<p>Переписка обновляется сама каждые 20 секунд, кнопка ⟳ — обновить сейчас. " +
       "Свой комментарий можно удалить (×), владелец круга 👑 может убрать любой.</p>" +
-      "<p>💬 есть и у баунти 🎁 — там удобно присылать фото результата до одобрения.</p>"));
+      "<p> есть и у заданий с наградой 🎁 — там удобно присылать фото результата до одобрения.</p>"));
     root.querySelector('[data-info="bonuses"]')?.addEventListener("click", () => SixMin.info("Бонусы круга",
       "<p>Бонусы — книга учёта заслуг внутри круга. Деньги и подарки происходят в реальной жизни, " +
       "приложение лишь честно записывает баллы.</p>" +
-      "<p><b>Баунти:</b> владелец публикует задачу с наградой («🎁 50»). Участник жмёт «Взять» → делает → «Готово ✅» → " +
+      "<p><b>Задания с наградой:</b> владелец публикует задание с наградой («🎁 50»). Участник жмёт «Взять» → делает → «Готово ✅» → " +
       "владелец «Одобрить» — баллы начислены. «↩» возвращает на доработку.</p>" +
       "<p><b>Витрина наград:</b> баллы можно списать на награду (кино-вечер, пицца). Все начисления и списания видны в «Моей выписке».</p>" +
       "<p>Баланс и лидерборд считаются по всем операциям круга.</p>"));
@@ -3518,7 +3764,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       const act = b.dataset.bact, id = b.dataset.id;
       if (act === "enable") {
         await SixMin.sb().from("circles").update({ bonuses_enabled: true }).eq("id", sel);
-        SixMin.toast("Бонусы включены! Создайте первое баунти 🎁");
+        SixMin.toast("Бонусы включены! Создайте первое задание с наградой 🎁");
         await refresh(); return;
       }
       if (act === "spend") { const r = (D.rewards || []).find((x) => x.id === id); if (r) await spendReward(r); return; }
@@ -3653,6 +3899,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       .sm-cr-ledger{display:flex;flex-direction:column;gap:4px}
       .sm-cr-bal-hint{font-size:11.5px;opacity:.65;margin-top:4px;line-height:1.4}
       .sm-cr-spend-off{opacity:.55;font-size:11px;cursor:default}
+      .sm-cr-status{font-size:10.5px;background:var(--inset,#242424);border:1px solid var(--line,#333);padding:2px 7px;border-radius:7px;margin-left:6px;opacity:.9;white-space:nowrap}
       .sm-cr-led-row{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;opacity:.85}
       .sm-cr-led-row .plus{color:#30a46c;font-weight:800}
       .sm-cr-led-row .minus{color:#E30613;font-weight:800}
@@ -3862,6 +4109,7 @@ window.__v02stage = "after-sixmin-swipe"; if (window.__v02say) window.__v02say("
       [window.SixMinFocus, "mount", "#focus-host", "focus", undefined],
       [window.SixMinTasks, "mount", "#tasks-host", "tasks", { area: "personal" }],
       [window.SixMinTasks, "mount", "#work-host", "work", { area: "work", stats: true }],
+      [window.SixMinShifts, "mount", "#shifts-host", "shifts", undefined],
       [window.SixMinDoneToday, "mount", "#donetoday-host", "donetoday", undefined],
       [window.SixMinAnalytics, "mount", "#stats-host", "analytics", undefined],
       [window.SixMinTheory, "mountCards", "#theory-host", "theory", undefined],
