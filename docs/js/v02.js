@@ -1921,7 +1921,14 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
 
     // v0.6.6 rev.5: ввод в форме добавления не должен стираться при перерисовке
     // (переключение категории, автообновление) — снимаем и возвращаем значения.
-    function formKeyT(el) { const f = el.closest("form"); return (f ? f.className : "noform:") + "|" + (el.name || el.placeholder || el.type); }
+    function formKeyT(el) {
+      // rev.10: уникальный ключ (scope по data-id карточки + собственный атрибут поля)
+      const f = el.closest("form");
+      const scope = el.closest("[data-id]") || f;
+      const scopeKey = scope ? (scope.dataset?.id || scope.dataset?.role || scope.className) : "noform";
+      const own = el.dataset.gidx || el.dataset.gsubin || el.name || el.id || el.placeholder || el.type;
+      return scopeKey + "|" + own;
+    }
     function snapFormsT() { const m = new Map(); if (!root) return m; root.querySelectorAll("input,textarea,select").forEach((el) => m.set(formKeyT(el), el.value)); return m; }
     function restoreFormsT(m) { if (!m || !m.size || !root) return; root.querySelectorAll("input,textarea,select").forEach((el) => { const k = formKeyT(el); if (m.has(k) && document.activeElement !== el) el.value = m.get(k); }); }
 
@@ -2776,8 +2783,14 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
   // v0.6.6 rev.4: автообновление круга каждые 20 сек стирало несохранённый ввод в формах
   // (владелец не мог вписать название награды длиннее ~20 символов набора) — сохраняем и возвращаем.
   function formKey(el) {
+    // rev.10: ключ обязан быть УНИКАЛЕН на элемент. Раньше одинаковые placeholder
+    // (textarea целей, инпуты подзадач, поля комментариев) схлопывались в один ключ,
+    // и restoreForms разносил одно значение по всем полям (массовое переименование).
     const f = el.closest("form");
-    return (f ? (f.dataset.role || f.className) : "noform:") + "|" + (el.name || el.placeholder || el.type);
+    const scope = el.closest("[data-id]") || f;
+    const scopeKey = scope ? (scope.dataset?.id || scope.dataset?.role || scope.className) : "noform";
+    const own = el.dataset.gidx || el.dataset.gsubin || el.name || el.id || el.placeholder || el.type;
+    return scopeKey + "|" + own;
   }
   function snapForms() {
     const m = new Map();
@@ -3095,9 +3108,9 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       if (t.bounty_status === "open") acts = btn("claim", t.id, "Взять") + (isOwner ? btn("cancel", t.id, "×", "sm-task-del") : "");
       if (t.bounty_status === "claimed" && t.assignee_id === D.uid) acts = btn("done", t.id, "Готово ✅");
       if (t.bounty_status === "done" && isOwner) acts = btn("approve", t.id, "Одобрить +" + t.bounty_points) + btn("reject", t.id, "↩");
-      const status = t.bounty_status === "open" ? (who ? "делегировано: " + who : "ждёт героя")
+      const status = t.bounty_status === "open" ? (who ? "делегировано: " + who : "ждёт героя") + " · автор: " + SixMin.esc(nameOf(t.user_id))
         : t.bounty_status === "claimed" ? "в работе: " + who : "ждёт одобрения: " + who;
-      return '<li class="sm-task-wrap"><div class="sm-task"><div class="sm-task-main">' +
+      return '<li class="sm-task-wrap" data-id="' + t.id + '"><div class="sm-task"><div class="sm-task-main">' +
         '<span class="sm-cr-bounty">🎁' + t.bounty_points + '</span>' +
         '<span class="sm-task-title">' + SixMin.esc(t.title) + '<em class="sm-cr-by"> · ' + status + '</em></span></div>' +
         '<div class="sm-task-actions">' + CM.buttonHTML(t, "Обсуждение баунти") + acts + '</div></div>' +
@@ -3318,7 +3331,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     }).join("");
 
     const tasks = D.tasks.map((t) => `
-      <li class="sm-task-wrap"><div class="sm-task">
+      <li class="sm-task-wrap" data-id="${t.id}"><div class="sm-task">
         <div class="sm-task-main">
           <button class="sm-task-check" data-st="${t.id}">☐</button>
           <span class="sm-task-title">${t.kind === "low" ? "📋 " : "⚡ "}${esc(t.title)}
@@ -3497,6 +3510,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       e.preventDefault();
       const f = e.target, title = f.t.value.trim(), pts = parseInt(f.p.value, 10) || 10, who = f.w.value || null;
       if (!title) return;
+      f.t.value = ""; f.p.value = "10"; f.w.value = ""; // rev.10: очищаем ДО перерисовки
       await SixMin.sb().from("tasks").insert({
         user_id: D.uid, title, due_date: D.today, area: "personal", kind: "high",
         circle_id: sel, bounty_points: pts, assignee_id: who, bounty_status: who ? "claimed" : "open",
@@ -3507,6 +3521,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       e.preventDefault();
       const f = e.target, title = f.t.value.trim(), cost = parseInt(f.p.value, 10) || 10;
       if (!title) return;
+      f.t.value = ""; f.p.value = "20"; // rev.10: очищаем ДО перерисовки, чтобы снапшот не вернул текст
       await SixMin.sb().from("circle_rewards").insert({ circle_id: sel, title, cost_points: cost });
       await refresh();
     });
