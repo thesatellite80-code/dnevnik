@@ -2808,9 +2808,29 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     return cyc[((diff % cyc.length) + cyc.length) % cyc.length];
   }
   const workJobsOn = (k) => (J || []).filter((j) => { const s = jobShift(k, j); return s === "day" || s === "night"; });
-  // v0.7.5: если смены разных графиков попадают в один день — работает только ВЕРХНИЙ
-  // в списке «Мои графики» (порядок = приоритет, меняется стрелками ↑↓); остальные «перекрываются».
-  const topWorkJob = (k) => workJobsOn(k)[0] || null;
+  // v0.7.6: перекрытие считаем ПО ВРЕМЕНИ: интервалы смены в минутах суток
+  // (ночь через полночь = два отрезка). Нижний по приоритету график перекрывается
+  // только если его интервал ПЕРЕСЕКАЕТСЯ с интервалом старшего; иначе оба активны
+  // (завод до 19:30 и спортзал с 20:30 — не пересекаются, день занят оба интервала).
+  const toMin = (hm) => { const p = String(hm || "").split(":"); return (+p[0] || 0) * 60 + (+p[1] || 0); };
+  const minToHM = (m) => String(Math.floor(m / 60) % 24).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
+  function dayIntervals(k, job) {
+    const tp = jobShift(k, job);
+    const tm = timesOf(job)[tp] || [];
+    if (!tm.length) return [[0, 1440]];
+    const s = toMin(tm[0]), e = toMin(tm[1]);
+    if (e === s) return [[0, 1440]];
+    return e > s ? [[s, e]] : [[s, 1440], [0, e]];
+  }
+  function splitWork(k) {
+    const act = [], masked = [];
+    for (const j of workJobsOn(k)) {
+      const iv = dayIntervals(k, j);
+      const hit = act.some((a) => a.iv.some((r1) => iv.some((r2) => r1[0] < r2[1] && r2[0] < r1[1])));
+      if (hit) masked.push(j); else act.push({ j, iv });
+    }
+    return { act, masked };
+  }
 
   function vacSet() {
     const s = new Set();
@@ -2826,15 +2846,19 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     if (HOLIDAYS[k]) return { loc: "🏖 праздник", free: true, msg: "праздник • полностью свободен", dot: "#f9ab00", kind: "hol" };
     const wj = workJobsOn(k);
     if (wj.length) {
-      const w = wj[0];
-      const tp = jobShift(k, w);
-      const tm = timesOf(w)[tp] || [];
-      const overl = wj.slice(1).map((j) => j.name);
-      const msg = (tp === "night" ? "🌙 ночь" : "☀️ день") + (tm.length ? " " + tm[0] + "–" + tm[1] : "") +
-        ((J || []).length > 1 ? " · " + w.name : "") +
-        (overl.length ? " · перекрывает: " + overl.join(", ") : "") +
-        (tp === "day" && tm[1] ? " · свободен после " + tm[1] : "");
-      return { loc: "🏭 смена", free: false, msg, dot: "#E30613", kind: tp };
+      const { act, masked } = splitWork(k);
+      const parts = act.map((a) => {
+        const tp = jobShift(k, a.j);
+        const tm = timesOf(a.j)[tp] || [];
+        return (tp === "night" ? "🌙 ночь" : "☀️ день") + (tm.length ? " " + tm[0] + "–" + tm[1] : "") +
+          ((J || []).length > 1 ? " · " + a.j.name : "");
+      }).join(" + ");
+      const ends = act.flatMap((a) => a.iv).filter((r) => r[1] > r[0] && r[1] < 1440).map((r) => r[1]);
+      const freeAfter = ends.length ? minToHM(Math.max.apply(null, ends)) : "";
+      const msg = parts +
+        (masked.length ? " · перекрывает: " + masked.map((j) => j.name).join(", ") : "") +
+        (freeAfter ? " · свободен после " + freeAfter : "");
+      return { loc: "🏭 смена", free: false, msg, dot: "#E30613", kind: jobShift(k, act[0].j) };
     }
     const rests = (J || []).some((j) => jobShift(k, j) === "rest");
     return { loc: "🏢 свободен", free: true, msg: rests ? "💤 отсыпной · полностью свободен" : "выходной · полностью свободен", dot: "#30a46c", kind: rests ? "rest" : "off" };
@@ -2845,9 +2869,12 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     const d = new Date(y, m, 1, 12);
     while (d.getMonth() === m) {
       const k = key(d);
-      const wj = (vs.has(k) || HOLIDAYS[k]) ? [] : workJobsOn(k);
-      if (wj.length) hours += parseInt(wj[0].shift_hours, 10) || 0;
-      else free++;
+      if (vs.has(k) || HOLIDAYS[k]) { free++; }
+      else {
+        const { act } = splitWork(k);
+        if (act.length) hours += act.reduce((s2, a) => s2 + (parseInt(a.j.shift_hours, 10) || 0), 0);
+        else free++;
+      }
       d.setDate(d.getDate() + 1);
     }
     return { free, hours };
@@ -2903,13 +2930,16 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     const { error } = await SixMin.sb().from("shift_jobs").upsert(row, { onConflict: "id" });
     if (error) { SixMin.toast("Ошибка: " + error.message); return false; }
     const q = insert
-      ? await SixMin.sb().from("shift_jobs").select("id,name,anchor_date,cycle,shift_hours").eq("user_id", uid).order("updated_at", { ascending: false }).limit(1).maybeSingle()
-      : await SixMin.sb().from("shift_jobs").select("id,name,anchor_date,cycle,shift_hours").eq("id", row.id).maybeSingle();
+      ? await SixMin.sb().from("shift_jobs").select("id,name,anchor_date,cycle,shift_hours,shift_times").eq("user_id", uid).order("updated_at", { ascending: false }).limit(1).maybeSingle()
+      : await SixMin.sb().from("shift_jobs").select("id,name,anchor_date,cycle,shift_hours,shift_times").eq("id", row.id).maybeSingle();
     const chk = q.data;
     const same = chk && String(chk.anchor_date) === String(row.anchor_date) &&
       JSON.stringify(chk.cycle) === JSON.stringify(row.cycle) &&
       parseInt(chk.shift_hours, 10) === parseInt(row.shift_hours, 10) && chk.name === row.name &&
-      JSON.stringify(chk.shift_times || DEF_TIMES) === JSON.stringify(row.shift_times);
+      (chk.shift_times || DEF_TIMES).day[0] === row.shift_times.day[0] &&
+      (chk.shift_times || DEF_TIMES).day[1] === row.shift_times.day[1] &&
+      (chk.shift_times || DEF_TIMES).night[0] === row.shift_times.night[0] &&
+      (chk.shift_times || DEF_TIMES).night[1] === row.shift_times.night[1];
     if (!same) {
       console.error("shift_jobs readback mismatch:", chk, row);
       SixMin.toast("⚠️ Запись ушла в облако, но вернулись другие данные — обновите страницу и проверьте");
@@ -2954,8 +2984,12 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
   function updatePreview(ed) {
     const pv = ed && ed.querySelector(".sm-sh-preview");
     if (!pv) return;
+    const ld = ed.querySelector(".sm-sh-times-day"), ln = ed.querySelector(".sm-sh-times-night");
+    const cyc0 = Array.from(ed.querySelectorAll("[data-cyc]")).map((s) => s.value);
+    if (ld) ld.style.display = cyc0.includes("day") ? "" : "none";
+    if (ln) ln.style.display = cyc0.includes("night") ? "" : "none";
     const anchorEl = root && root.querySelector(".sm-sh-anchor");
-    const cyc = Array.from(ed.querySelectorAll("[data-cyc]")).map((s) => s.value);
+    const cyc = cyc0;
     const a = parse((anchorEl && anchorEl.value) || DEF.anchor);
     if (!a || !cyc.length) { pv.textContent = ""; return; }
     const idxOf = (d) => { const n = Math.round((d - a) / 86400000); return ((n % cyc.length) + cyc.length) % cyc.length; };
@@ -2983,8 +3017,8 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       '<label class="sm-sh-lbl">Название графика <input type="text" class="sm-sh-name" maxlength="40" value="' + esc((job && job.name) || DEF.name) + '"></label>' +
       '<label class="sm-sh-lbl">Дата, про которую точно знаете (например, последняя смена) <input type="date" class="sm-sh-anchor" value="' + ((job && job.anchor_date) || DEF.anchor) + '"></label>' +
       '<div class="sm-sh-cycwrap">' + cycleEditorInner(jobCycle(job || {})) + "</div>" +
-      '<label class="sm-sh-lbl">☀️ День: с <input type="time" class="sm-sh-dayfrom" value="' + timesOf(job).day[0] + '"> до <input type="time" class="sm-sh-dayto" value="' + timesOf(job).day[1] + '"></label>' +
-      '<label class="sm-sh-lbl">🌙 Ночь: с <input type="time" class="sm-sh-nightfrom" value="' + timesOf(job).night[0] + '"> до <input type="time" class="sm-sh-nightto" value="' + timesOf(job).night[1] + '"></label>' +
+      '<label class="sm-sh-lbl sm-sh-times-day"' + (jobCycle(job || {}).includes("day") ? "" : ' style="display:none"') + '>☀️ Дневная смена: с <input type="time" class="sm-sh-dayfrom" value="' + timesOf(job).day[0] + '"> до <input type="time" class="sm-sh-dayto" value="' + timesOf(job).day[1] + '"></label>' +
+      '<label class="sm-sh-lbl sm-sh-times-night"' + (jobCycle(job || {}).includes("night") ? "" : ' style="display:none"') + '>🌙 Ночная смена: с <input type="time" class="sm-sh-nightfrom" value="' + timesOf(job).night[0] + '"> до <input type="time" class="sm-sh-nightto" value="' + timesOf(job).night[1] + '"></label>' +
       '<label class="sm-sh-lbl">Смена, часов <input type="number" class="sm-sh-hours" min="1" max="24" value="' + ((job && job.shift_hours) || DEF.hours) + '"></label>' +
       '<div class="sm-sh-lbl"><button class="sm-sh-save" type="button" data-jsave="1">' + (job ? "Сохранить график" : "Создать график") + "</button>" +
       (job ? ' <button class="sm-sh-cycadd" type="button" data-jcancel="1">Отмена</button>' : "") +
@@ -3143,8 +3177,9 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     root.querySelector("[data-shinfo]")?.addEventListener("click", () => SixMin.info("Мои смены",
       "<p>Графиков может быть несколько (например, офис и завод): у каждого свой цикл дней от своей якорной даты. " +
       "День считается <b>🏭 сменой</b>, если занята хотя бы одна работа; <b>🏢 свободен</b> — если свободны все. " +
-      "Если смены нескольких графиков попадают в один день, работает только верхний в списке «Мои графики» " +
-      "(порядок = приоритет, меняйте стрелками ↑↓), остальные помечаются «перекрывает»." +
+      "Если смены нескольких графиков пересекаются ПО ВРЕМЕНИ, верхний в списке «Мои графики» " +
+      "(порядок = приоритет, стрелки ↑↓) перекрывает нижний. Если интервалы не пересекаются " +
+      "(завод до 19:30, спортзал с 20:30) — день занят оба интервала, и то и другое видно в статусе." +
       "Приоритет: отпуск → праздник → смена. Графики видят участники ваших кругов, если в «Настройках» " +
       "включена видимость; дни рождения приходят из кругов и попадают в подсказки и поиск.</p>"));
     root.querySelector(".sm-sh-reswrap .sm-sh-hide")?.addEventListener("click", (e) => {
