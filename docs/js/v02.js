@@ -2783,24 +2783,25 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     "2026-05-01": "1 Мая", "2026-05-04": "4 Мая", "2026-05-09": "9 Мая",
     "2026-05-11": "11 Мая", "2026-06-12": "12 Июня", "2026-11-04": "4 Ноября",
   };
-  const DEF = { anchor: "2026-04-27", cycle: ["night", "rest", "off", "day", "off"], hours: 12 };
+  const DEF = { anchor: "2026-04-27", cycle: ["night", "rest", "off", "day", "off"], hours: 12, name: "Мой график" };
   const SHIFT_NAMES = { night: "🌙 Ночь", rest: "💤 Отсыпной", off: "🏠 Выходной", day: "☀️ День" };
-  let root = null, P = null, V = [], loggedOut = false, resCache = null, CIRC = [];
+  // v0.7.0: графиков может быть НЕСКОЛЬКО (офис + завод): у каждого свой цикл.
+  // J — списки работ; P — личные настройки человека (день рождения, видимость для кругов).
+  let root = null, P = null, J = [], V = [], loggedOut = false, resCache = null, CIRC = [], editing = null;
 
   const parse = (k) => SixMin.parseKey(k);
   const key = (d) => SixMin.fmtKey(d);
   const esc = SixMin.esc;
 
-  const cycleOf = () => (P && Array.isArray(P.cycle) && P.cycle.length === 5) ? P.cycle : DEF.cycle;
-  const anchorOf = () => (P && P.anchor_date) || DEF.anchor;
-  const hoursOf = () => (P && P.shift_hours) || DEF.hours;
-
-  function shiftFor(k, anchor, cycle) {
-    const cyc = cycle || cycleOf();
-    const a = parse(anchor || anchorOf());
+  const jobCycle = (job) => (Array.isArray(job.cycle) && job.cycle.length >= 2) ? job.cycle : DEF.cycle;
+  function jobShift(k, job) {
+    const cyc = jobCycle(job);
+    const a = parse(job.anchor_date || DEF.anchor);
     const diff = Math.round((parse(k) - a) / 86400000);
     return cyc[((diff % cyc.length) + cyc.length) % cyc.length];
   }
+  const workJobsOn = (k) => (J || []).filter((j) => { const s = jobShift(k, j); return s === "day" || s === "night"; });
+
   function vacSet() {
     const s = new Set();
     for (const v of V || []) {
@@ -2809,26 +2810,32 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     }
     return s;
   }
-  function info(k, vs, anchor, cycle) {
+  // v0.7.0: «на заводе/в офисе» больше нет — день либо СМЕНА (по любому графику), либо СВОБОДЕН
+  function infoDay(k, vs) {
     if (vs && vs.has(k)) return { loc: "🏖 отпуск", free: true, msg: "отпуск · полностью свободен", dot: "#f9ab00", kind: "vac" };
     if (HOLIDAYS[k]) return { loc: "🏖 праздник", free: true, msg: "праздник • полностью свободен", dot: "#f9ab00", kind: "hol" };
-    const sh = shiftFor(k, anchor, cycle);
-    if (sh === "day" || sh === "night")
-      return { loc: "🏭 на заводе", free: false, msg: sh === "day" ? "☀️ дневная смена" : "🌙 ночная смена", dot: "#E30613", kind: sh };
+    const wj = workJobsOn(k);
+    if (wj.length) {
+      const parts = wj.map((j) => (jobShift(k, j) === "night" ? "🌙 ночь" : "☀️ день") + ((J || []).length > 1 ? " · " + j.name : "")).join(" + ");
+      return { loc: "🏭 смена", free: false, msg: parts, dot: "#E30613", kind: wj.length > 1 ? "multi" : jobShift(k, wj[0], ) };
+    }
+    const rests = (J || []).some((j) => jobShift(k, j) === "rest");
     const dow = parse(k).getDay();
-    const t = (dow >= 1 && dow <= 4) ? "свободен после 17:00" : dow === 5 ? "свободен после 19:30" : "полностью свободен";
-    return { loc: "🏢 в офисе", free: true, msg: (sh === "rest" ? "💤 отсыпной · " : "выходной · ") + t, dot: "#30a46c", kind: sh };
+    const t2 = (dow >= 1 && dow <= 4) ? "свободен после 17:00" : dow === 5 ? "свободен после 19:30" : "полностью свободен";
+    return { loc: "🏢 свободен", free: true, msg: (rests ? "💤 отсыпной · " : "выходной · ") + t2, dot: "#30a46c", kind: rests ? "rest" : "off" };
   }
   function monthStats(y, m) {
     const vs = vacSet();
-    let office = 0, factory = 0;
+    let free = 0, hours = 0;
     const d = new Date(y, m, 1, 12);
     while (d.getMonth() === m) {
-      const inf = info(key(d), vs);
-      if (inf.kind === "day" || inf.kind === "night") factory += hoursOf(); else office++;
+      const k = key(d);
+      const wj = (vs.has(k) || HOLIDAYS[k]) ? [] : workJobsOn(k);
+      if (wj.length) hours += wj.reduce((s, j) => s + (parseInt(j.shift_hours, 10) || 0), 0);
+      else free++;
       d.setDate(d.getDate() + 1);
     }
-    return { office, factory };
+    return { free, hours };
   }
   function bdayInfo(birthday, fromKey) {
     if (!birthday) return null;
@@ -2846,41 +2853,68 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     try { uid = await SixMin.uid(); } catch (e) { uid = null; }
     loggedOut = !uid;
     CIRC = [];
-    if (!uid) { P = null; V = []; return; }
+    if (!uid) { P = null; J = []; V = []; return; }
     const sb = SixMin.sb();
     const { data: pr } = await sb.from("shift_profiles").select("*").eq("user_id", uid).maybeSingle();
-    P = pr || null; // v0.6.10: БЕЗ профиля нет графика — показываем карточку настройки
+    P = pr || null;
+    const { data: jb } = await sb.from("shift_jobs").select("*").eq("user_id", uid)
+      .order("sort", { ascending: true }).order("updated_at", { ascending: true });
+    J = jb || [];
     const { data: vc } = await sb.from("shift_vacations").select("*").eq("user_id", uid).order("start_date");
     V = vc || [];
-    if (P) {
+    if (J.length) {
       const { data: ms } = await sb.from("circle_members").select("circle_id").eq("user_id", uid);
       const ids = (ms || []).map((r) => r.circle_id);
       if (ids.length) {
         const { data: cs } = await sb.from("circles").select("id, name").in("id", ids);
         for (const c of cs || []) {
           const { data: rows } = await sb.rpc("circle_shifts_and_birthdays", { p_circle: c.id });
-          CIRC.push({ id: c.id, name: c.name, members: rows || [] });
+          const rj = await sb.rpc("circle_jobs", { p_circle: c.id });
+          CIRC.push({ id: c.id, name: c.name, members: rows || [], jobs: (rj.error ? [] : (rj.data || [])) });
         }
       }
     }
   }
-  async function saveProfile(insert) {
+
+  // v0.6.13+: сохранение с ОБРАТНЫМ ЧТЕНИЕМ: облако должно вернуть ровно то, что записали
+  async function saveJob(job, insert) {
     const uid = await SixMin.uid();
     const row = {
-      user_id: uid, anchor_date: P.anchor_date, cycle: P.cycle, shift_hours: P.shift_hours,
-      birthday: P.birthday || null, shared: !!P.shared, updated_at: new Date().toISOString(),
+      user_id: uid, name: job.name, anchor_date: job.anchor_date,
+      cycle: job.cycle, shift_hours: job.shift_hours, updated_at: new Date().toISOString(),
     };
+    if (!insert) row.id = job.id;
+    const { error } = await SixMin.sb().from("shift_jobs").upsert(row, { onConflict: "id" });
+    if (error) { SixMin.toast("Ошибка: " + error.message); return false; }
+    const q = insert
+      ? await SixMin.sb().from("shift_jobs").select("id,name,anchor_date,cycle,shift_hours").eq("user_id", uid).order("updated_at", { ascending: false }).limit(1).maybeSingle()
+      : await SixMin.sb().from("shift_jobs").select("id,name,anchor_date,cycle,shift_hours").eq("id", row.id).maybeSingle();
+    const chk = q.data;
+    const same = chk && String(chk.anchor_date) === String(row.anchor_date) &&
+      JSON.stringify(chk.cycle) === JSON.stringify(row.cycle) &&
+      parseInt(chk.shift_hours, 10) === parseInt(row.shift_hours, 10) && chk.name === row.name;
+    if (!same) {
+      console.error("shift_jobs readback mismatch:", chk, row);
+      SixMin.toast("⚠️ Запись ушла в облако, но вернулись другие данные — обновите страницу и проверьте");
+    } else {
+      SixMin.toast((insert ? "График добавлен: " : "График сохранён: ") + row.name + " (" + row.cycle.length + " дн.)");
+    }
+    editing = null;
+    await load().catch((e) => console.error("shifts reload after save:", e));
+    render(); renderBday();
+    return true;
+  }
+  async function savePerson() {
+    const uid = await SixMin.uid();
+    const row = { user_id: uid, shared: !!(P && P.shared), birthday: (P && P.birthday) || null };
     const { error } = await SixMin.sb().from("shift_profiles").upsert(row, { onConflict: "user_id" });
     if (error) { SixMin.toast("Ошибка: " + error.message); return; }
-    SixMin.toast(insert ? "График сохранён — теперь он ваш личный" : "Настройки смен сохранены");
-    // v0.6.13 (Video 17, баг 1): сперва перерисовка из памяти — экран показывает новый
-    // график сразу; затем синхронизация из БД, ошибка load() экран не блокирует
-    render(); renderBday();
-    await load().catch((e) => console.error("shifts reload after save:", e));
+    SixMin.toast("Сохранено: день рождения и видимость для кругов");
+    await load().catch(() => {});
     render(); renderBday();
   }
 
-  // v0.6.11: редактор цепочки: тип якорного дня + слоты с добавлением/удалением (Video 16, приоритет 1)
+  // ── редактор цепочки (v0.6.11, Video 16) ──
   function cycleEditorInner(cycle) {
     const a0 = cycle[0];
     return '<label class="sm-sh-lbl">Какой день был в эту дату? <select class="sm-sh-atype">' +
@@ -2895,35 +2929,56 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       '<p class="sm-sh-note sm-sh-preview"></p>';
   }
   const cycleEditor = (cycle) => '<div class="sm-sh-editor">' + cycleEditorInner(cycle) + "</div>";
+  function cycleOk(cycle) {
+    if (!cycle || cycle.length < 2) { SixMin.toast("Цикл: минимум 2 дня"); return false; }
+    if (!cycle.some((c) => c === "night" || c === "day")) { SixMin.toast("Нужна хотя бы одна рабочая смена: ночь или день"); return false; }
+    return true;
+  }
   function updatePreview(ed) {
     const pv = ed && ed.querySelector(".sm-sh-preview");
     if (!pv) return;
     const anchorEl = root && root.querySelector(".sm-sh-anchor");
     const cyc = Array.from(ed.querySelectorAll("[data-cyc]")).map((s) => s.value);
-    const a = parse((anchorEl && anchorEl.value) || anchorOf());
+    const a = parse((anchorEl && anchorEl.value) || DEF.anchor);
     if (!a || !cyc.length) { pv.textContent = ""; return; }
     const idxOf = (d) => { const n = Math.round((d - a) / 86400000); return ((n % cyc.length) + cyc.length) % cyc.length; };
     const t = new Date(); t.setHours(0, 0, 0, 0);
     pv.textContent = "Сегодня по этому циклу: " + SHIFT_NAMES[cyc[idxOf(t)]] +
       ", завтра: " + SHIFT_NAMES[cyc[idxOf(new Date(t.getTime() + 86400000))]] + ".";
   }
-  function cycleOk(cycle) {
-    if (!cycle || cycle.length < 2) { SixMin.toast("Цикл: минимум 2 дня"); return false; }
-    if (!cycle.some((c) => c === "night" || c === "day")) { SixMin.toast("Нужна хотя бы одна рабочая смена: ночь или день"); return false; }
-    return true;
+  function readEditor(ed) {
+    const nameEl = root.querySelector(".sm-sh-name");
+    const anchorEl = root.querySelector(".sm-sh-anchor");
+    const hoursEl = root.querySelector(".sm-sh-hours");
+    return {
+      name: ((nameEl && nameEl.value.trim()) || DEF.name).slice(0, 40),
+      anchor_date: (anchorEl && anchorEl.value) || DEF.anchor,
+      cycle: Array.from(ed.querySelectorAll("[data-cyc]")).map((s) => s.value),
+      shift_hours: parseInt((hoursEl && hoursEl.value), 10) || DEF.hours,
+    };
   }
+  function jobEditorHTML(job) {
+    return '<div class="sm-sh-editor">' +
+      '<label class="sm-sh-lbl">Название графика <input type="text" class="sm-sh-name" maxlength="40" value="' + esc((job && job.name) || DEF.name) + '"></label>' +
+      '<label class="sm-sh-lbl">Дата, про которую точно знаете (например, последняя смена) <input type="date" class="sm-sh-anchor" value="' + ((job && job.anchor_date) || DEF.anchor) + '"></label>' +
+      cycleEditorInner(jobCycle(job || {})) +
+      '<label class="sm-sh-lbl">Смена, часов <input type="number" class="sm-sh-hours" min="1" max="24" value="' + ((job && job.shift_hours) || DEF.hours) + '"></label>' +
+      '<div class="sm-sh-lbl"><button class="sm-sh-save" type="button" data-jsave="1">' + (job ? "Сохранить график" : "Создать график") + "</button>" +
+      (job ? ' <button class="sm-sh-cycadd" type="button" data-jcancel="1">Отмена</button>' : "") +
+      "</div></div>";
+  }
+
   function setupHTML() {
     return '<div class="sm-sh">' +
       '<div class="sm-sh-head">🔥 Мои смены</div>' +
       '<p class="sm-sh-note">График смен личный у каждого: расскажите приложению про свой цикл — ' +
-      "и оно покажет ВАШИ смены, отпуска и праздники, а в кругах найдёт общие свободные дни и дни рождения.</p>" +
-      '<label class="sm-sh-lbl">Дата, про которую точно знаете (например, последняя смена) <input type="date" class="sm-sh-anchor" value="' + DEF.anchor + '"></label>' +
-      cycleEditor(DEF.cycle) +
-      '<label class="sm-sh-lbl">Смена, часов <input type="number" class="sm-sh-hours" min="1" max="24" value="' + DEF.hours + '"></label>' +
-      '<label class="sm-sh-lbl"><input type="checkbox" class="sm-sh-shared" checked> показывать график и ДР участникам моих кругов</label>' +
-      '<button class="sm-sh-save" type="button" data-setup="1">Сохранить мой график</button>' +
+      "и оно покажет ВАШИ смены, отпуска и праздники, а в кругах найдёт общие свободные дни и дни рождения. " +
+      "Работы две или больше? Создайте по графику на каждую — свободные дни считаются по всем сразу.</p>" +
+      jobEditorHTML(null) +
       "</div>";
   }
+
+  async function refresh() { await load().catch((e) => console.error("shifts load:", e)); render(); renderBday(); }
 
   function render() {
     if (!root) return;
@@ -2933,16 +2988,16 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
         'Войдите в аккаунт — и карточка появится здесь.</p></div>';
       return;
     }
-    if (!P) { root.innerHTML = setupHTML(); wireSetup(); return; }
+    if (!J.length) { root.innerHTML = setupHTML(); wireSetup(); return; }
     const vs = vacSet();
     const today = key(new Date());
-    const ti = info(today, vs);
-    const bdaysMine = (P.birthday && key(new Date()).slice(5, 10) === String(P.birthday).slice(5, 10)) ? " · 🎂 у вас день рождения!" : "";
+    const ti = infoDay(today, vs);
+    const bdaysMine = (P && P.birthday && key(new Date()).slice(5, 10) === String(P.birthday).slice(5, 10)) ? " · 🎂 у вас день рождения!" : "";
     const strip = [];
     for (let i = 0; i < 14; i++) {
       const d = new Date(parse(today).getTime() + i * 86400000);
       const k = key(d);
-      const inf = info(k, vs);
+      const inf = infoDay(k, vs);
       const bmark = circleBirthdaysOn(k);
       strip.push('<i class="sm-sh-dot' + (k === today ? " now" : "") + '" style="background:' + inf.dot + '" title="' +
         k.slice(8) + "." + k.slice(5, 7) + " · " + esc(inf.loc) + " · " + esc(inf.msg) +
@@ -2953,13 +3008,22 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     const prevD = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const prev = monthStats(prevD.getFullYear(), prevD.getMonth());
     const mName = (d) => d.toLocaleString("ru-RU", { month: "long", year: "numeric" });
+    const jobsRows = (J || []).map((j) =>
+      '<div class="sm-sh-row"><span><b>' + esc(j.name) + "</b> · цикл " + (jobCycle(j).length) + " дн · сегодня " +
+      esc(SHIFT_NAMES[jobShift(today, j)] || "") + '</span><span><b class="sm-sh-del" data-jedit="' + j.id +
+      '" title="Редактировать график">✏️</b> <b class="sm-sh-del" data-jdel="' + j.id + '" title="Удалить график">×</b></span></div>').join("");
+    const editJob = (editing && editing !== "__new") ? (J || []).find((j) => j.id === editing) : null;
+    const editorHtml = (editing === "__new" || editJob)
+      ? jobEditorHTML(editJob || null)
+      : '<p class="sm-sh-note">Нажмите ✏️ у графика, чтобы изменить его цикл, или добавьте новый график.</p>';
     const vacRows = (V || []).map((v) =>
       '<div class="sm-sh-row"><span>' + v.start_date.slice(8, 10) + "." + v.start_date.slice(5, 7) + "." + v.start_date.slice(0, 4) +
       " · " + v.days + " дн · " + esc(v.kind === "harm" ? "вредность (+7)" : v.kind === "extra" ? "дополнительный" : "основной") +
       '</span><b class="sm-sh-del" data-vdel="' + v.id + '" title="Удалить отпуск">×</b></div>').join("");
     const holRows = Object.keys(HOLIDAYS).map((k) => {
-      const inf = info(k, vs);
-      return '<div class="sm-sh-row"><span>' + esc(HOLIDAYS[k]) + " · " + esc(SHIFT_NAMES[shiftFor(k)] || "") +
+      const inf = infoDay(k, vs);
+      const wj = workJobsOn(k);
+      return '<div class="sm-sh-row"><span>' + esc(HOLIDAYS[k]) + " · " + (wj.length ? "смена: " + esc(wj.map((x) => x.name).join(", ")) : "свободный день") +
         '</span><b style="color:' + (inf.free ? "#30a46c" : "#E30613") + '">' + (inf.free ? "свободен ✅" : "занят 🔴") + "</b></div>";
     }).join("");
     const resHtml = resCache
@@ -2971,15 +3035,16 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       : "";
     root.innerHTML =
       '<div class="sm-sh">' +
-      '<div class="sm-sh-head">🔥 Мои смены <button class="sm-ib" data-shinfo="1">i</button>' +
-      ' <button class="sm-add-btn" type="button" data-shedit="1">✏️ Изменить график</button></div>' +
+      '<div class="sm-sh-head">🔥 Мои смены <button class="sm-ib" data-shinfo="1">i</button></div>' +
       '<div class="sm-sh-today">' + esc(ti.loc) + ' · ' + esc(ti.msg) + esc(bdaysMine) + '</div>' +
       '<div class="sm-sh-strip">' + strip.join("") + '</div>' +
-      '<div class="sm-sh-legend"><span><i style="background:#E30613"></i>на заводе</span><span><i style="background:#30a46c"></i>в офисе (свободен)</span><span><i style="background:#f9ab00"></i>праздник/отпуск</span></div>' +
+      '<div class="sm-sh-legend"><span><i style="background:#E30613"></i>смена</span><span><i style="background:#30a46c"></i>свободен</span><span><i style="background:#f9ab00"></i>праздник/отпуск</span></div>' +
       '<div class="sm-sh-stats">' +
-      '<div class="sm-sh-stat"><b>🏢 ' + cur.office + ' дн.</b><span>' + esc(mName(now)) + '</span><em>🏭 ' + cur.factory + ' ч.</em></div>' +
-      '<div class="sm-sh-stat"><b>🏢 ' + prev.office + ' дн.</b><span>' + esc(mName(prevD)) + '</span><em>🏭 ' + prev.factory + ' ч.</em></div>' +
+      '<div class="sm-sh-stat"><b>🏢 ' + cur.free + ' дн.</b><span>' + esc(mName(now)) + '</span><em>🏭 ' + cur.hours + ' ч.</em></div>' +
+      '<div class="sm-sh-stat"><b>🏢 ' + prev.free + ' дн.</b><span>' + esc(mName(prevD)) + '</span><em>🏭 ' + prev.hours + ' ч.</em></div>' +
       '</div>' +
+      '<div class="sm-sh-sec">Мои графики (' + (J || []).length + ')</div>' + jobsRows +
+      '<div class="sm-sh-lbl"><button class="sm-sh-cycadd" type="button" data-jadd="1">+ Добавить график</button></div>' +
       circlesHTML(today) +
       '<div class="sm-sh-sec">Найти свободные дни</div>' +
       '<form class="sm-sh-find"><input type="date" class="sm-sh-from" value="' + today + '"><input type="date" class="sm-sh-to" value="' +
@@ -2991,13 +3056,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       '<button class="sm-add-btn" type="submit">+</button></form>' +
       (vacRows || '<p class="sm-sh-note">Отпусков не запланировано.</p>') +
       '<div class="sm-sh-sec">Праздники 2026</div>' + holRows +
-      '<details class="sm-sh-cfg"><summary>✏️ Настройки смен — график, цикл, отпуска</summary>' +
-      '<label class="sm-sh-lbl">Якорная дата — день №1 цепочки ниже <input type="date" class="sm-sh-anchor" value="' + anchorOf() + '"></label>' +
-      '<label class="sm-sh-lbl">Длительность смены, ч <input type="number" class="sm-sh-hours" min="1" max="24" value="' + hoursOf() + '"></label>' +
-      '<label class="sm-sh-lbl"><input type="checkbox" class="sm-sh-shared"' + (P.shared ? " checked" : "") + '> показывать график и ДР участникам моих кругов</label>' +
-      cycleEditor(cycleOf()) +
-      '<button class="sm-sh-save" type="button">Сохранить настройки</button>' +
-      '</details>' +
+      '<details class="sm-sh-cfg"' + (editing ? " open" : "") + '><summary>✏️ Настроить графики работ</summary>' + editorHtml + '</details>' +
       '</div>';
     wire();
   }
@@ -3013,59 +3072,55 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     if (!CIRC.length) return "";
     let out = '<div class="sm-sh-sec">В моих кругах</div>';
     for (const c of CIRC) {
-      const others = c.members.filter((m) => m.user_id !== (P && P.user_id));
       const bds = [];
       for (const m of c.members) {
         const b = bdayInfo(m.birthday, today);
-        if (b) bds.push({ name: m.name, me: m.user_id === P.user_id, ...b });
+        if (b) bds.push({ name: m.name, me: m.user_id === (P && P.user_id), ...b });
       }
       bds.sort((a, b) => a.inDays - b.inDays);
-      const shared = [];
+      const memberJobs = {};
+      for (const jr of (c.jobs || [])) (memberJobs[jr.user_id] = memberJobs[jr.user_id] || []).push(jr);
+      const sharers = c.members.filter((m) => m.shared !== false && (memberJobs[m.user_id] || []).length);
+      const sharedDays = [];
       for (let i = 0; i < 14; i++) {
         const k = key(new Date(parse(today).getTime() + i * 86400000));
-        const sharers = c.members.filter((m) => m.anchor_date && m.shared !== false);
         if (!sharers.length) break;
-        const freeAll = sharers.every((m) => info(k, null, m.anchor_date, m.cycle).free);
-        if (freeAll) shared.push(k.slice(8) + "." + k.slice(5, 7));
+        const freeAll = sharers.every((m) => (memberJobs[m.user_id] || []).every((j) => {
+          const s = jobShift(k, j); return s !== "day" && s !== "night";
+        }));
+        if (freeAll) sharedDays.push(k.slice(8) + "." + k.slice(5, 7));
       }
       out += '<div class="sm-sh-circle"><b>🤝 ' + esc(c.name) + "</b>" +
         (bds.length ? '<div class="sm-sh-row"><span>🎂 ' + esc(bds[0].name) + (bds[0].me ? " (у вас)" : "") +
           " — " + (bds[0].inDays === 0 ? "сегодня!" : "через " + bds[0].inDays + " дн.") + "</span></div>" : "") +
-        (shared.length ? '<details class="sm-sh-days"><summary class="sm-sh-row free"><span>Общие свободные дни (14 дн): ' + shared.length + " дн. — развернуть</span></summary>" +
-          '<div class="sm-sh-dayslist">' + shared.map((d) => '<span class="sm-sh-day">' + esc(d) + "</span>").join("") + "</div></details>"
-          : (sharersCount(c) ? '<div class="sm-sh-row"><span>Общих свободных дней на ближайших 14 нет</span></div>' : "")) +
+        (sharedDays.length ? '<details class="sm-sh-days"><summary class="sm-sh-row free"><span>Общие свободные дни (14 дн): ' + sharedDays.length + " дн. — развернуть</span></summary>" +
+          '<div class="sm-sh-dayslist">' + sharedDays.map((d) => '<span class="sm-sh-day">' + esc(d) + "</span>").join("") + "</div></details>"
+          : (sharers.length ? '<div class="sm-sh-row"><span>Общих свободных дней на ближайших 14 нет</span></div>' : "")) +
         "</div>";
     }
     return out;
-    function sharersCount(c) { return c.members.filter((m) => m.anchor_date && m.shared !== false).length; }
   }
 
   function wireSetup() {
-    root.querySelector("[data-setup]")?.addEventListener("click", async () => {
-      const cycle = Array.from(root.querySelectorAll("[data-cyc]")).map((s) => s.value);
-      if (!cycleOk(cycle)) return;
-      P = {
-        user_id: await SixMin.uid(),
-        anchor_date: root.querySelector(".sm-sh-anchor").value || DEF.anchor,
-        cycle,
-        shift_hours: parseInt(root.querySelector(".sm-sh-hours").value, 10) || DEF.hours,
-        birthday: null,
-        shared: root.querySelector(".sm-sh-shared").checked,
-      };
-      await saveProfile(true);
+    root.querySelector("[data-jsave]")?.addEventListener("click", async () => {
+      const ed = root.querySelector(".sm-sh-editor");
+      const job = readEditor(ed);
+      if (!cycleOk(job.cycle)) return;
+      if (!P) {
+        const uid = await SixMin.uid();
+        const r = await SixMin.sb().from("shift_profiles").upsert({ user_id: uid, shared: true }, { onConflict: "user_id" });
+        if (!r.error) P = { user_id: uid, shared: true, birthday: null };
+      }
+      await saveJob(job, true);
     });
     updatePreview(root.querySelector(".sm-sh-editor"));
   }
   function wire() {
-    root.querySelector("[data-shedit]")?.addEventListener("click", () => {
-      const d = root.querySelector(".sm-sh-cfg");
-      if (d) { d.open = true; d.scrollIntoView({ behavior: "smooth", block: "start" }); }
-    });
     root.querySelector("[data-shinfo]")?.addEventListener("click", () => SixMin.info("Мои смены",
-      "<p>Цикл любой длины: ваша цепочка дней от якорной даты — дня №1 цепочки (тип этого дня выбираете вы). " +
-      "<b>🏭 На заводе</b> — только рабочие смены; <b>🏢 В офисе</b> — все свободные дни, включая отсыпные. " +
-      "Приоритет: отпуск → завод → офис/праздник. График видят участники ваших кругов, если включена галочка «показывать»; " +
-      "дни рождения приходят из кругов и попадают в подсказки ленты и поиска.</p>"));
+      "<p>Графиков может быть несколько (например, офис и завод): у каждого свой цикл дней от своей якорной даты. " +
+      "День считается <b>🏭 сменой</b>, если занята хотя бы одна работа; <b>🏢 свободен</b> — если свободны все. " +
+      "Приоритет: отпуск → праздник → смена. Графики видят участники ваших кругов, если в «Настройках» " +
+      "включена видимость; дни рождения приходят из кругов и попадают в подсказки и поиск.</p>"));
     root.querySelector(".sm-sh-reswrap .sm-sh-hide")?.addEventListener("click", (e) => {
       e.preventDefault(); resCache = null; render();
     });
@@ -3079,7 +3134,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       const end = parse(b);
       while (d <= end && resCache.length < 90) {
         const k = key(d);
-        resCache.push({ k, wd: wd[d.getDay()], inf: info(k, vs()), bday: circleBirthdaysOn(k) });
+        resCache.push({ k, wd: wd[d.getDay()], inf: infoDay(k, vs()), bday: circleBirthdaysOn(k) });
         d = new Date(d.getTime() + 86400000);
       }
       render();
@@ -3095,26 +3150,33 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       const { error } = await SixMin.sb().from("shift_vacations").insert({ user_id: uid, start_date: s, days, kind });
       if (error) { SixMin.toast("Ошибка: " + error.message); return; }
       SixMin.toast("Отпуск добавлен");
-      await load(); render();
+      await load().catch(() => {}); render();
     });
     root.querySelectorAll("[data-vdel]").forEach((b) => b.addEventListener("click", async () => {
       if (!confirm("Удалить этот отпуск из плана?")) return;
       await SixMin.sb().from("shift_vacations").delete().eq("id", b.dataset.vdel);
-      await load(); render();
+      await load().catch(() => {}); render();
     }));
-    root.querySelector(".sm-sh-save")?.addEventListener("click", async () => {
-      const cycle = Array.from(root.querySelectorAll("[data-cyc]")).map((s) => s.value);
-      if (!cycleOk(cycle)) return;
-      P.anchor_date = root.querySelector(".sm-sh-anchor").value || DEF.anchor;
-      P.shift_hours = parseInt(root.querySelector(".sm-sh-hours").value, 10) || DEF.hours;
-      P.cycle = cycle;
-      P.shared = root.querySelector(".sm-sh-shared").checked;
-      await saveProfile(false);
+    root.querySelector("[data-jadd]")?.addEventListener("click", () => { editing = "__new"; render(); });
+    root.querySelectorAll("[data-jedit]").forEach((b) => b.addEventListener("click", () => { editing = b.dataset.jedit; render(); }));
+    root.querySelectorAll("[data-jdel]").forEach((b) => b.addEventListener("click", async () => {
+      if (!confirm("Удалить этот график? Остальные графики останутся.")) return;
+      await SixMin.sb().from("shift_jobs").delete().eq("id", b.dataset.jdel);
+      editing = null;
+      await load().catch(() => {}); render();
+    }));
+    root.querySelector("[data-jcancel]")?.addEventListener("click", () => { editing = null; render(); });
+    root.querySelector("[data-jsave]")?.addEventListener("click", async () => {
+      const ed = root.querySelector(".sm-sh-editor");
+      const job = readEditor(ed);
+      if (!cycleOk(job.cycle)) return;
+      const insert = !editing || editing === "__new";
+      if (!insert) job.id = editing;
+      await saveJob(job, insert);
     });
     updatePreview(root.querySelector(".sm-sh-editor"));
   }
 
-  async function refresh() { await load().catch((e) => console.error("shifts load:", e)); render(); renderBday(); }
   function injectStyles() {
     if (document.getElementById("sm-shifts-css")) return;
     const st = document.createElement("style");
@@ -3156,47 +3218,46 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       .sm-sh-slot:last-child{border-right:0;margin-right:0}
       .sm-sh-cycadd{white-space:nowrap;border:0;border-radius:10px;background:var(--accent,#E30613);color:#fff;font-weight:700;padding:7px 12px;cursor:pointer;font-size:12px}
       .sm-sh-cfg .sm-sh-save{position:sticky;bottom:12px;box-shadow:0 6px 14px rgba(0,0,0,.45)}
-      .sm-sh-editor{margin:6px 0}
       .sm-sh-days summary{list-style:none;cursor:pointer}
       .sm-sh-days summary::-webkit-details-marker{display:none}
       .sm-sh-dayslist{display:flex;flex-wrap:wrap;gap:4px;padding:6px 8px}
       .sm-sh-day{background:var(--inset,#1c1c1c);border:1px solid var(--line,#333);border-radius:8px;padding:4px 8px;font-size:12px}
+      .sm-sh-editor{margin:6px 0}
     `;
     document.head.appendChild(st);
   }
+
   let bhost = null;
   function mountBdayCard() {
     const content = document.querySelector("#screen-settings .content");
     if (!content || document.getElementById("sm-bday-card")) return;
     const card = document.createElement("div");
     card.className = "card"; card.id = "sm-bday-card";
-    card.innerHTML = '<h3>🎂 День рождения</h3><div class="sm-bd-host"></div>';
+    card.innerHTML = '<h3>🎂 День рождения и видимость</h3><div class="sm-bd-host"></div>';
     content.appendChild(card);
     bhost = card.querySelector(".sm-bd-host");
     bhost.addEventListener("click", async (e) => {
       if (!e.target.closest("[data-bdsave]")) return;
-      const val = bhost.querySelector(".sm-bd-input").value || null;
-      const uid = await SixMin.uid();
-      const { error } = await SixMin.sb().from("shift_profiles")
-        .upsert({ user_id: uid, birthday: val }, { onConflict: "user_id" });
-      if (error) { SixMin.toast("Ошибка: " + error.message); return; }
-      SixMin.toast(val ? "День рождения сохранён" : "День рождения очищен");
-      await load(); render(); renderBday();
+      if (!P) { const uid = await SixMin.uid(); P = { user_id: uid, birthday: null, shared: true }; }
+      P.birthday = bhost.querySelector(".sm-bd-input").value || null;
+      P.shared = bhost.querySelector(".sm-bd-shared").checked;
+      await savePerson();
     });
     renderBday();
   }
   function renderBday() {
     if (!bhost) return;
-    if (loggedOut) { bhost.innerHTML = '<p class="sm-sh-note">Войдите в облако — и здесь появится ваш день рождения для поздравлений в кругах.</p>'; return; }
-    if (!P) { bhost.innerHTML = '<p class="sm-sh-note">День рождения хранится вместе с графиком смен и виден кругам только при включённой галочке видимости. Сначала создайте график: «Работа» → «Мои смены».</p>'; return; }
-    bhost.innerHTML = '<label class="sm-sh-lbl">Дата <input type="date" class="sm-bd-input" min="1900-01-01" max="' + key(new Date()) + '" value="' + (P.birthday || "") + '"></label>' +
+    if (loggedOut) { bhost.innerHTML = '<p class="sm-sh-note">Войдите в облако — и здесь появятся день рождения и настройка видимости для кругов.</p>'; return; }
+    bhost.innerHTML = '<label class="sm-sh-lbl">День рождения <input type="date" class="sm-bd-input" min="1900-01-01" max="' + key(new Date()) + '" value="' + ((P && P.birthday) || "") + '"></label>' +
+      '<label class="sm-sh-lbl"><input type="checkbox" class="sm-bd-shared"' + (!P || P.shared ? " checked" : "") + '> показывать кругам мои графики и день рождения</label>' +
       '<button class="sm-sh-save" type="button" data-bdsave="1">Сохранить</button>' +
-      '<p class="sm-sh-note">Поздравления придут участникам ваших кругов; видимость — галочка «показывать график и ДР» в «Моих сменах».</p>';
+      '<p class="sm-sh-note">Поздравления придут участникам ваших кругов; при выключенной галочке круг не видит ни графиков, ни дня рождения.</p>';
   }
+
   function mount(container) {
     root = typeof container === "string" ? document.querySelector(container) : container;
     injectStyles();
-    // v0.6.11: делегированные события редактора цепочки (переживают перерисовки карточки)
+    // делегированные события редактора цепочки (переживают перерисовки карточки)
     root.addEventListener("click", (e) => {
       const add = e.target.closest("[data-cycadd]");
       const del = e.target.closest("[data-cycdel]");

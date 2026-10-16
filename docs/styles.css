@@ -253,3 +253,7 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
 .sheet-card ul{padding-left:18px;margin:.3em 0}
 .sheet-card .muted{font-size:13.5px}
 .quote-author{color:var(--muted);font-size:13.5px;margin-top:10px;font-style:normal}
+
+/* v0.7.0: поля входа не налезают друг на друга на мобильных */
+#auth-box{display:flex;flex-direction:column;gap:8px}
+#auth-box input{width:100%}
