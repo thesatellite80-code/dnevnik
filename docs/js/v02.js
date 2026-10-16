@@ -2865,19 +2865,37 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
   }
   function monthStats(y, m) {
     const vs = vacSet();
-    let free = 0, hours = 0;
+    let free = 0, work = 0, hours = 0, vac = 0;
+    const perJob = {};
     const d = new Date(y, m, 1, 12);
     while (d.getMonth() === m) {
       const k = key(d);
-      if (vs.has(k) || HOLIDAYS[k]) { free++; }
+      if (vs.has(k) || HOLIDAYS[k]) { free++; vac++; }
       else {
-        const { act } = splitWork(k);
-        if (act.length) hours += act.reduce((s2, a) => s2 + (parseInt(a.j.shift_hours, 10) || 0), 0);
-        else free++;
+        const wj = workJobsOn(k);
+        if (wj.length) {
+          work++;
+          // перекрытые другими графиками смены не считаем (splitWork)
+          const { act } = splitWork(k);
+          for (const a of act) {
+            const h = parseInt(a.j.shift_hours, 10) || 0;
+            hours += h;
+            const pj = perJob[a.j.id] || (perJob[a.j.id] = { name: a.j.name, shifts: 0, hours: 0 });
+            pj.shifts++; pj.hours += h;
+          }
+        } else free++;
       }
       d.setDate(d.getDate() + 1);
     }
-    return { free, hours };
+    return { free, work, hours, vac, perJob };
+  }
+  // v0.7.7: живые текущие дата и время наверху карточки
+  let nowTimer = null;
+  function updateNow() {
+    const el = root && root.querySelector(".sm-sh-now");
+    if (!el) return;
+    const s = new Date().toLocaleString("ru-RU", { weekday: "long", day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
+    el.textContent = "Сегодня: " + s;
   }
   function bdayInfo(birthday, fromKey) {
     if (!birthday) return null;
@@ -3075,6 +3093,11 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       '<button class="sm-sh-icbtn" type="button" data-jdel="' + j.id + '" title="Удалить график">×</button></span></div>').join("");
     const editJob = (editing && editing !== "__new") ? (J || []).find((j) => j.id === editing) : null;
     const editorHtml = (editing === "__new" || editJob) ? jobEditorHTML(editJob || null) : "";
+    const perJobOn = (() => { try { return localStorage.getItem("sm-sh-perjob") !== "0"; } catch (e) { return true; } })();
+    const pjLine = (st) => {
+      const rows = Object.values(st.perJob || {});
+      return rows.length ? rows.map((p) => esc(p.name) + ": " + p.shifts + " смен · " + p.hours + " ч").join(" · ") : "смен не было";
+    };
     const vacRows = (V || []).map((v) =>
       '<div class="sm-sh-row"><span>' + v.start_date.slice(8, 10) + "." + v.start_date.slice(5, 7) + "." + v.start_date.slice(0, 4) +
       " · " + v.days + " дн · " + esc(v.kind === "harm" ? "вредность (+7)" : v.kind === "extra" ? "дополнительный" : "основной") +
@@ -3095,13 +3118,19 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     root.innerHTML =
       '<div class="sm-sh">' +
       '<div class="sm-sh-head">🔥 Мои смены <button class="sm-ib" data-shinfo="1">i</button></div>' +
+      '<div class="sm-sh-now"></div>' +
       '<div class="sm-sh-today">' + esc(ti.loc) + ' · ' + esc(ti.msg) + esc(bdaysMine) + '</div>' +
       '<div class="sm-sh-strip">' + strip.join("") + '</div>' +
       '<div class="sm-sh-legend"><span><i style="background:#E30613"></i>смена</span><span><i style="background:#30a46c"></i>свободен</span><span><i style="background:#f9ab00"></i>праздник/отпуск</span></div>' +
       '<div class="sm-sh-stats">' +
-      '<div class="sm-sh-stat"><b>🏢 ' + cur.free + ' дн.</b><span>' + esc(mName(now)) + '</span><em>🏭 ' + cur.hours + ' ч.</em></div>' +
-      '<div class="sm-sh-stat"><b>🏢 ' + prev.free + ' дн.</b><span>' + esc(mName(prevD)) + '</span><em>🏭 ' + prev.hours + ' ч.</em></div>' +
+      '<div class="sm-sh-stat"><b>🏭 ' + cur.work + ' дн. · ' + cur.hours + ' ч.</b><span>рабочие · ' + esc(mName(now)) + '</span><em>🏢 свободен: ' + cur.free + ' дн.</em></div>' +
+      '<div class="sm-sh-stat"><b>🏭 ' + prev.work + ' дн. · ' + prev.hours + ' ч.</b><span>рабочие · ' + esc(mName(prevD)) + '</span><em>🏢 свободен: ' + prev.free + ' дн.</em></div>' +
       '</div>' +
+      (perJobOn
+        ? '<div class="sm-sh-perjob"><div>📊 ' + esc(mName(now)) + ": " + pjLine(cur) + '</div>' +
+          '<div>📊 ' + esc(mName(prevD)) + ": " + pjLine(prev) + '</div>' +
+          '<button class="sm-sh-perjob-tgl" type="button" data-perjob="0">× скрыть разбивку по графикам</button></div>'
+        : '<div class="sm-sh-perjob"><button class="sm-sh-perjob-tgl" type="button" data-perjob="1">📊 показать по графикам</button></div>') +
       '<div class="sm-sh-sec">Мои графики (' + (J || []).length + ')</div>' + jobsRows + editorHtml +
       '<div class="sm-sh-lbl"><button class="sm-sh-cycadd" type="button" data-jadd="1">+ Добавить график</button></div>' +
       circlesHTML(today) +
@@ -3116,6 +3145,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       (vacRows || '<p class="sm-sh-note">Отпусков не запланировано.</p>') + '</details>' +
       '<details class="sm-sh-secwrap"><summary>🎉 Праздники 2026</summary>' + holRows + '</details>' +
       '</div>';
+    updateNow();
     wire();
   }
 
@@ -3230,6 +3260,10 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     };
     root.querySelectorAll("[data-jup]").forEach((b) => b.addEventListener("click", () => moveJob(b.dataset.jup, -1)));
     root.querySelectorAll("[data-jdown]").forEach((b) => b.addEventListener("click", () => moveJob(b.dataset.jdown, 1)));
+    root.querySelector("[data-perjob]")?.addEventListener("click", (e) => {
+      try { localStorage.setItem("sm-sh-perjob", e.currentTarget.dataset.perjob); } catch (err) {}
+      render();
+    });
     root.querySelector("[data-jadd]")?.addEventListener("click", () => {
       editing = "__new"; render();
       root.querySelector(".sm-sh-editor")?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -3264,6 +3298,9 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       .sm-sh{font-size:14px}
       .sm-sh-head{font-weight:800;font-size:16px;margin-bottom:8px;display:flex;gap:8px;align-items:center}
       .sm-sh-today{font-size:15px;font-weight:700;margin-bottom:8px}
+      .sm-sh-now{font-size:12.5px;opacity:.75;margin:-2px 0 8px}
+      .sm-sh-perjob{font-size:11.5px;opacity:.85;margin:-4px 0 10px;display:flex;flex-direction:column;gap:2px}
+      .sm-sh-perjob-tgl{align-self:flex-start;background:none;border:0;color:var(--accent,#E30613);font-size:11.5px;cursor:pointer;padding:2px 0}
       .sm-sh-strip{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px}
       .sm-sh-dot{width:14px;height:14px;border-radius:50%;display:inline-block;opacity:.85}
       .sm-sh-dot.now{outline:2px solid var(--accent,#E30613);outline-offset:2px}
@@ -3378,6 +3415,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       }
     });
     mountBdayCard();
+    if (!nowTimer) nowTimer = setInterval(updateNow, 30000);
     refresh();
   }
   window.SixMinShifts = { mount };
