@@ -3762,7 +3762,7 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
     const uid = await SixMin.uid();
     const today = await SixMin.todayKey();
     const week = SixMin.weekKeys(0);
-    const mk = SixMin.monthKey();
+    const mk = goalKey();
     const sb = SixMin.sb();
     const [g, h, myLogs, todayLogs, t, m, rw, lg, bn] = await Promise.all([
       sb.from("circle_goals").select("*").eq("circle_id", sel)
@@ -3910,7 +3910,7 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
   }
 
   const saveGoal = SixMin.debounce(async (index, patch) => {
-    const mk = SixMin.monthKey();
+    const mk = goalKey();
     let g = D.goals.find((x) => x.goal_index === index);
     if (!g) {
       const { data } = await SixMin.sb().from("circle_goals").insert({
@@ -3966,7 +3966,7 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
     subs.push({ text: "", done: false });
     g.subtasks = subs;
     if (!g.id) {
-      const mk = SixMin.monthKey();
+      const mk = goalKey();
       const { data } = await SixMin.sb().from("circle_goals").insert({
         circle_id: sel, period_type: "month", period_key: mk, goal_index: g.goal_index,
         title: g.title || "", subtasks: subs,
@@ -4194,7 +4194,11 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
       </details>`;
   }
 
-  const monthLabel = () => new Date().toLocaleDateString("ru-RU", { month: "long", year: "numeric" });
+  // v0.8.13: цели круга листаются по месяцам (планировать отпуск и т.п. заранее)
+  let goalOffset = 0;
+  const goalDate = () => { const n = new Date(); return new Date(n.getFullYear(), n.getMonth() + goalOffset, 1); };
+  const goalKey = () => SixMin.monthKey(goalDate());
+  const monthLabel = () => goalDate().toLocaleDateString("ru-RU", { month: "long", year: "numeric" });
 
   const INFO_BTN = (key) => `<button class="sm-ib" data-info="${key}" aria-label="Как это работает">i</button>`;
 
@@ -4344,7 +4348,12 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
           `<button class="sm-kind-chip${c.id === sel ? " on" : ""}" data-csel="${c.id}">${esc(c.name)}</button>`).join("")}</div>` : ""}
 
         <section class="sm-cr-block">
-          <div class="sm-cr-sec">🎯 Общие цели · ${monthLabel()}</div>
+          <div class="sm-cr-sec sm-cr-goalsnav">
+            <button class="sm-nav" type="button" data-gshift="-1" title="Предыдущий месяц">‹</button>
+            <span>🎯 Общие цели · ${monthLabel()}</span>
+            <button class="sm-nav" type="button" data-gshift="1" title="Следующий месяц">›</button>
+            ${goalOffset !== 0 ? '<button class="sm-nav" type="button" data-gshift="0" title="Вернуться к текущему месяцу">•</button>' : ""}
+          </div>
           ${goals}
         </section>
 
@@ -4389,7 +4398,13 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
         () => SixMin.toast("Код: " + c));
     });
     root.querySelectorAll("[data-csel]").forEach((b) =>
-      b.addEventListener("click", () => { sel = b.dataset.csel; CM.reset(); refresh(); }));
+      b.addEventListener("click", () => { sel = b.dataset.csel; goalOffset = 0; CM.reset(); refresh(); }));
+    root.querySelectorAll("[data-gshift]").forEach((b) =>
+      b.addEventListener("click", async () => {
+        const d = b.dataset.gshift;
+        goalOffset = d === "0" ? 0 : Math.max(-12, Math.min(12, goalOffset + Number(d)));
+        await refresh();
+      }));
     root.querySelector("#sm-cr-myname-save")?.addEventListener("click", () => {
       const v = (root.querySelector("#sm-cr-myname")?.value || "").trim();
       if (!v) { SixMin.toast("Введите имя — например, «Мама» или своё настоящее."); return; }
@@ -4427,7 +4442,7 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
       const idxs = (D.goals || []).map((g) => g.goal_index);
       if (idxs.length >= 8) { SixMin.toast("Up to 8 goals: more than that and the circle's focus gets scattered."); return; }
       const next = idxs.length ? Math.max(...idxs) + 1 : 0;
-      const mk = SixMin.monthKey();
+      const mk = goalKey();
       const { data, error } = await SixMin.sb().from("circle_goals").insert({
         circle_id: sel, period_type: "month", period_key: mk, goal_index: next, title: "",
       }).select().maybeSingle();
@@ -4571,6 +4586,10 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
       .sm-cr-block .sm-cr-sec{margin:14px 0 10px}
       .sm-cr-block .sm-cr-sec:first-child{margin:2px 0 10px}
       .sm-cr-block .sm-cr-note{margin-bottom:8px}
+      .sm-cr-goalsnav{display:flex;gap:6px;align-items:center}
+      .sm-cr-goalsnav span{flex:1}
+      .sm-cr-goalsnav button{width:34px;height:30px;border-radius:9px;border:1px solid var(--line,#333);background:#222;color:var(--tx,#eee);font-size:16px;cursor:pointer}
+      .sm-cr-goalsnav button:active{transform:scale(.94)}
       .sm-cr-goalwrap{margin:8px 0}
       .sm-cr-goalwrap>summary{list-style:none;cursor:pointer;display:flex;gap:8px;align-items:center;padding:9px 10px;border:1px solid var(--line,#333);border-radius:10px;background:var(--inset,#1c1c1c)}
       .sm-cr-goalwrap>summary::-webkit-details-marker{display:none}
