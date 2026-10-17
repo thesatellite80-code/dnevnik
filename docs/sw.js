@@ -1,10 +1,10 @@
 /* sw.js — офлайн-кэш приложения (cache-first, навигация → index.html) */
-const CACHE = "sixmin-v0.4.5";
+const CACHE = "sixmin-v0.4.8";
 const ASSETS = [
   "./",
   "index.html",
   "manifest.webmanifest",
-  "js/bundle.js?v=034",
+  "js/bundle.js?v=037",
   "js/v02.js?v=068",
   "js/vendor/supabase.min.js?v=014",
   "icons/icon-192.png",
@@ -48,6 +48,11 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // v0.8.8: version.json всегда из сети — маяк для самолечения устаревшего кэша
+  if (url.pathname.endsWith("version.json")) {
+    event.respondWith(fetch(req).catch(() => caches.match(req)));
+    return;
+  }
   event.respondWith(
     caches.match(req).then((cached) => {
       if (cached) {

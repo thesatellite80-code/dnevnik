@@ -1141,7 +1141,7 @@ window.__v02stage = "after-sixmin-voice"; if (window.__v02say) window.__v02say("
   let rows = [];
 
   async function load() {
-    const uid = await SixMin.uid();
+    const uid = await SixMin.uid().catch(() => "00000000-0000-0000-0000-000000000000");
     const { data, error } = await SixMin.sb().from("voice_notes")
       .select("*").eq("user_id", uid)
       .order("created_at", { ascending: false }).limit(50);
@@ -1283,7 +1283,7 @@ window.__v02stage = "after-sixmin-voicelist"; if (window.__v02say) window.__v02s
   let root = null;
 
   async function load() {
-    const uid = await SixMin.uid();
+    const uid = await SixMin.uid().catch(() => "00000000-0000-0000-0000-000000000000"); // v0.8.6: нет сессии — пустые данные вместо красной консоли
     const keys = SixMin.weekKeys(state.weekOffset);
     const [h, l] = await Promise.all([
       SixMin.sb().from("habits").select("*")
@@ -1505,7 +1505,7 @@ window.__v02stage = "after-sixmin-habits"; if (window.__v02say) window.__v02say(
   };
 
   async function load() {
-    const uid = await SixMin.uid();
+    const uid = await SixMin.uid().catch(() => "00000000-0000-0000-0000-000000000000");
     const p = periodOf(tab);
     const { data } = await SixMin.sb().from("focus_goals")
       .select("*").eq("user_id", uid).eq("period_type", p.type).eq("period_key", p.key)
@@ -1774,7 +1774,7 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
     });
 
     async function load() {
-      const uid = await SixMin.uid();
+      const uid = await SixMin.uid().catch(() => "00000000-0000-0000-0000-000000000000");
       todayKey = await SixMin.todayKey();
       const { data } = await SixMin.sb().from("tasks").select("*")
         .eq("user_id", uid).eq("area", AREA)
@@ -2220,7 +2220,7 @@ window.__v02stage = "after-sixmin-tasks"; if (window.__v02say) window.__v02say("
   }
 
   async function load() {
-    const uid = await SixMin.uid();
+    const uid = await SixMin.uid().catch(() => "00000000-0000-0000-0000-000000000000");
     const todayKey = await SixMin.todayKey();
     const sb = SixMin.sb();
     const [d, o] = await Promise.all([
@@ -2346,7 +2346,7 @@ window.__v02stage = "after-sixmin-donetoday"; if (window.__v02say) window.__v02s
   const DAYS = 17 * 7; // ~4 месяца
 
   async function loadAll() {
-    const uid = await SixMin.uid();
+    const uid = await SixMin.uid().catch(() => "00000000-0000-0000-0000-000000000000");
     const to = SixMin.fmtKey(new Date());
     const fromD = new Date(); fromD.setDate(fromD.getDate() - DAYS + 1);
     const from = SixMin.fmtKey(fromD);

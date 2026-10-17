@@ -22,7 +22,7 @@ window.SIXMIN_CONFIG = {
 
   // ── 3. ПРОЧЕЕ ──────────────────────────────────────────────────────
   defaultTimezone: "Europe/Moscow",
-  version: "0.8.5"
+  version: "0.8.8"
 };
 
 /* ── Контент: вопросы (свои формулировки, пул вариантов для ротации) ── */
@@ -979,6 +979,15 @@ const App = (() => {
     } catch (e) {}
   }
 
+  // v0.8.7: inline-примечание прямо в карточке «Облако» — обратная связь,
+  // которую невозможно не увидеть (ни баннер на другой вкладке, ни тост вне экрана)
+  function authNote(msg) {
+    const n = $("auth-note");
+    if (!n) return;
+    n.textContent = msg || "";
+    n.hidden = !msg;
+  }
+
   /* ═══════════ ГЛАВНАЯ ═══════════ */
   async function renderToday() {
     const entries = await Store.allEntries();
@@ -1518,6 +1527,7 @@ const App = (() => {
     if (!pass) { $("auth-pass").focus(); flash("Введите пароль", "err"); return; }
     try {
       await Cloud.signInPassword(email, pass);
+      authNote("");
       flash("Вход выполнен ✓", "ok");
       renderAuth(); renderSyncState();
     } catch (e) {
@@ -1527,12 +1537,14 @@ const App = (() => {
 
   async function forgotPass() {
     const email = $("auth-email").value.trim();
-    if (!email || email.indexOf("@") < 0) { $("auth-email").focus(); flash("Введите почту в поле выше — для неё и придёт ссылка сброса", "err"); return; }
+    if (!email || email.indexOf("@") < 0) { $("auth-email").focus(); authNote("Введите почту в поле выше — для неё и придёт ссылка сброса."); flash("Введите почту в поле выше — для неё и придёт ссылка сброса", "err"); return; }
     try {
       await Cloud.resetPassword(email);
+      authNote("Письмо со ссылкой сброса отправлено (если аккаунт существует). Ссылка одноразовая и живёт около часа — откройте сразу, в этом же браузере. Повторные клики сжигают почтовый лимит!");
       flash("Если аккаунт на " + email + " существует, письмо со ссылкой сброса уже отправлено (загляните в «Спам»). " +
         "Ссылка ОДНОРАЗОВАЯ и живёт около часа: открывайте её сразу и в том браузере, где будете работать.", "ok");
     } catch (e) {
+      authNote("Не удалось отправить сброс: " + authRu(e));
       flash("Не удалось отправить сброс: " + authRu(e), "err");
     }
   }
@@ -1635,8 +1647,9 @@ const App = (() => {
       try {
         await Cloud.changePassword(p);
         $("auth-newpass").value = "";
+        authNote("Пароль изменён ✓ Теперь входите с ним.");
         flash("Пароль изменён ✓ Теперь входите с ним.", "ok");
-      } catch (e) { flash("Не удалось изменить пароль: " + authRu(e), "err"); }
+      } catch (e) { authNote("Не удалось изменить пароль: " + authRu(e)); flash("Не удалось изменить пароль: " + authRu(e), "err"); }
     };
     const bw = $("btn-wisdom"); if (bw) bw.onclick = () => show("wisdom");
     const bwc = $("btn-wisdom-close"); if (bwc) bwc.onclick = () => show(lastMainTab());
@@ -1719,6 +1732,22 @@ const App = (() => {
 
     bind();
     show(lastMainTab());
+
+    // v0.8.8: самолечение устаревшего кэша: version.json ходит только по сети (sw пропускает
+    // его мимо кэша). Если сервер новее этого бандла — один раз перезагружаем страницу.
+    try {
+      fetch("version.json", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((j) => {
+        const sv = String((j && j.version) || "");
+        if (!sv) return;
+        if (sv !== CFG.version && !sessionStorage.getItem("sm-updating")) {
+          sessionStorage.setItem("sm-updating", "1");
+          flash("Приложение обновилось до v" + sv + " — перезагружаю страницу…", "ok");
+          setTimeout(() => location.reload(), 1400);
+        } else if (sv === CFG.version) {
+          sessionStorage.removeItem("sm-updating");
+        }
+      }).catch(() => {});
+    } catch (e) {}
 
     // deep link: ?slot=am / ?slot=pm / ?quick=1
     const params = new URLSearchParams(location.search);
