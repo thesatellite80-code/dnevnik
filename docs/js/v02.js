@@ -4157,11 +4157,20 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
   }
 
   // ---------- рендер ----------
+  let goalOpen = new Set(); // v0.8.12: раскрытые спойлеры целей переживают автообновление круга
   function goalHTML(i, pos) {
     const g = D.goals.find((x) => x.goal_index === i) || { goal_index: i, title: "", subtasks: [] };
     const subs = Array.isArray(g.subtasks) ? g.subtasks : [];
     const n = (pos == null ? i : pos) + 1;
+    const doneCnt = subs.filter((s) => s.done).length;
     return `
+      <details class="sm-cr-goalwrap" data-gwrap="${i}"${goalOpen.has(i) ? " open" : ""}>
+        <summary>
+          <span class="sm-cr-goal-cap">🎯 Цель круга №${n}</span>
+          <span class="sm-cr-goalsum-t">${esc(g.title) || "— ещё не задана —"}</span>
+          ${subs.length ? `<em class="sm-cr-goalprog">${doneCnt}/${subs.length}</em>` : ""}
+          ${g.done ? "✅" : ""}
+        </summary>
       <div class="sm-cr-goal${g.done ? " done" : ""}">
         <div class="sm-cr-goal-head">
           <span class="sm-cr-goal-cap">🎯 Цель круга №${n}</span>
@@ -4181,7 +4190,8 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
             </div>`).join("")}
           <button class="sm-sub-add" data-gadd="${i}">+ подзадача</button>
         </div>
-      </div>`;
+      </div>
+      </details>`;
   }
 
   const monthLabel = () => new Date().toLocaleDateString("ru-RU", { month: "long", year: "numeric" });
@@ -4427,6 +4437,10 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
       root.querySelector(`.sm-focus-title[data-gidx="${next}"]`)?.focus();
     });
     // v0.6.2: goal deletion (along with its subtasks)
+    root.querySelectorAll("details.sm-cr-goalwrap").forEach((d) => d.addEventListener("toggle", () => {
+      const gi = parseInt(d.dataset.gwrap, 10);
+      if (d.open) goalOpen.add(gi); else goalOpen.delete(gi);
+    }));
     root.querySelectorAll("[data-gdel]").forEach((b) =>
       b.addEventListener("click", async () => {
         const i = Number(b.dataset.gdel);
@@ -4557,6 +4571,12 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
       .sm-cr-block .sm-cr-sec{margin:14px 0 10px}
       .sm-cr-block .sm-cr-sec:first-child{margin:2px 0 10px}
       .sm-cr-block .sm-cr-note{margin-bottom:8px}
+      .sm-cr-goalwrap{margin:8px 0}
+      .sm-cr-goalwrap>summary{list-style:none;cursor:pointer;display:flex;gap:8px;align-items:center;padding:9px 10px;border:1px solid var(--line,#333);border-radius:10px;background:var(--inset,#1c1c1c)}
+      .sm-cr-goalwrap>summary::-webkit-details-marker{display:none}
+      .sm-cr-goalsum-t{flex:1;font-weight:600;font-size:13px;opacity:.9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .sm-cr-goalprog{font-style:normal;font-size:12px;opacity:.7}
+      .sm-cr-goalwrap[open]>summary{margin-bottom:6px}
       .sm-cr-goal{border:1px solid rgba(128,128,128,.18);border-radius:14px;padding:12px;margin-bottom:10px;
                   background:var(--inset,#242424);transition:background-color .18s ease,border-color .18s ease}
       .sm-cr-goal:hover{background:var(--inset-hi,#2A2A2A);border-color:rgba(227,6,19,.45)}

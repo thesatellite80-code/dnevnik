@@ -24,7 +24,7 @@ window.SIXMIN_CONFIG = {
 
   // ── 3. ПРОЧЕЕ ──────────────────────────────────────────────────────
   defaultTimezone: "Europe/Moscow",
-  version: "0.8.11"
+  version: "0.8.12"
 };
 
 /* ── Контент: вопросы (свои формулировки, пул вариантов для ротации) ── */
@@ -1743,10 +1743,18 @@ const App = (() => {
         if (!sv) return;
         if (sv !== CFG.version && !sessionStorage.getItem("sm-updating")) {
           sessionStorage.setItem("sm-updating", "1");
-          flash("Приложение обновилось до v" + sv + " — перезагружаю страницу…", "ok");
-          setTimeout(() => location.reload(), 1400);
+          sessionStorage.setItem("sm-just-updated", sv);
+          const msg = "Приложение обновилось до v" + sv + " — перезагружу страницу через пару секунд…";
+          flash(msg, "ok");
+          if (window.SixMin && SixMin.toast) SixMin.toast(msg); // v0.8.12: тост живёт по длине текста
+          setTimeout(() => location.reload(), 5200);            // и успеваем дочитать до перезагрузки
         } else if (sv === CFG.version) {
           sessionStorage.removeItem("sm-updating");
+          const ju = sessionStorage.getItem("sm-just-updated");
+          if (ju) {
+            sessionStorage.removeItem("sm-just-updated");
+            setTimeout(() => { if (window.SixMin && SixMin.toast) SixMin.toast("Обновление завершено: вы на v" + ju + " ✓"); }, 700);
+          }
         }
       }).catch(() => {});
     } catch (e) {}
