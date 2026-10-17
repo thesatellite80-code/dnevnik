@@ -2027,11 +2027,12 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
 
     async function remove(t) {
       // v0.8.18: сначала сервер с проверкой (та же причина, что у круговых удалений)
-      const { error, data } = await SixMin.sb().from("tasks").delete().eq("id", t.id).select();
-      if (error) { console.error("task delete:", error); SixMin.toast("Не удалось удалить задачу: " + error.message); return; }
-      if (!data || !data.length) {
-        console.error("task delete: сервер удалил 0 строк (нет DELETE-права в RLS)");
-        SixMin.toast("Сервер не удалил задачу — она осталась на месте.");
+      // v0.8.21: circle_task_del сам проверяет владение (свои) или членство (круговые)
+      const { error, data } = await SixMin.sb().rpc("circle_task_del", { p_task: t.id });
+      if (error || data !== "ok") {
+        console.error("task delete:", error || data);
+        SixMin.toast(data === "not_owner" ? "Это не ваша задача — удалить нельзя."
+          : "Не удалось удалить задачу: " + (error ? error.message : String(data)));
         await refresh(); return;
       }
       today = today.filter((x) => x.id !== t.id);
@@ -4078,7 +4079,25 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
   async function maybeSeedOnboarding() {
     if (onbChecked || !circles.length) return;
     onbChecked = true;
-    await seedOnboarding();
+    // v0.8.21: шаги — НОВИЧКАМ круга. В v0.8.16–v0.8.20 самолечение сеяло их всем
+    // участникам подряд — давние пользователи получили чужой чек-лист
+    // («шаги новичка появились у всех пользователей»). Теперь: членство моложе
+    // 14 дней → сеем; старше → убираем ошибочно посеянные НЕВЫПОЛНЕННЫЕ шаги
+    // (через circle_task_del, не зависимо от RLS-политик). Выполненные не трогаем — история.
+    try {
+      const uid = await SixMin.uid();
+      const { data: ms } = await SixMin.sb().from("circle_members")
+        .select("created_at").eq("user_id", uid).order("created_at", { ascending: true }).limit(1);
+      const joined = (ms && ms[0] && ms[0].created_at) ? new Date(ms[0].created_at).getTime() : 0;
+      if (Date.now() - joined < 14 * 864e5) { await seedOnboarding(); return; }
+      const { data: stale } = await SixMin.sb().from("tasks").select("id")
+        .eq("user_id", uid).like("title", "Онбординг ·%").eq("completed", false);
+      for (const s of (stale || [])) {
+        const r = await SixMin.sb().rpc("circle_task_del", { p_task: s.id });
+        if (r.error) console.error("onboarding cleanup:", r.error);
+      }
+      if ((stale || []).length) console.info("onboarding: убраны ошибочно посеянные шаги у давнего участника:", (stale || []).length);
+    } catch (e) { console.error("onboarding check:", e); }
   }
   async function joinCircle(code) {
     // v0.6.5: вступление через серверный RPC circle_join_by_code — политика circles
@@ -4251,11 +4270,11 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
   async function delShared(t) {
     // v0.8.18: сначала сервер с проверкой удалённых строк (см. комментарий у data-gdel):
     // раньше задача «исчезала» на экране и оживала при автообновлении.
-    const { error, data } = await SixMin.sb().from("tasks").delete().eq("id", t.id).select();
-    if (error) { console.error("circle task delete:", error); SixMin.toast("Не удалось удалить задачу: " + error.message); return; }
-    if (!data || !data.length) {
-      console.error("circle task delete: сервер удалил 0 строк (нет DELETE-права в RLS)");
-      SixMin.toast("Сервер не удалил задачу (нет прав на удаление). Задача осталась на месте: владельцу нужен SQL-шаг 1 из ПРОСТОЙ-ШАГ-v0818.");
+    // v0.8.21: серверная функция circle_task_del (security definer), см. circle_goal_del
+    const { error, data } = await SixMin.sb().rpc("circle_task_del", { p_task: t.id });
+    if (error || data !== "ok") {
+      console.error("circle task delete:", error || data);
+      SixMin.toast("Не удалось удалить задачу на сервере: " + (error ? error.message : String(data)) + " Владельцу: SQL-шаг 1 из ПРОСТОЙ-ШАГ-v0821.");
       await refresh(); return;
     }
     D.tasks = D.tasks.filter((x) => x.id !== t.id);
@@ -4729,13 +4748,15 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
         if (!g || !g.id) return;
         const pos = (D.goals || []).map((x) => x.goal_index).indexOf(i);
         if (!confirm(`Удалить цель круга №${pos + 1}${g.title ? " «" + g.title + "»" : ""} вместе с подзадачами? Отменить нельзя.`)) return;
-        // v0.8.18: RLS без DELETE-политики молча удаляет 0 строк и рапортует «успех».
-        // .select() возвращает удалённые строки: пусто = сервер ничего не удалил.
-        const { error, data } = await SixMin.sb().from("circle_goals").delete().eq("id", g.id).select();
-        if (error) { console.error("circle goal delete:", error); SixMin.toast("Не удалось удалить цель: " + error.message); return; }
-        if (!data || !data.length) {
-          console.error("circle goal delete: сервер удалил 0 строк (нет DELETE-права в RLS)");
-          SixMin.toast("Сервер не удалил цель (нет прав на удаление). Цель осталась на месте: владельцу нужен SQL-шаг 1 из ПРОСТОЙ-ШАГ-v0818.");
+        // v0.8.21: удаление через серверную функцию circle_goal_del (security definer) —
+        // схема рабочего circle_habit_del: не зависит от состояния RLS DELETE-политик,
+        // из-за которого прямые delete в v0.8.18/v0.8.20 так и не заработали у владельца.
+        const { error, data } = await SixMin.sb().rpc("circle_goal_del", { p_goal: g.id });
+        if (error || data !== "ok") {
+          console.error("circle goal delete:", error || data);
+          SixMin.toast(data === "not_member"
+            ? "Вы не участник этого круга — удалить цель нельзя."
+            : "Не удалось удалить цель на сервере: " + (error ? error.message : String(data)) + " Владельцу: SQL-шаг 1 из ПРОСТОЙ-ШАГ-v0821.");
           await refresh(); return;
         }
         D.goals = D.goals.filter((x) => x.goal_index !== i);
