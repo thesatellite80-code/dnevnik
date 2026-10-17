@@ -2124,8 +2124,12 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
           <span class="sm-tasks-count">${doneCount}/${today.length}</span>
           <button class="sm-ib" data-info="tasks" aria-label="Как это работает">i</button>
         </div>
-        ${KINDS.map((k) => {
-          const rows = today.filter((t) => (t.kind || KINDS[0].id) === k.id);
+        ${KINDS.map((k, ki) => {
+          // v0.8.20: задача с типом, которого нет в списке типов области (например,
+          // старый посев онбординга с kind="high" в личных), попадает в первую группу,
+          // а не в невидимость (кейс 18.10: счётчик 0/6 при «Список пуст»).
+          const rows = today.filter((t) => (t.kind || KINDS[0].id) === k.id ||
+            (ki === 0 && !KINDS.some((kk) => kk.id === t.kind)));
           if (!rows.length) return "";
           return `<div class="sm-kind-head">${kindMark(k)} ${k.label}</div>
             <ul class="sm-task-list">${rows.map((t) => taskRow(t, false, false)).join("")}</ul>`;
@@ -3868,8 +3872,17 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
     const f = el.closest("form");
     const scope = el.closest("[data-id]") || f;
     const scopeKey = scope ? (scope.dataset?.id || scope.dataset?.role || scope.className) : "noform";
-    const own = el.dataset.gidx || el.dataset.gsubin || el.name || el.id || el.placeholder || el.type;
-    return scopeKey + "|" + own;
+    let own = el.dataset.gidx || el.dataset.gsubin || el.name || el.id || el.placeholder || el.type;
+    // v0.8.20: rev.10 мало: у textarea целей нет form/[data-id], поэтому ключ был
+    // "noform|0" у цели №0 ЛЮБОГО круга и у пустого слота — restoreForms переносил
+    // текст между кругами («дубли») и воскрешал его после удаления («не удаляется»).
+    // Ключ включает круг и id цели; пустой слот keyed "new" — воскресать нечему.
+    if (el.dataset.gidx !== undefined || el.dataset.gsubin !== undefined) {
+      const gi = Number(el.dataset.gidx !== undefined ? el.dataset.gidx : String(el.dataset.gsubin).split(":")[0]);
+      const gg = (D && D.goals ? D.goals : []).find((x) => x.goal_index === gi);
+      own = "goal:" + gi + ":" + (gg && gg.id ? gg.id : "new");
+    }
+    return sel + "|" + scopeKey + "|" + own;
   }
   function snapForms() {
     const m = new Map();
@@ -4049,7 +4062,7 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
         "Онбординг · 6/6: Напишите 3 непонятных места в комментарии к любой общей задаче круга — это лучшая помощь владельцу",
       ];
       const rows = steps.map((title, i) => ({
-        user_id: uid, title, due_date: today, area: "personal", kind: "high",
+        user_id: uid, title, due_date: today, area: "personal", kind: "cream", // v0.8.20: личные типы — cream/cherry/fun; «high» делал шаги невидимыми в общем списке
         completed: false, position: i,
       }));
       const { error } = await SixMin.sb().from("tasks").insert(rows);
