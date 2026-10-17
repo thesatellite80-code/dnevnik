@@ -3868,6 +3868,33 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
     await refresh();
   }
 
+  // v0.8.11: персональный онбординг для новичка круга: 6 личных задач-шагов.
+  // Имена и число участников не важны: каждый вошедший получает СВОЙ чек-лист
+  // на вкладке «Сегодня» и отмечает его сам. Повторно не сеем (проверка по like).
+  async function seedOnboarding() {
+    try {
+      const uid = await SixMin.uid();
+      const { data: exist } = await SixMin.sb().from("tasks").select("id")
+        .eq("user_id", uid).like("title", "Онбординг ·%").limit(1);
+      if ((exist || []).length) return;
+      const today = SixMin.fmtKey(new Date());
+      const steps = [
+        "Онбординг · 1/6: Задайте свой график: Работа → «Мои графики» → «+ Добавить график» (дата-якорь, цепочка, часы)",
+        "Онбординг · 2/6: Откройте «Найти свободные дни» и тапните любой день — посмотрите детали (смены, ДР, дедлайны)",
+        "Онбординг · 3/6: Настройки → карточка «🎂 День рождения и видимость»: укажите дату и оставьте галочку",
+        "Онбординг · 4/6: Круги → «Бонусы круга»: возьмите открытое задание с наградой или предложите своё",
+        "Онбординг · 5/6: Круги → «Мои смены» → «📅 Событие с приглашением»: ответьте «иду» кому-то или создайте своё",
+        "Онбординг · 6/6: Напишите 3 непонятных места в комментарии к любой общей задаче круга — это лучшая помощь владельцу",
+      ];
+      const rows = steps.map((title, i) => ({
+        user_id: uid, title, due_date: today, area: "personal", kind: "high",
+        completed: false, position: i,
+      }));
+      const { error } = await SixMin.sb().from("tasks").insert(rows);
+      if (error) { console.error("onboarding seed:", error); return; }
+      SixMin.toast("Добро пожаловать! На вкладке «Сегодня» вас ждут 6 задач-шагов онбординга — идите по порядку ✓");
+    } catch (e) { console.error("onboarding seed:", e); }
+  }
   async function joinCircle(code) {
     // v0.6.5: вступление через серверный RPC circle_join_by_code — политика circles
     // прячет круги от не-участников, поэтому клиентский поиск по коду возвращал пусто.
@@ -3878,6 +3905,7 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
     if (error) { SixMin.toast("Ошибка: " + error.message); return; }
     if (!data || !data.length) { SixMin.toast("Код не найден. Проверьте букву O и ноль 0, лишние пробелы"); return; }
     SixMin.toast("Вы в круге «" + data[0].circle_name + "» 🤝");
+    await seedOnboarding();
     await refresh();
   }
 
