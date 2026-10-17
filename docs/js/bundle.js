@@ -18,11 +18,13 @@ window.SIXMIN_CONFIG = {
   // ── 2. ПУБЛИЧНЫЙ АДРЕС ПРИЛОЖЕНИЯ ──────────────────────────────────
   // Например: https://ivan.github.io/sixmin/  или https://sixmin.netlify.app
   // Нужен для кнопок «Открыть дневник» в Telegram и для поля URL в .ics.
-  appUrl: "https://studiomwm.ru/",
+  // v0.8.9: ВСЕ отправляемые ссылки (письма сброса, magic link, .ics) ведут на зеркало:
+  // studiomwm.ru не открывается из РФ без VPN, а ссылка обязана быть доступной получателю.
+  appUrl: "https://thesatellite80-code.github.io/dnevnik/",
 
   // ── 3. ПРОЧЕЕ ──────────────────────────────────────────────────────
   defaultTimezone: "Europe/Moscow",
-  version: "0.8.8"
+  version: "0.8.9"
 };
 
 /* ── Контент: вопросы (свои формулировки, пул вариантов для ротации) ── */
