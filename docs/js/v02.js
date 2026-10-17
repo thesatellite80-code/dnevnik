@@ -1892,7 +1892,9 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
     const KINDS = AREA === "work" ? KINDS_WORK : KINDS_PERSONAL;
     const kindOf = (t) => KINDS.find((k) => k.id === (t.kind || KINDS[0].id)) || KINDS[0];
     let root = null, todayKey = null, newKind = KINDS[0].id;
-    let today = [], overdue = [], upcoming = [], all = [];
+    let today = [], overdue = [], upcoming = [], all = [], onb = [];
+    // v0.8.19: шаги онбординга новичка круга (сеются seedOnboarding, v0.8.11/0.8.16)
+    const IS_ONB = (t) => /^Онбординг ·/.test(t.title || "");
     // комментарии + вложения: общий компонент v0.6 (тот же, что в кругах)
     const CM = SixMinComments.create({
       render: () => render(),
@@ -1908,9 +1910,13 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
         .order("due_date", { ascending: true }).order("position", { ascending: true })
         .limit(400);
       all = data || [];
-      const open = all.filter((t) => !t.completed);
+      // v0.8.19: неполные шаги онбординга не теряются в общем списке —
+      // их рисует отдельный блок onbBlock() сверху карточки.
+      onb = all.filter((t) => !t.completed && IS_ONB(t));
+      const rest = all.filter((t) => t.completed || !IS_ONB(t));
+      const open = rest.filter((t) => !t.completed);
       today = [...open.filter((t) => t.due_date === todayKey),
-               ...all.filter((t) => t.completed && t.due_date === todayKey)];
+               ...rest.filter((t) => t.completed && t.due_date === todayKey)];
       overdue = open.filter((t) => t.due_date < todayKey);
       upcoming = open.filter((t) => t.due_date > todayKey);
     const ids = [...today, ...overdue, ...upcoming].map((t) => t.id);
@@ -2004,6 +2010,21 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
       return out + '</div>';
     }
 
+    // v0.8.19: витрина шагов новичка: выполнено X из Y, осталось Z; отмечатся тем же
+    // делегированным обработчиком задач (data-act="toggle"), удаляются так же.
+    function onbBlock() {
+      if (AREA !== "personal" || !onb.length) return "";
+      const done = all.filter((t) => t.completed && IS_ONB(t)).length;
+      const total = done + onb.length;
+      return `
+      <div class="sm-onb">
+        <div class="sm-onb-cap">🎓 Шаги новичка круга: выполнено ${done} из ${total}, осталось ${onb.length}</div>
+        <div class="sm-onb-hint">Это личные подсказки-шаги: отмечайте ☑ по мере выполнения.
+          Блок исчезнет, когда выполните все шаги.</div>
+        <ul class="sm-task-list">${onb.map((t) => taskRow(t, false, false)).join("")}</ul>
+      </div>`;
+    }
+
     async function remove(t) {
       // v0.8.18: сначала сервер с проверкой (та же причина, что у круговых удалений)
       const { error, data } = await SixMin.sb().from("tasks").delete().eq("id", t.id).select();
@@ -2078,6 +2099,7 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
       const ph = AREA === "work" ? "Новая рабочая задача…" : "Новая задача…";
       root.innerHTML = `
       <div class="sm-tasks">
+        ${onbBlock()}
         ${SHOW_STATS ? statsHTML() : ""}
         <div class="sm-kind-row">
           ${KINDS.map((k) => `<button type="button" class="sm-kind-chip${newKind === k.id ? " on" : ""}" data-kind="${k.id}">${kindMark(k)} ${k.label}</button>`).join("")}
@@ -2234,6 +2256,11 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
       css.id = "sixmin-tasks-css";
       css.textContent = `
       .sm-tasks{--bg:rgba(128,128,128,.12);font-family:system-ui,sans-serif}
+      .sm-onb{border:1px solid rgba(227,6,19,.5);background:rgba(227,6,19,.10);
+              border-radius:14px;padding:10px 12px;margin-bottom:12px}
+      .sm-onb-cap{font-weight:800;font-size:13.5px;margin-bottom:6px}
+      .sm-onb-hint{font-size:12px;opacity:.8;margin-bottom:8px;line-height:1.45}
+      .sm-onb .sm-task-list{margin:0}
       .sm-stats-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
       .sm-stats-card{border:1px solid rgba(128,128,128,.18);border-radius:12px;padding:10px;text-align:center}
       .sm-stats-num{font-size:19px;font-weight:800}
@@ -4027,7 +4054,7 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
       }));
       const { error } = await SixMin.sb().from("tasks").insert(rows);
       if (error) { console.error("onboarding seed:", error); return; }
-      SixMin.toast("Добро пожаловать! Ваши 6 задач-шагов онбординга — на вкладке «Трекер» (личные задачи), идите по порядку ✓");
+      SixMin.toast("Добро пожаловать! На «Трекере» сверху ждёт блок «🎓 Шаги новичка круга» — 6 шагов, идите по порядку ✓");
     } catch (e) { console.error("onboarding seed:", e); }
   }
   // v0.8.16: самолечение онбординга. Посев в joinCircle не покрывает тех, кто
