@@ -1,5 +1,5 @@
 /* sw.js — офлайн-кэш приложения (cache-first, навигация → index.html) */
-const CACHE = "sixmin-v0.4.13";
+const CACHE = "sixmin-v0.4.14";
 const ASSETS = [
   "./",
   "index.html",

@@ -1500,6 +1500,9 @@ window.__v02stage = "after-sixmin-habits"; if (window.__v02say) window.__v02say(
   let tab = "day"; // day | week | month
   let goals = [];
   let now = new Date();
+  // v0.8.14: перенос цели недели/месяца в другой период
+  let moveIdx = null; // индекс карточки, у которой открыт выбор периода
+  let moveOff = 1;    // сдвиг выбранного периода от текущего
 
   const periodOf = (t) => {
     if (t === "day") return { type: "day", key: SixMin.fmtKey(now), count: 1 };
@@ -1564,6 +1567,7 @@ window.__v02stage = "after-sixmin-habits"; if (window.__v02say) window.__v02say(
     if (tab === "day") now.setDate(now.getDate() + dir);
     else if (tab === "week") now.setDate(now.getDate() + dir * 7);
     else now.setMonth(now.getMonth() + dir);
+    moveIdx = null; // v0.8.14: листаем период — закрываем пикер переноса
     refresh();
   }
 
@@ -1587,6 +1591,7 @@ window.__v02stage = "after-sixmin-habits"; if (window.__v02say) window.__v02say(
         <div class="sm-focus-head">
           <span class="sm-focus-emoji">${cfg.emoji}</span>
           <span class="sm-focus-cap">${cfg.caption}</span>
+          ${cfg.subtasks && g?.id ? `<button class="sm-move-btn" data-mv="${index}" title="Перенести на другой месяц/неделю" aria-label="Перенести">⤳</button>` : ""}
           <button class="sm-focus-check" data-done="${index}" title="Отметить выполненным">${done ? "✅" : "⬜"}</button>
         </div>
         <textarea class="sm-focus-title" data-idx="${index}" rows="${cfg.rows || 2}"
@@ -1601,6 +1606,36 @@ window.__v02stage = "after-sixmin-habits"; if (window.__v02say) window.__v02say(
             </div>`).join("")}
           <button class="sm-sub-add" data-idx="${index}">+ подзадача</button>
         </div>` : ""}
+        ${moveIdx === index && g?.id ? movePickerHTML(index) : ""}
+      </div>`;
+  }
+
+  // v0.8.14: выбор периода, куда перенести цель (стрелки как в листалке периода)
+  function moveTargetDate() {
+    const d = new Date(now);
+    if (tab === "week") d.setDate(d.getDate() + moveOff * 7);
+    else d.setMonth(d.getMonth() + moveOff);
+    return d;
+  }
+  function moveTargetLabel() {
+    const d = moveTargetDate();
+    return tab === "week"
+      ? "неделя " + SixMin.fmtRange(SixMin.weekKeys(0, d))
+      : d.toLocaleDateString("ru-RU", { month: "long", year: "numeric" });
+  }
+  function movePickerHTML(index) {
+    return `
+      <div class="sm-move-pick">
+        <span class="sm-move-cap">⤳ Перенести цель (подзадачи и отметки поедут с ней)</span>
+        <div class="sm-move-nav">
+          <button type="button" class="sm-nav sm-move-arr" data-mvshift="-1" title="Раньше">‹</button>
+          <span class="sm-move-label">${SixMin.esc(moveTargetLabel())}</span>
+          <button type="button" class="sm-nav sm-move-arr" data-mvshift="1" title="Позже">›</button>
+        </div>
+        <div class="sm-move-acts">
+          <button type="button" class="sm-move-ok" data-mvgo="${index}">Перенести сюда</button>
+          <button type="button" class="sm-move-cancel" data-mvclose="${index}">Отмена</button>
+        </div>
       </div>`;
   }
 
@@ -1640,11 +1675,28 @@ window.__v02stage = "after-sixmin-habits"; if (window.__v02say) window.__v02say(
       "<p><b>День:</b> «Антилопа» — ОДНА главная задача дня (львица не гонится за всеми антилопами сразу). <b>Неделя:</b> две главные цели, у каждой — подзадачи с чекбоксами ☐/☑ (выполненные зачёркиваются). <b>Месяц:</b> до пяти целей, у каждой — свои подзадачи с чекбоксами.</p>" +
       "<p>Текст сохраняется сам через секунду после того, как вы перестали печатать. ⬜/✅ справа — отметить выполненным. Стрелки ‹ › листают дни / недели / месяцы.</p>"));
     root.querySelectorAll("[data-tab]").forEach((b) =>
-      b.addEventListener("click", () => { tab = b.dataset.tab; refresh(); }));
+      b.addEventListener("click", () => { tab = b.dataset.tab; moveIdx = null; refresh(); }));
     root.querySelectorAll("[data-shift]").forEach((b) =>
       b.addEventListener("click", () => shift(Number(b.dataset.shift))));
     root.querySelectorAll("[data-done]").forEach((b) =>
       b.addEventListener("click", () => toggleDone(Number(b.dataset.done))));
+    // v0.8.14: перенос цели недели/месяца в другой период
+    root.querySelectorAll("[data-mv]").forEach((b) =>
+      b.addEventListener("click", () => {
+        const i = Number(b.dataset.mv);
+        if (moveIdx === i) moveIdx = null;
+        else { moveIdx = i; moveOff = 1; }
+        render();
+      }));
+    root.querySelectorAll("[data-mvclose]").forEach((b) =>
+      b.addEventListener("click", () => { moveIdx = null; render(); }));
+    root.querySelectorAll("[data-mvshift]").forEach((b) =>
+      b.addEventListener("click", () => {
+        moveOff = Math.max(-52, Math.min(52, moveOff + Number(b.dataset.mvshift)));
+        render();
+      }));
+    root.querySelectorAll("[data-mvgo]").forEach((b) =>
+      b.addEventListener("click", () => moveGo(Number(b.dataset.mvgo))));
     root.querySelectorAll(".sm-focus-title").forEach((t) =>
       t.addEventListener("input", () => saveTitle(Number(t.dataset.idx), t.value)));
     root.querySelectorAll(".sm-sub-input").forEach((inp) => {
@@ -1691,6 +1743,28 @@ window.__v02stage = "after-sixmin-habits"; if (window.__v02say) window.__v02say(
       }));
   }
 
+  const moveGo = SixMin.debounce(async (index) => {
+    const g = goals.find((x) => x.goal_index === index);
+    if (!g?.id) { SixMin.toast("Сначала напишите цель — пустую переносить некуда"); return; }
+    await saveTitle(index, g.title || "");
+    const d = moveTargetDate();
+    const p = { type: tab === "week" ? "week" : "month", key: tab === "week" ? SixMin.weekKeyISO(d) : SixMin.monthKey(d) };
+    if (p.key === periodOf(tab).key) { SixMin.toast("Это текущий период — цель уже здесь"); return; }
+    const uid = await SixMin.uid();
+    const { data: busy } = await SixMin.sb().from("focus_goals").select("goal_index")
+      .eq("user_id", uid).eq("period_type", p.type).eq("period_key", p.key);
+    const taken = new Set((busy || []).map((x) => x.goal_index));
+    let gi = g.goal_index;
+    while (taken.has(gi)) gi += 1; // в новом периоде место могло быть занято
+    const { error } = await SixMin.sb().from("focus_goals")
+      .update({ period_type: p.type, period_key: p.key, goal_index: gi, updated_at: new Date().toISOString() })
+      .eq("id", g.id);
+    if (error) { SixMin.toast("Не удалось перенести: " + error.message); return; }
+    moveIdx = null;
+    SixMin.toast("Цель перенесена: " + moveTargetLabel() + (gi !== g.goal_index ? " (встала на свободное место №" + (gi + 1) + ")" : ""));
+    await refresh();
+  }, 350);
+
   async function refresh() { await load(); render(); }
 
   function mount(container) {
@@ -1732,7 +1806,19 @@ window.__v02stage = "after-sixmin-habits"; if (window.__v02say) window.__v02say(
       .sm-sub-del:hover{opacity:.9;color:#E30613}
       .sm-sub-add{border:0;background:transparent;color:var(--accent,#E30613);font-size:13px;font-weight:600;cursor:pointer;padding:6px 0 0}
       .sm-nav{width:36px;height:36px;border-radius:10px;border:1px solid var(--bg);background:transparent;
-              color:inherit;font-size:20px;cursor:pointer;line-height:1}`;
+              color:inherit;font-size:20px;cursor:pointer;line-height:1}
+      .sm-move-btn{border:0;background:transparent;color:inherit;opacity:.45;font-size:15px;cursor:pointer;padding:2px 4px;line-height:1}
+      .sm-move-btn:hover{opacity:1;color:var(--accent,#E30613)}
+      .sm-move-pick{margin-top:10px;border-top:1px dashed var(--bg);padding-top:10px;display:flex;flex-direction:column;gap:8px}
+      .sm-move-cap{font-size:12px;font-weight:600;opacity:.75}
+      .sm-move-nav{display:flex;align-items:center;gap:8px}
+      .sm-move-label{flex:1;text-align:center;font-weight:600;font-size:14px;text-transform:capitalize}
+      .sm-move-arr{width:32px;height:32px;font-size:17px;flex-shrink:0}
+      .sm-move-acts{display:flex;gap:8px}
+      .sm-move-ok{flex:1;border:0;border-radius:10px;background:var(--accent,#E30613);color:#fff;
+                  font:600 13px system-ui;padding:9px;cursor:pointer}
+      .sm-move-cancel{border:1px solid var(--bg);border-radius:10px;background:transparent;color:inherit;
+                      font:13px system-ui;padding:9px 14px;cursor:pointer;opacity:.7}`;
     document.head.appendChild(css);
   }
 
@@ -3923,6 +4009,27 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
     Object.assign(g, patch);
   }, 700);
 
+  // v0.8.14: перенос общей цели на другой месяц. Ставится в очередь ПОСЛЕ debounced
+  // saveGoal — так последние правки заголовка успевают сохраниться.
+  const moveGoal = SixMin.debounce(async (index) => {
+    const g = D.goals.find((x) => x.goal_index === index);
+    if (!g?.id) return;
+    await saveGoal(index, { title: g.title || "" });
+    const key = SixMin.monthKey(moveTargetDate());
+    if (key === goalKey()) { SixMin.toast("Это тот же месяц — цель уже здесь"); return; }
+    const { data: busy } = await SixMin.sb().from("circle_goals").select("goal_index")
+      .eq("circle_id", sel).eq("period_type", "month").eq("period_key", key);
+    const taken = new Set((busy || []).map((x) => x.goal_index));
+    let gi = g.goal_index;
+    while (taken.has(gi)) gi += 1; // в новом месяце место могло быть занято
+    const { error } = await SixMin.sb().from("circle_goals")
+      .update({ period_key: key, goal_index: gi }).eq("id", g.id);
+    if (error) { SixMin.toast("Не удалось перенести: " + error.message); return; }
+    moveIdx = null;
+    SixMin.toast("Цель перенесена: " + moveTargetLabel() + (gi !== g.goal_index ? " (встала на свободное место №" + (gi + 1) + ")" : ""));
+    await refresh();
+  }, 350);
+
   // подзадачи общих целей: текст редактируется инпутом (как в Фокусе), сохранение с дебаунсом
   const saveSubs = SixMin.debounce(async (g, subs) => {
     if (!g?.id) return;
@@ -4175,6 +4282,7 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
         <div class="sm-cr-goal-head">
           <span class="sm-cr-goal-cap">🎯 Цель круга №${n}</span>
           <span class="sm-cr-goal-btns">
+            ${g.id ? `<button class="sm-move-btn" data-gmv="${i}" title="Перенести на другой месяц" aria-label="Перенести цель">⤳</button>` : ""}
             ${g.id ? `<button class="sm-cr-goal-del" data-gdel="${i}" aria-label="Удалить цель" title="Удалить цель">×</button>` : ""}
             <button class="sm-focus-check" data-gdone="${i}">${g.done ? "✅" : "⬜"}</button>
           </span>
@@ -4190,21 +4298,44 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
             </div>`).join("")}
           <button class="sm-sub-add" data-gadd="${i}">+ подзадача</button>
         </div>
+        ${moveIdx === i && g.id ? movePickerHTML(i) : ""}
       </div>
       </details>`;
   }
 
   // v0.8.13: цели круга листаются по месяцам (планировать отпуск и т.п. заранее)
   let goalOffset = 0;
+  // v0.8.14: перенос общей цели на другой месяц
+  let moveIdx = null; // goal_index цели, у которой открыт выбор месяца
+  let moveOff = 1;    // сдвиг выбранного месяца от текущего
   const goalDate = () => { const n = new Date(); return new Date(n.getFullYear(), n.getMonth() + goalOffset, 1); };
   const goalKey = () => SixMin.monthKey(goalDate());
   const monthLabel = () => goalDate().toLocaleDateString("ru-RU", { month: "long", year: "numeric" });
+
+  // v0.8.14: перенос общей цели на другой месяц (подзадачи и галочки едут вместе с ней)
+  const moveTargetDate = () => { const n = new Date(); return new Date(n.getFullYear(), n.getMonth() + moveOff, 1); };
+  const moveTargetLabel = () => moveTargetDate().toLocaleDateString("ru-RU", { month: "long", year: "numeric" });
+  function movePickerHTML(i) {
+    return `
+      <div class="sm-move-pick">
+        <span class="sm-move-cap">⤳ Перенести цель (подзадачи и отметки поедут с ней)</span>
+        <div class="sm-move-nav">
+          <button type="button" class="sm-nav sm-move-arr" data-gmvshift="-1" title="Раньше">‹</button>
+          <span class="sm-move-label">${esc(moveTargetLabel())}</span>
+          <button type="button" class="sm-nav sm-move-arr" data-gmvshift="1" title="Позже">›</button>
+        </div>
+        <div class="sm-move-acts">
+          <button type="button" class="sm-move-ok" data-gmvgo="${i}">Перенести сюда</button>
+          <button type="button" class="sm-move-cancel" data-gmvclose="${i}">Отмена</button>
+        </div>
+      </div>`;
+  }
 
   const INFO_BTN = (key) => `<button class="sm-ib" data-info="${key}" aria-label="Как это работает">i</button>`;
 
   function wireInfo() {
     root.querySelector('[data-info="circles"]')?.addEventListener("click", () => SixMin.info("Круги",
-      "<p><b>Круг</b> — общее пространство семьи или команды: общие цели месяца с подзадачами, " +
+      "<p><b>Круг</b> — общее пространство семьи или команды: общие цели месяца с подзадачами (кнопка ⤳ переносит цель вместе с подзадачами на другой месяц), " +
       "общие привычки (видно, кто сегодня отметил) и задачи «на всех».</p>" +
       "<p><b>Личное остаётся личным:</b> участники не видят чужие дневники, привычки и задачи — только общее поле круга.</p>" +
       "<p><b>Как позвать близких:</b> нажмите «код: XXXXXX ⧉» — код скопируется, пришлите его. " +
@@ -4403,6 +4534,7 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
       b.addEventListener("click", async () => {
         const d = b.dataset.gshift;
         goalOffset = d === "0" ? 0 : Math.max(-12, Math.min(12, goalOffset + Number(d)));
+        moveIdx = null; // v0.8.14: сменили месяц — пикер переноса закрываем
         await refresh();
       }));
     root.querySelector("#sm-cr-myname-save")?.addEventListener("click", () => {
@@ -4456,6 +4588,23 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
       const gi = parseInt(d.dataset.gwrap, 10);
       if (d.open) goalOpen.add(gi); else goalOpen.delete(gi);
     }));
+    // v0.8.14: перенос общей цели на другой месяц
+    root.querySelectorAll("[data-gmv]").forEach((b) =>
+      b.addEventListener("click", () => {
+        const i = Number(b.dataset.gmv);
+        if (moveIdx === i) moveIdx = null;
+        else { moveIdx = i; moveOff = goalOffset + (goalOffset >= 0 ? 1 : -1); }
+        render();
+      }));
+    root.querySelectorAll("[data-gmvclose]").forEach((b) =>
+      b.addEventListener("click", () => { moveIdx = null; render(); }));
+    root.querySelectorAll("[data-gmvshift]").forEach((b) =>
+      b.addEventListener("click", () => {
+        moveOff = Math.max(-24, Math.min(24, moveOff + Number(b.dataset.gmvshift)));
+        render();
+      }));
+    root.querySelectorAll("[data-gmvgo]").forEach((b) =>
+      b.addEventListener("click", () => moveGoal(Number(b.dataset.gmvgo))));
     root.querySelectorAll("[data-gdel]").forEach((b) =>
       b.addEventListener("click", async () => {
         const i = Number(b.dataset.gdel);
@@ -4606,6 +4755,18 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
       .sm-cr-goal-del{border:0;background:transparent;color:inherit;opacity:.7;font-size:18px;cursor:pointer;
                       font-size:17px;line-height:1;padding:2px 4px}
       .sm-cr-goal-del:hover{opacity:1;color:#E30613}
+      .sm-move-btn{border:0;background:transparent;color:inherit;opacity:.45;font-size:15px;cursor:pointer;padding:2px 4px;line-height:1}
+      .sm-move-btn:hover{opacity:1;color:var(--accent,#E30613)}
+      .sm-move-pick{margin-top:10px;border-top:1px dashed var(--bg);padding-top:10px;display:flex;flex-direction:column;gap:8px}
+      .sm-move-cap{font-size:12px;font-weight:600;opacity:.75}
+      .sm-move-nav{display:flex;align-items:center;gap:8px}
+      .sm-move-label{flex:1;text-align:center;font-weight:600;font-size:14px;text-transform:capitalize}
+      .sm-move-arr{width:32px;height:32px;font-size:17px;flex-shrink:0}
+      .sm-move-acts{display:flex;gap:8px}
+      .sm-move-ok{flex:1;border:0;border-radius:10px;background:var(--accent,#E30613);color:#fff;
+                  font:600 13px system-ui;padding:9px;cursor:pointer}
+      .sm-move-cancel{border:1px solid var(--bg);border-radius:10px;background:transparent;color:inherit;
+                      font:13px system-ui;padding:9px 14px;cursor:pointer;opacity:.7}
       .sm-cr-goal-add{margin:0 0 8px}
       .sm-cr-habit{display:flex;align-items:center;gap:10px;padding:8px;border-radius:10px;
                    border:1px solid transparent;transition:background-color .15s ease}
