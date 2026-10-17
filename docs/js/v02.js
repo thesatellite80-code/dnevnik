@@ -177,7 +177,10 @@ window.SixMin = window.SixMin || {};
       el.style.transform = "translateX(-50%) translateY(0)";
     });
     clearTimeout(el._t);
-    el._t = setTimeout(() => { el.style.opacity = "0"; }, 2600);
+    // v0.8.10: время показа по длине текста (≈70 мс/символ, 3.2–12 с), тап — закрыть сразу
+    const ms = Math.min(12000, Math.max(3200, 500 + String(msg).length * 70));
+    el._t = setTimeout(() => { el.style.opacity = "0"; }, ms);
+    el.onclick = () => { clearTimeout(el._t); el.style.opacity = "0"; el.onclick = null; };
   };
 })();
 window.__v02stage = "after-sixmin-common"; if (window.__v02say) window.__v02say("v02 stage: after-sixmin-common");
