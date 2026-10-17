@@ -2005,11 +2005,18 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
     }
 
     async function remove(t) {
+      // v0.8.18: сначала сервер с проверкой (та же причина, что у круговых удалений)
+      const { error, data } = await SixMin.sb().from("tasks").delete().eq("id", t.id).select();
+      if (error) { console.error("task delete:", error); SixMin.toast("Не удалось удалить задачу: " + error.message); return; }
+      if (!data || !data.length) {
+        console.error("task delete: сервер удалил 0 строк (нет DELETE-права в RLS)");
+        SixMin.toast("Сервер не удалил задачу — она осталась на месте.");
+        await refresh(); return;
+      }
       today = today.filter((x) => x.id !== t.id);
       overdue = overdue.filter((x) => x.id !== t.id);
       upcoming = upcoming.filter((x) => x.id !== t.id);
       render();
-      await SixMin.sb().from("tasks").delete().eq("id", t.id);
     }
 
     async function postponeAllOverdue() {
@@ -3550,7 +3557,8 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     });
     root.querySelectorAll("[data-vdel]").forEach((b) => b.addEventListener("click", async () => {
       if (!confirm("Удалить этот отпуск из плана?")) return;
-      await SixMin.sb().from("shift_vacations").delete().eq("id", b.dataset.vdel);
+      const rv = await SixMin.sb().from("shift_vacations").delete().eq("id", b.dataset.vdel);
+      if (rv.error) { SixMin.toast("Не удалось удалить отпуск: " + rv.error.message); return; }
       await load().catch(() => {}); render();
     }));
     const moveJob = async (id, dir) => {
@@ -3592,7 +3600,8 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     }));
     root.querySelectorAll("[data-evdel]").forEach((b) => b.addEventListener("click", async () => {
       if (!confirm("Отменить событие и убрать приглашения?")) return;
-      await SixMin.sb().from("shift_events").delete().eq("id", b.dataset.evdel);
+      const re = await SixMin.sb().from("shift_events").delete().eq("id", b.dataset.evdel);
+      if (re.error) { SixMin.toast("Не удалось отменить событие: " + re.error.message); return; }
       await load().catch(() => {}); render();
     }));
     root.querySelector("[data-perjob]")?.addEventListener("click", (e) => {
@@ -3612,7 +3621,8 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     }));
     root.querySelectorAll("[data-jdel]").forEach((b) => b.addEventListener("click", async () => {
       if (!confirm("Удалить этот график? Остальные графики останутся.")) return;
-      await SixMin.sb().from("shift_jobs").delete().eq("id", b.dataset.jdel);
+      const rj = await SixMin.sb().from("shift_jobs").delete().eq("id", b.dataset.jdel);
+      if (rj.error) { SixMin.toast("Не удалось удалить график: " + rj.error.message); return; }
       editing = null;
       await load().catch(() => {}); render();
     }));
@@ -4044,6 +4054,14 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
     await refresh();
   }
 
+  // v0.8.18: сводка спойлера цели обновляется на месте сразу после сохранения:
+  // полный render сбивал бы фокус с поля, а без него сводка ещё минуту врала
+  // «— ещё не задана —» при написанной цели (видно на video-44).
+  function goalSumSync(index, patch) {
+    if (!root || patch.title === undefined) return;
+    const sum = root.querySelector(`details.sm-cr-goalwrap[data-gwrap="${index}"] summary .sm-cr-goalsum-t`);
+    if (sum) sum.textContent = patch.title || "— ещё не задана —";
+  }
   const saveGoal = SixMin.debounce(async (index, patch) => {
     const mk = goalKey();
     let g = D.goals.find((x) => x.goal_index === index);
@@ -4052,10 +4070,12 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
         circle_id: sel, period_type: "month", period_key: mk, goal_index: index, ...patch,
       }).select().maybeSingle();
       if (data) D.goals.push(data);
+      goalSumSync(index, patch);
       return;
     }
     await SixMin.sb().from("circle_goals").update(patch).eq("id", g.id);
     Object.assign(g, patch);
+    goalSumSync(index, patch);
   }, 700);
 
   // v0.8.14: перенос общей цели на другой месяц. Ставится в очередь ПОСЛЕ debounced
@@ -4189,9 +4209,17 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
   }
 
   async function delShared(t) {
+    // v0.8.18: сначала сервер с проверкой удалённых строк (см. комментарий у data-gdel):
+    // раньше задача «исчезала» на экране и оживала при автообновлении.
+    const { error, data } = await SixMin.sb().from("tasks").delete().eq("id", t.id).select();
+    if (error) { console.error("circle task delete:", error); SixMin.toast("Не удалось удалить задачу: " + error.message); return; }
+    if (!data || !data.length) {
+      console.error("circle task delete: сервер удалил 0 строк (нет DELETE-права в RLS)");
+      SixMin.toast("Сервер не удалил задачу (нет прав на удаление). Задача осталась на месте: владельцу нужен SQL-шаг 1 из ПРОСТОЙ-ШАГ-v0818.");
+      await refresh(); return;
+    }
     D.tasks = D.tasks.filter((x) => x.id !== t.id);
     render();
-    await SixMin.sb().from("tasks").delete().eq("id", t.id);
   }
 
   // ---------- бонусы круга ----------
@@ -4621,7 +4649,7 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
     // v0.6.2: необязательные дополнительные цели — создаём пустую и сразу фокус на названии
     root.querySelector("[data-gnew]")?.addEventListener("click", async () => {
       const idxs = (D.goals || []).map((g) => g.goal_index);
-      if (idxs.length >= 8) { SixMin.toast("Up to 8 goals: more than that and the circle's focus gets scattered."); return; }
+      if (idxs.length >= 8) { SixMin.toast("До 8 целей: больше — фокус круга размывается."); return; }
       const next = idxs.length ? Math.max(...idxs) + 1 : 0;
       const mk = goalKey();
       const { data, error } = await SixMin.sb().from("circle_goals").insert({
@@ -4661,7 +4689,15 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
         if (!g || !g.id) return;
         const pos = (D.goals || []).map((x) => x.goal_index).indexOf(i);
         if (!confirm(`Удалить цель круга №${pos + 1}${g.title ? " «" + g.title + "»" : ""} вместе с подзадачами? Отменить нельзя.`)) return;
-        await SixMin.sb().from("circle_goals").delete().eq("id", g.id);
+        // v0.8.18: RLS без DELETE-политики молча удаляет 0 строк и рапортует «успех».
+        // .select() возвращает удалённые строки: пусто = сервер ничего не удалил.
+        const { error, data } = await SixMin.sb().from("circle_goals").delete().eq("id", g.id).select();
+        if (error) { console.error("circle goal delete:", error); SixMin.toast("Не удалось удалить цель: " + error.message); return; }
+        if (!data || !data.length) {
+          console.error("circle goal delete: сервер удалил 0 строк (нет DELETE-права в RLS)");
+          SixMin.toast("Сервер не удалил цель (нет прав на удаление). Цель осталась на месте: владельцу нужен SQL-шаг 1 из ПРОСТОЙ-ШАГ-v0818.");
+          await refresh(); return;
+        }
         D.goals = D.goals.filter((x) => x.goal_index !== i);
         render();
       }));
