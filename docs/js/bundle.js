@@ -22,7 +22,7 @@ window.SIXMIN_CONFIG = {
 
   // ── 3. ПРОЧЕЕ ──────────────────────────────────────────────────────
   defaultTimezone: "Europe/Moscow",
-  version: "0.8.1"
+  version: "0.8.2"
 };
 
 /* ── Контент: вопросы (свои формулировки, пул вариантов для ротации) ── */
@@ -924,14 +924,14 @@ const App = (() => {
   function lastMainTab() {
     try {
       const t = localStorage.getItem("sixmin-tab");
-      if (t && document.getElementById("screen-" + t)) return t;
+      if (t && t !== "wisdom" && document.getElementById("screen-" + t)) return t;
     } catch (e) {}
     return "today";
   }
   function show(name) {
     state.screen = name;
     // v0.6.13: запоминаем активную вкладку между перезагрузками страницы
-    if (name !== "form" && name !== "quick" && name !== "done") {
+    if (name !== "form" && name !== "quick" && name !== "done" && name !== "wisdom") {
       try { localStorage.setItem("sixmin-tab", name); } catch (e) {}
     }
     document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
