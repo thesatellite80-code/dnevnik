@@ -22,7 +22,7 @@ window.SIXMIN_CONFIG = {
 
   // ── 3. ПРОЧЕЕ ──────────────────────────────────────────────────────
   defaultTimezone: "Europe/Moscow",
-  version: "0.8.4"
+  version: "0.8.5"
 };
 
 /* ── Контент: вопросы (свои формулировки, пул вариантов для ротации) ── */
@@ -971,6 +971,12 @@ const App = (() => {
     f.hidden = false;
     clearTimeout(f._t);
     f._t = setTimeout(() => { f.hidden = true; }, 3800);
+    // v0.8.5: баннер живёт только на «Сегодня»; если пользователь в другом месте —
+    // дублируем глобальным тостом, иначе реакция кнопки выглядит как «не работает»
+    try {
+      const todayActive = document.getElementById("screen-today") && document.getElementById("screen-today").classList.contains("active");
+      if (!todayActive && window.SixMin && SixMin.toast) SixMin.toast(msg);
+    } catch (e) {}
   }
 
   /* ═══════════ ГЛАВНАЯ ═══════════ */
@@ -1496,7 +1502,7 @@ const App = (() => {
 
   async function login() {
     const email = $("auth-email").value;
-    if (!email || email.indexOf("@") < 0) { flash("Введите корректную почту", "err"); return; }
+    if (!email || email.indexOf("@") < 0) { $("auth-email").focus(); flash("Введите корректную почту", "err"); return; }
     try {
       await Cloud.signIn(email);
       flash("Письмо со ссылкой отправлено на " + email + ". Откройте его на этом же устройстве.", "ok");
@@ -1508,8 +1514,8 @@ const App = (() => {
   async function loginPass() {
     const email = $("auth-email").value;
     const pass = $("auth-pass").value;
-    if (!email || email.indexOf("@") < 0) { flash("Введите корректную почту", "err"); return; }
-    if (!pass) { flash("Введите пароль", "err"); return; }
+    if (!email || email.indexOf("@") < 0) { $("auth-email").focus(); flash("Введите корректную почту", "err"); return; }
+    if (!pass) { $("auth-pass").focus(); flash("Введите пароль", "err"); return; }
     try {
       await Cloud.signInPassword(email, pass);
       flash("Вход выполнен ✓", "ok");
@@ -1521,7 +1527,7 @@ const App = (() => {
 
   async function forgotPass() {
     const email = $("auth-email").value.trim();
-    if (!email || email.indexOf("@") < 0) { flash("Введите почту, для которой сбросить пароль", "err"); return; }
+    if (!email || email.indexOf("@") < 0) { $("auth-email").focus(); flash("Введите почту в поле выше — для неё и придёт ссылка сброса", "err"); return; }
     try {
       await Cloud.resetPassword(email);
       flash("Если аккаунт на " + email + " существует, письмо со ссылкой сброса уже отправлено (загляните в «Спам»). " +
