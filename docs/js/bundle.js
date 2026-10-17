@@ -22,7 +22,7 @@ window.SIXMIN_CONFIG = {
 
   // ── 3. ПРОЧЕЕ ──────────────────────────────────────────────────────
   defaultTimezone: "Europe/Moscow",
-  version: "0.8.2"
+  version: "0.8.4"
 };
 
 /* ── Контент: вопросы (свои формулировки, пул вариантов для ротации) ── */
@@ -507,6 +507,13 @@ const Cloud = (() => {
     user = (data && data.session && data.session.user) || null;
 
     client.auth.onAuthStateChange((_ev, session) => {
+      // v0.8.4: вход по recovery-ссылке = сеанс восстановления: сразу просим новый пароль
+      if (_ev === "PASSWORD_RECOVERY") {
+        setTimeout(() => {
+          show("settings");
+          flash("Вы вошли по ссылке восстановления — задайте новый пароль в карточке «Облако» и сохраните.", "ok");
+        }, 400);
+      }
       user = (session && session.user) || null;
       emit();
       if (user) sync().catch(e => console.warn("auto-sync", e));
@@ -540,6 +547,13 @@ const Cloud = (() => {
   async function signInPassword(email, password) {
     const c = await ensureClient();
     const { error } = await c.auth.signInWithPassword({ email: email.trim(), password });
+    if (error) throw error;
+    return true;
+  }
+  // v0.8.4: смена пароля у залогиненного пользователя (после временного или recovery-входа)
+  async function changePassword(pass) {
+    const c = await ensureClient();
+    const { error } = await c.auth.updateUser({ password: pass });
     if (error) throw error;
     return true;
   }
@@ -708,7 +722,7 @@ const Cloud = (() => {
 
   return {
     configured,
-    init, state, onChange, signIn, signInPassword, resetPassword, signOut, sync,
+    init, state, onChange, signIn, signInPassword, resetPassword, changePassword, signOut, sync,
     pushSettings, pullSettings, createLinkCode, telegramLinked,
     ensureClient,
     get client() { return client; },
@@ -1432,6 +1446,7 @@ const App = (() => {
       box.hidden = true; out.hidden = true; return;
     }
     box.hidden = !!st.user; out.hidden = !st.user;
+    const cp = $("auth-chpass"); if (cp) cp.hidden = !st.user;
     status.textContent = st.user ? ("Подключено: " + st.user.email) : "Не подключено — записи хранятся только на этом устройстве.";
   }
 
@@ -1473,6 +1488,9 @@ const App = (() => {
     if (/rate limit/i.test(m)) return "слишком много попыток подряд: подождите минуту и повторите.";
     if (/Password should be/i.test(m)) return "пароль должен быть не короче 6 символов.";
     if (/Unable to validate email/i.test(m)) return "похоже, в почте опечатка: проверьте адрес.";
+    if (/Token has expired|invalid token|Token is invalid/i.test(m))
+      return "ссылка из письма уже использована или истекла (они одноразовые, ~1 час). " +
+        "Запросите новую и откройте сразу, либо попросите владельца задать временный пароль из Supabase.";
     return m;
   }
 
@@ -1506,7 +1524,8 @@ const App = (() => {
     if (!email || email.indexOf("@") < 0) { flash("Введите почту, для которой сбросить пароль", "err"); return; }
     try {
       await Cloud.resetPassword(email);
-      flash("Если аккаунт на " + email + " существует, письмо со ссылкой сброса уже отправлено (загляните в «Спам»).", "ok");
+      flash("Если аккаунт на " + email + " существует, письмо со ссылкой сброса уже отправлено (загляните в «Спам»). " +
+        "Ссылка ОДНОРАЗОВАЯ и живёт около часа: открывайте её сразу и в том браузере, где будете работать.", "ok");
     } catch (e) {
       flash("Не удалось отправить сброс: " + authRu(e), "err");
     }
@@ -1603,6 +1622,16 @@ const App = (() => {
     $("btn-login").onclick = login;
     $("btn-login-pass").onclick = loginPass;
     const bf = $("btn-forgot"); if (bf) bf.onclick = forgotPass;
+    const bcp = $("btn-chpass");
+    if (bcp) bcp.onclick = async () => {
+      const p = $("auth-newpass").value;
+      if (!p || p.length < 6) { flash("Пароль — минимум 6 символов", "err"); return; }
+      try {
+        await Cloud.changePassword(p);
+        $("auth-newpass").value = "";
+        flash("Пароль изменён ✓ Теперь входите с ним.", "ok");
+      } catch (e) { flash("Не удалось изменить пароль: " + authRu(e), "err"); }
+    };
     const bw = $("btn-wisdom"); if (bw) bw.onclick = () => show("wisdom");
     const bwc = $("btn-wisdom-close"); if (bwc) bwc.onclick = () => show(lastMainTab());
     $("btn-logout").onclick = async () => { await Cloud.signOut(); renderAuth(); flash("Вы вышли из облака"); };

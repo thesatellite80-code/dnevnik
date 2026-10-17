@@ -502,6 +502,10 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
         <div class="auth-actions"><button class="auth-link" id="btn-forgot" title="Пришлём письмо со ссылкой для нового пароля">забыли пароль?</button></div>
       </form>
       <button class="btn ghost" id="btn-logout" hidden>Выйти</button>
+      <form id="auth-chpass" onsubmit="return false" hidden>
+        <input type="password" id="auth-newpass" placeholder="Новый пароль (минимум 6 символов)" autocomplete="new-password">
+        <button class="btn auth-compact" id="btn-chpass">Сменить пароль</button>
+      </form>
       <p class="hint-text">«Ссылка на почту» — magic link: письмо с одноразовой ссылкой, пароль не нужен. Если письмо не доходит (спа-фильтры ya.ru) — войдите с паролем. Пароль — от дневника (задавали в «Создать аккаунт»), а не от почтового ящика.</p>
     </div>
 
@@ -564,7 +568,7 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
       </div>
     </div>
 
-    <p class="version"><span id="build-info">v0.8.2</span> · данные на устройстве + Supabase</p>
+    <p class="version"><span id="build-info">v0.8.4</span> · данные на устройстве + Supabase</p>
   </main>
 </section>
 
@@ -636,7 +640,7 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
   <button data-tab="settings"><span>⚙️</span>Настройки</button>
 </nav>
 
-<script defer src="js/bundle.js?v=032"></script>
-<script defer src="js/v02.js?v=067"></script>
+<script defer src="js/bundle.js?v=033"></script>
+<script defer src="js/v02.js?v=068"></script>
 </body>
 </html>
