@@ -1592,7 +1592,7 @@ window.__v02stage = "after-sixmin-habits"; if (window.__v02say) window.__v02say(
           <span class="sm-focus-emoji">${cfg.emoji}</span>
           <span class="sm-focus-cap">${cfg.caption}</span>
           ${cfg.subtasks && g?.id ? `<button class="sm-move-btn" data-mv="${index}" title="Перенести на другой месяц/неделю" aria-label="Перенести">⤳</button>` : ""}
-          <button class="sm-focus-check" data-done="${index}" title="Отметить выполненным">${done ? "✅" : "⬜"}</button>
+          ${cfg.blank ? "" : `<button class="sm-focus-check" data-done="${index}" title="Отметить выполненным">${done ? "✅" : "⬜"}</button>`}
         </div>
         <textarea class="sm-focus-title" data-idx="${index}" rows="${cfg.rows || 2}"
           placeholder="${cfg.placeholder}">${SixMin.esc(title)}</textarea>
@@ -1639,6 +1639,33 @@ window.__v02stage = "after-sixmin-habits"; if (window.__v02say) window.__v02say(
       </div>`;
   }
 
+  // v0.8.16: цель считается заполненной, если есть текст или хотя бы одна подзадача
+  const goalHasContent = (i) => {
+    const g = goals.find((x) => x.goal_index === i);
+    return !!g && (!!String(g.title || "").trim() || normSubs(g.subtasks).length > 0);
+  };
+  let addOpen = false; // спойлер «добавить цель» помнит состояние между перерисовками
+  function monthCards() {
+    const idxs = [0, 1, 2, 3, 4];
+    const mc = (i) => ({
+      emoji: "🏔️", caption: "Цель месяца №" + (i + 1),
+      color: ["var(--accent,#E30613)", "var(--accent,#E30613)", "#9A9A9A", "#E30613", "#6E6E6E"][i],
+      rows: 2, placeholder: "Цель месяца — своими словами", subtasks: true,
+    });
+    const full = idxs.filter(goalHasContent);
+    const free = idxs.filter((i) => !goalHasContent(i));
+    const out = full.map((i) => cardHTML(i, mc(i)));
+    if (!full.length)
+      out.push(`<div class="sm-focus-empty">Целей на этот месяц пока нет — добавьте первую в спойлере ниже ↓</div>`);
+    out.push(free.length
+      ? `<details class="sm-focus-add"${addOpen ? " open" : ""}>` +
+        `<summary>➕ Добавить цель месяца · свободно ${free.length} из 5</summary>` +
+        free.map((i) => cardHTML(i, Object.assign(mc(i), { blank: true }))).join("") +
+        `</details>`
+      : `<div class="sm-focus-empty">Все 5 целей месяца заняты ✓</div>`);
+    return out;
+  }
+
   function render() {
     if (!root) return;
     const cfgs = {
@@ -1650,10 +1677,7 @@ window.__v02stage = "after-sixmin-habits"; if (window.__v02say) window.__v02say(
         cardHTML(1, { emoji: "🎯", caption: "Цель недели №2", color: "#9A9A9A", rows: 2,
           placeholder: "Вторая главная цель недели", subtasks: true }),
       ],
-      month: [0, 1, 2, 3, 4].map((i) => cardHTML(i, {
-        emoji: "🏔️", caption: "Цель месяца №" + (i + 1),
-        color: ["var(--accent,#E30613)", "var(--accent,#E30613)", "#9A9A9A", "#E30613", "#6E6E6E"][i],
-        rows: 2, placeholder: "Цель месяца — своими словами", subtasks: true })),
+      month: monthCards(),
     };
 
     root.innerHTML = `
@@ -1673,9 +1697,13 @@ window.__v02stage = "after-sixmin-habits"; if (window.__v02say) window.__v02say(
 
     root.querySelector('[data-info="focus"]')?.addEventListener("click", () => SixMin.info("Фокус",
       "<p><b>День:</b> «Антилопа» — ОДНА главная задача дня (львица не гонится за всеми антилопами сразу). <b>Неделя:</b> две главные цели, у каждой — подзадачи с чекбоксами ☐/☑ (выполненные зачёркиваются). <b>Месяц:</b> до пяти целей, у каждой — свои подзадачи с чекбоксами.</p>" +
-      "<p>Текст сохраняется сам через секунду после того, как вы перестали печатать. ⬜/✅ справа — отметить выполненным. Стрелки ‹ › листают дни / недели / месяцы.</p>"));
+      "<p>Текст сохраняется сам через секунду после того, как вы перестали печатать. ⬜/✅ справа — отметить выполненным. Стрелки ‹ › листают дни / недели / месяцы.</p>" +
+      "<p><b>Месяц без простыни:</b> в списке видны только заполненные цели, а пустые слоты спрятаны в спойлер «➕ Добавить цель месяца»: раскрыли, написали — цель уехала в общий список.</p>"));
     root.querySelectorAll("[data-tab]").forEach((b) =>
       b.addEventListener("click", () => { tab = b.dataset.tab; moveIdx = null; refresh(); }));
+    // v0.8.16: запоминаем, раскрыт ли спойлер добавления целей месяца
+    const addDet = root.querySelector(".sm-focus-add");
+    if (addDet) addDet.addEventListener("toggle", () => { addOpen = addDet.open; });
     root.querySelectorAll("[data-shift]").forEach((b) =>
       b.addEventListener("click", () => shift(Number(b.dataset.shift))));
     root.querySelectorAll("[data-done]").forEach((b) =>
@@ -1798,6 +1826,16 @@ window.__v02stage = "after-sixmin-habits"; if (window.__v02say) window.__v02say(
                       resize:none;outline:none;box-sizing:border-box}
       .sm-focus-title::placeholder{opacity:.4;font-weight:400}
       .sm-focus-subs{margin-top:10px;border-top:1px dashed var(--bg);padding-top:8px}
+      .sm-focus-empty{font-size:13px;opacity:.6;margin:0 2px 10px}
+      .sm-focus-add{border:1px dashed rgba(128,128,128,.35);border-radius:14px;
+                      padding:2px 12px 6px;margin-bottom:12px}
+      .sm-focus-add>summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;
+                            padding:11px 2px;font-size:13.5px;font-weight:700;opacity:.9}
+      .sm-focus-add>summary::-webkit-details-marker{display:none}
+      .sm-focus-add>summary::after{content:"⌄";margin-left:auto;font-size:16px;opacity:.7;
+                                  transition:transform .18s}
+      .sm-focus-add[open]>summary::after{transform:rotate(180deg)}
+      .sm-focus-add .sm-focus-card{background:rgba(128,128,128,.06);margin-bottom:10px}
       .sm-sub-row{display:flex;align-items:center;gap:6px;margin-bottom:4px}
       .sm-sub-check{border:0;background:transparent;color:var(--accent,#E30613);font-size:17px;cursor:pointer;padding:0;line-height:1;flex-shrink:0}
       .sm-sub-done .sm-sub-input{text-decoration:line-through;opacity:.5}
@@ -3956,7 +3994,8 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
 
   // v0.8.11: персональный онбординг для новичка круга: 6 личных задач-шагов.
   // Имена и число участников не важны: каждый вошедший получает СВОЙ чек-лист
-  // на вкладке «Сегодня» и отмечает его сам. Повторно не сеем (проверка по like).
+  // в личных задачах (вкладка «Трекер», #tasks-host) и отмечает его сам.
+  // Повторно не сеем (проверка по like).
   async function seedOnboarding() {
     try {
       const uid = await SixMin.uid();
@@ -3978,8 +4017,18 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
       }));
       const { error } = await SixMin.sb().from("tasks").insert(rows);
       if (error) { console.error("onboarding seed:", error); return; }
-      SixMin.toast("Добро пожаловать! На вкладке «Сегодня» вас ждут 6 задач-шагов онбординга — идите по порядку ✓");
+      SixMin.toast("Добро пожаловать! Ваши 6 задач-шагов онбординга — на вкладке «Трекер» (личные задачи), идите по порядку ✓");
     } catch (e) { console.error("onboarding seed:", e); }
+  }
+  // v0.8.16: самолечение онбординга. Посев в joinCircle не покрывает тех, кто
+  // вступил в круг ДО появления v0.8.11 на хостах (или на старом SW-кэше) —
+  // у них 6 шагов просто нет. При наличии членства досеваем один раз за сеанс;
+  // seedOnboarding сам не сеет повторно (like-проверка по «Онбординг ·%»).
+  let onbChecked = false;
+  async function maybeSeedOnboarding() {
+    if (onbChecked || !circles.length) return;
+    onbChecked = true;
+    await seedOnboarding();
   }
   async function joinCircle(code) {
     // v0.6.5: вступление через серверный RPC circle_join_by_code — политика circles
@@ -4681,7 +4730,7 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
     restoreForms(snap);
   }
 
-  async function refresh() { await loadCircles(); await loadData(); render(); }
+  async function refresh() { await loadCircles(); await loadData(); render(); maybeSeedOnboarding(); }
 
   function mount(container) {
     root = typeof container === "string" ? document.querySelector(container) : container;
@@ -4740,11 +4789,14 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
       .sm-cr-goalsnav button{width:34px;height:30px;border-radius:9px;border:1px solid var(--line,#333);background:#222;color:var(--tx,#eee);font-size:16px;cursor:pointer}
       .sm-cr-goalsnav button:active{transform:scale(.94)}
       .sm-cr-goalwrap{margin:8px 0}
-      .sm-cr-goalwrap>summary{list-style:none;cursor:pointer;display:flex;gap:8px;align-items:center;padding:9px 10px;border:1px solid var(--line,#333);border-radius:10px;background:var(--inset,#1c1c1c)}
+      .sm-cr-goalwrap>summary{list-style:none;cursor:pointer;display:flex;gap:8px;align-items:center;padding:10px 12px;border:1px solid rgba(227,6,19,.55);border-radius:10px;background:linear-gradient(0deg,rgba(227,6,19,.13),rgba(227,6,19,.13)) var(--inset,#1c1c1c);transition:border-color .15s ease,transform .06s ease}
       .sm-cr-goalwrap>summary::-webkit-details-marker{display:none}
-      .sm-cr-goalsum-t{flex:1;font-weight:600;font-size:13px;opacity:.9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .sm-cr-goalwrap>summary::after{content:"⌄";flex:none;font-size:15px;line-height:1;opacity:.8;color:var(--accent,#E30613);transition:transform .2s ease}
+      .sm-cr-goalwrap[open]>summary::after{transform:rotate(180deg)}
+      .sm-cr-goalwrap>summary:active{transform:scale(.985);border-color:var(--accent,#E30613)}
+      .sm-cr-goalsum-t{flex:1;font-weight:600;font-size:13px;opacity:.95;white-space:normal;overflow-wrap:break-word;min-width:0;line-height:1.35}
       .sm-cr-goalprog{font-style:normal;font-size:12px;opacity:.7}
-      .sm-cr-goalwrap[open]>summary{margin-bottom:6px}
+      .sm-cr-goalwrap[open]>summary{margin-bottom:6px;background:linear-gradient(0deg,rgba(227,6,19,.20),rgba(227,6,19,.20)) var(--inset,#1c1c1c)}
       .sm-cr-goal{border:1px solid rgba(128,128,128,.18);border-radius:14px;padding:12px;margin-bottom:10px;
                   background:var(--inset,#242424);transition:background-color .18s ease,border-color .18s ease}
       .sm-cr-goal:hover{background:var(--inset-hi,#2A2A2A);border-color:rgba(227,6,19,.45)}
@@ -4849,9 +4901,13 @@ window.__v02stage = "after-sixmin-circles"; if (window.__v02say) window.__v02say
       if (!email || email.indexOf("@") < 0) { msg.textContent = "Нужна корректная почта."; return; }
       if (pass.length < 6) { msg.textContent = "Пароль — минимум 6 символов."; return; }
       msg.textContent = "Создаю…";
+      // v0.8.16: ссылка подтверждения регистрации обязана вести на зеркало.
+      // Без emailRedirectTo Supabase подставляет Site URL дашборда (studiomwm.ru),
+      // который из РФ без VPN не открывается — кейс регистрации 18.10.2026.
+      const redir = (window.SIXMIN_CONFIG || {}).appUrl || (location.origin + location.pathname);
       const { data, error } = await SixMin.sb().auth.signUp({
         email, password: pass,
-        options: { data: { display_name: name || null } },
+        options: { data: { display_name: name || null }, emailRedirectTo: redir },
       });
       if (error) {
         const m = String(error.message || error);
