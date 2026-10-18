@@ -1,0 +1,6 @@
+# Cloudflare Pages: служебные файлы не кэшировать в HTTP-кэше,
+# иначе браузер может долго держать старый service worker.
+/sw.js
+  Cache-Control: no-cache, no-store, must-revalidate
+/manifest.webmanifest
+  Cache-Control: no-cache, must-revalidate
