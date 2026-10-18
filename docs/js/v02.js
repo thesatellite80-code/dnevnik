@@ -3939,6 +3939,7 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
   });
 
   let loggedIn = true;
+  let onbAny = false; // v0.8.24: есть ли у участника шаги онбординга (любые)
   async function loadCircles() {
     // v0.6.6 rev.8: без сессии не падаем в пустой экран, а показываем карточку входа
     let uid;
@@ -3952,6 +3953,10 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
     const { data: cs } = await SixMin.sb().from("circles").select("*").in("id", ids);
     circles = cs || [];
     if (!circles.find((c) => c.id === sel)) sel = circles[0]?.id || null;
+    // v0.8.24: личное состояние онбординга для кнопки «🎓 получить чек-лист»
+    const { data: onb } = await SixMin.sb().from("tasks").select("id")
+      .eq("user_id", uid).like("title", "Онбординг ·%").limit(1);
+    onbAny = (onb || []).length > 0;
   }
 
   async function loadData() {
@@ -4097,30 +4102,13 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
   // вступил в круг ДО появления v0.8.11 на хостах (или на старом SW-кэше) —
   // у них 6 шагов просто нет. При наличии членства досеваем один раз за сеанс;
   // seedOnboarding сам не сеет повторно (like-проверка по «Онбординг ·%»).
-  let onbChecked = false;
-  async function maybeSeedOnboarding() {
-    if (onbChecked || !circles.length) return;
-    onbChecked = true;
-    // v0.8.21: шаги — НОВИЧКАМ круга. В v0.8.16–v0.8.20 самолечение сеяло их всем
-    // участникам подряд — давние пользователи получили чужой чек-лист
-    // («шаги новичка появились у всех пользователей»). Теперь: членство моложе
-    // 14 дней → сеем; старше → убираем ошибочно посеянные НЕВЫПОЛНЕННЫЕ шаги
-    // (через circle_task_del, не зависимо от RLS-политик). Выполненные не трогаем — история.
-    try {
-      const uid = await SixMin.uid();
-      const { data: ms } = await SixMin.sb().from("circle_members")
-        .select("created_at").eq("user_id", uid).order("created_at", { ascending: true }).limit(1);
-      const joined = (ms && ms[0] && ms[0].created_at) ? new Date(ms[0].created_at).getTime() : 0;
-      if (Date.now() - joined < 14 * 864e5) { await seedOnboarding(); return; }
-      const { data: stale } = await SixMin.sb().from("tasks").select("id")
-        .eq("user_id", uid).like("title", "Онбординг ·%").eq("completed", false);
-      for (const s of (stale || [])) {
-        const r = await SixMin.sb().rpc("circle_task_del", { p_task: s.id });
-        if (r.error) console.error("onboarding cleanup:", r.error);
-      }
-      if ((stale || []).length) console.info("onboarding: убраны ошибочно посеянные шаги у давнего участника:", (stale || []).length);
-    } catch (e) { console.error("onboarding check:", e); }
+  // v0.8.24: шаги для уже состоящих в круге — опт-ин кнопкой «🎓» в «Кругах».
+  // Автопосев остаётся только в момент вступления (joinCircle).
+  async function onbGet() {
+    await seedOnboarding();
+    await refresh();
   }
+
   async function joinCircle(code) {
     // v0.6.5: вступление через серверный RPC circle_join_by_code — политика circles
     // прячет круги от не-участников, поэтому клиентский поиск по коду возвращал пусто.
@@ -4622,6 +4610,7 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
             <button class="sm-cr-new" title="Создать ещё один круг">+ Круг</button>
           </div>
         </div>
+        ${!onbAny ? `<button type="button" class="sm-cr-onbget" data-onbget>🎓 Шаги новичка круга: получить чек-лист из 6 шагов</button>` : ""}
         <details class="sm-cr-members-sp">
           <summary>👥 <b>${D.members.length}</b> ${membersWord(D.members.length)} <span class="sm-cr-sp-arrow">▾</span></summary>
           <div class="sm-cr-members">
@@ -4688,6 +4677,7 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
     });
     root.querySelectorAll("[data-csel]").forEach((b) =>
       b.addEventListener("click", () => { sel = b.dataset.csel; goalOffset = 0; CM.reset(); refresh(); }));
+    root.querySelector("[data-onbget]")?.addEventListener("click", onbGet);
     root.querySelectorAll("[data-gshift]").forEach((b) =>
       b.addEventListener("click", async () => {
         const d = b.dataset.gshift;
@@ -4849,7 +4839,7 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
     restoreForms(snap);
   }
 
-  async function refresh() { await loadCircles(); await loadData(); render(); maybeSeedOnboarding(); }
+  async function refresh() { await loadCircles(); await loadData(); render(); }
 
   function mount(container) {
     root = typeof container === "string" ? document.querySelector(container) : container;
@@ -4968,6 +4958,9 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
         .sm-cr-badd .sm-cr-sel{flex:1 1 auto}
         .sm-cr-badd .sm-cr-input{font-size:16px}
       }
+      .sm-cr-onbget{display:block;width:100%;margin:2px 0 10px;padding:11px 12px;border-radius:12px;
+                    border:1px dashed rgba(227,6,19,.5);background:rgba(227,6,19,.08);color:inherit;
+                    font-weight:700;font-size:13.5px;cursor:pointer;text-align:left}
       .sm-cr-num{flex:0 0 64px;text-align:center}
       .sm-cr-sel{flex:0 0 130px;background:transparent;color:inherit;border:1px solid rgba(128,128,128,.25);
                  border-radius:12px;padding:10px 8px;font-size:13px}
