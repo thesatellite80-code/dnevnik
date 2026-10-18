@@ -3939,7 +3939,8 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
   });
 
   let loggedIn = true;
-  let onbAny = false; // v0.8.24: есть ли у участника шаги онбординга (любые)
+  // v0.8.25: сколько шагов онбординга есть и сколько не выполнено — для состояний кнопки
+  let onbTotal = 0, onbOpen = 0;
   async function loadCircles() {
     // v0.6.6 rev.8: без сессии не падаем в пустой экран, а показываем карточку входа
     let uid;
@@ -3953,10 +3954,11 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
     const { data: cs } = await SixMin.sb().from("circles").select("*").in("id", ids);
     circles = cs || [];
     if (!circles.find((c) => c.id === sel)) sel = circles[0]?.id || null;
-    // v0.8.24: личное состояние онбординга для кнопки «🎓 получить чек-лист»
-    const { data: onb } = await SixMin.sb().from("tasks").select("id")
-      .eq("user_id", uid).like("title", "Онбординг ·%").limit(1);
-    onbAny = (onb || []).length > 0;
+    // v0.8.25: личное состояние онбординга: всего шагов и невыполненных
+    const { data: onb } = await SixMin.sb().from("tasks").select("id,completed")
+      .eq("user_id", uid).like("title", "Онбординг ·%").limit(10);
+    onbTotal = (onb || []).length;
+    onbOpen = (onb || []).filter((x) => !x.completed).length;
   }
 
   async function loadData() {
@@ -4077,9 +4079,9 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
   async function seedOnboarding() {
     try {
       const uid = await SixMin.uid();
-      const { data: exist } = await SixMin.sb().from("tasks").select("id")
-        .eq("user_id", uid).like("title", "Онбординг ·%").limit(1);
-      if ((exist || []).length) return;
+      const { data: exist } = await SixMin.sb().from("tasks").select("id,title")
+        .eq("user_id", uid).like("title", "Онбординг ·%").limit(10);
+      const have = new Set((exist || []).map((x) => x.title));
       const today = SixMin.fmtKey(new Date());
       const steps = [
         "Онбординг · 1/6: Задайте свой график: Работа → «Мои графики» → «+ Добавить график» (дата-якорь, цепочка, часы)",
@@ -4089,13 +4091,19 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
         "Онбординг · 5/6: Круги → «Мои смены» → «📅 Событие с приглашением»: ответьте «иду» кому-то или создайте своё",
         "Онбординг · 6/6: Напишите 3 непонятных места в комментарии к любой общей задаче круга — это лучшая помощь владельцу",
       ];
-      const rows = steps.map((title, i) => ({
+      // v0.8.25: сеем только отсутствующие титулы — прошедшие не дублируются,
+      // частично прошедший чек-лист дозиивается недостающими шагами.
+      const missing = steps.filter((t) => !have.has(t));
+      if (!missing.length) return;
+      const rows = missing.map((title) => ({
         user_id: uid, title, due_date: today, area: "personal", kind: "cream", // v0.8.20: личные типы — cream/cherry/fun; «high» делал шаги невидимыми в общем списке
-        completed: false, position: i,
+        completed: false, position: steps.indexOf(title),
       }));
       const { error } = await SixMin.sb().from("tasks").insert(rows);
       if (error) { console.error("onboarding seed:", error); return; }
-      SixMin.toast("Добро пожаловать! На «Трекере» сверху ждёт блок «🎓 Шаги новичка круга» — 6 шагов, идите по порядку ✓");
+      SixMin.toast(missing.length === steps.length
+        ? "Добро пожаловать! На «Трекере» сверху ждёт блок «🎓 Шаги новичка круга» — 6 шагов, идите по порядку ✓"
+        : "Добавлены недостающие шаги онбординга: " + missing.length + " — они на «Трекере» ✓");
     } catch (e) { console.error("onboarding seed:", e); }
   }
   // v0.8.16: самолечение онбординга. Посев в joinCircle не покрывает тех, кто
@@ -4610,7 +4618,10 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
             <button class="sm-cr-new" title="Создать ещё один круг">+ Круг</button>
           </div>
         </div>
-        ${!onbAny ? `<button type="button" class="sm-cr-onbget" data-onbget>🎓 Шаги новичка круга: получить чек-лист из 6 шагов</button>` : ""}
+        ${onbOpen === 0 && onbTotal < 6
+          ? `<button type="button" class="sm-cr-onbget" data-onbget>🎓 Шаги новичка круга: ${onbTotal === 0 ? "получить чек-лист из 6 шагов" : "добавить недостающие (" + onbTotal + " из 6 есть)"}</button>`
+          : ""}
+        ${onbOpen === 0 && onbTotal >= 6 ? `<div class="sm-cr-note">🎓 Шаги новичка круга: все 6 выполнены ✓</div>` : ""}
         <details class="sm-cr-members-sp">
           <summary>👥 <b>${D.members.length}</b> ${membersWord(D.members.length)} <span class="sm-cr-sp-arrow">▾</span></summary>
           <div class="sm-cr-members">
