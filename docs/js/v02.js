@@ -3892,6 +3892,10 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
     // из-за снапшота текст оставался в поле после отправки (баг из видео 15)
     root.querySelectorAll("input,textarea,select").forEach((el) => {
       if (el.hasAttribute("data-cminput")) return;
+      // v0.8.22: поля целей и подзадач не снапшотим: сохраняются дебаунсом за 700 мс,
+      // а снапшот устраивал «призрака» удалённой цели (self-loop ключа goal:N:new,
+      // video-47: RPC удаления 200, строки нет, поле непустое).
+      if (el.dataset.gidx !== undefined || el.dataset.gsubin !== undefined) return;
       m.set(formKey(el), el.value);
     });
     return m;
@@ -3900,6 +3904,8 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
     if (!m || !m.size || !root) return;
     root.querySelectorAll("input,textarea,select").forEach((el) => {
       if (el.hasAttribute("data-cminput")) return;
+      // v0.8.22: см. комментарий в snapForms — цели/подзадачи не восстанавливаем
+      if (el.dataset.gidx !== undefined || el.dataset.gsubin !== undefined) return;
       const k = formKey(el);
       if (m.has(k) && document.activeElement !== el) el.value = m.get(k);
     });
