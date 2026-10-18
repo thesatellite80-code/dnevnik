@@ -3069,8 +3069,20 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       }).join(" + ");
       const ends = act.flatMap((a) => a.iv).filter((r) => r[1] > r[0] && r[1] < 1440).map((r) => r[1]);
       const freeAfter = ends.length ? minToHM(Math.max.apply(null, ends)) : "";
+      // v0.8.23: свободные ОКНА внутри занятого дня (кейс: между 19:30 и 21:30 два часа,
+      // а строка говорила только «смена … свободен после 22:00»). Показываем промежутки >= 60 мин.
+      const sorted = act.flatMap((a) => a.iv).sort((a, b) => a[0] - b[0]);
+      const merged = [];
+      for (const r of sorted) {
+        const L = merged[merged.length - 1];
+        if (L && r[0] <= L[1]) L[1] = Math.max(L[1], r[1]); else merged.push([r[0], r[1]]);
+      }
+      const wins = [];
+      for (let i = 1; i < merged.length; i++)
+        if (merged[i][0] - merged[i - 1][1] >= 60) wins.push(minToHM(merged[i - 1][1]) + "–" + minToHM(merged[i][0]));
       const msg = parts +
         (masked.length ? " · перекрывает: " + masked.map((j) => j.name).join(", ") : "") +
+        (wins.length ? " · окно: " + wins.join(", ") : "") +
         (freeAfter ? " · свободен после " + freeAfter : "");
       return { loc: "🏭 смена", free: false, msg, dot: "#E30613", kind: jobShift(k, act[0].j) };
     }
@@ -3907,7 +3919,11 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
       // v0.8.22: см. комментарий в snapForms — цели/подзадачи не восстанавливаем
       if (el.dataset.gidx !== undefined || el.dataset.gsubin !== undefined) return;
       const k = formKey(el);
-      if (m.has(k) && document.activeElement !== el) el.value = m.get(k);
+      if (m.has(k) && document.activeElement !== el) {
+        el.value = m.get(k);
+        // v0.8.23: каретка в конец — после перерисовки не казалось, что ввод «сбросился»
+        try { const n = el.value.length; if (el.setSelectionRange) el.setSelectionRange(n, n); } catch (e) {}
+      }
     });
   }
 
@@ -4945,6 +4961,13 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
       .sm-cr-bal-me b{color:var(--accent,#E30613);font-size:17px}
       .sm-cr-board{display:flex;gap:6px;flex-wrap:wrap}
       .sm-cr-badd{display:flex;gap:6px;margin:8px 0;flex-wrap:wrap}
+      /* v0.8.23: на телефоне название задания — отдельной строкой, иначе поле
+         сжималось до пары символов и набор «не было видно» (скрин 11) */
+      @media (max-width:640px){
+        .sm-cr-badd input[name="t"]{flex:1 1 100%}
+        .sm-cr-badd .sm-cr-sel{flex:1 1 auto}
+        .sm-cr-badd .sm-cr-input{font-size:16px}
+      }
       .sm-cr-num{flex:0 0 64px;text-align:center}
       .sm-cr-sel{flex:0 0 130px;background:transparent;color:inherit;border:1px solid rgba(128,128,128,.25);
                  border-radius:12px;padding:10px 8px;font-size:13px}
