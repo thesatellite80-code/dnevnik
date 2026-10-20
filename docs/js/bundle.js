@@ -24,7 +24,7 @@ window.SIXMIN_CONFIG = {
 
   // ── 3. ПРОЧЕЕ ──────────────────────────────────────────────────────
   defaultTimezone: "Europe/Moscow",
-  version: "0.8.42"
+  version: "0.8.43"
 };
 
 /* ── Контент: вопросы (свои формулировки, пул вариантов для ротации) ── */
@@ -1017,6 +1017,8 @@ const App = (() => {
     const weekly = entries.find(x => x.date === today && x.slot === "weekly");
     $("weekly-sub").textContent = weekly ? "Заполнен в этом tygodне ✓" : "5 вопросов · 5 минут, по воскресеньям";
     $("btn-weekly").textContent = weekly ? "Пересмотреть" : "Заполнить обзор";
+    const ax = $("am-extra"); // v0.8.43: подсказка о ДР круга под утренними вопросами
+    if (ax && window.SixMinAmExtraHTML) ax.innerHTML = window.SixMinAmExtraHTML(today) || "";
   }
 
   function hasAnswers(e) {

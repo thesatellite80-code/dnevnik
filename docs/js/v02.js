@@ -2748,18 +2748,18 @@ window.__v02stage = "after-sixmin-analytics"; if (window.__v02say) window.__v02s
 (function () {
   // ---------- Принципы ----------
   const PRINCIPLES = [
-    { emoji: "🦁", title: "Львица и Антилопа", text: "Львица не бегает за всеми антилопами сразу — она выбирает одну и догоняет. Ваша «Антилопа дня» — главная задача, которая двигает вас вперёд. Всё остальное может подождать." },
-    { emoji: "📊", title: "Принцип 80/20", text: "80% результата дают 20% усилий. Найдите те самые 20% дел — и впишите их в «Антилопу». Остальные 80% суеты можно смело делегировать, упростить или отложить." },
-    { emoji: "⏱️", title: "6 минут — это много", text: "6 минут утром и 6 вечером = 73 часа осознанности в год. Ритуал важнее длительности: маленькое действие, повторённое 365 раз, меняет жизнь сильнее разового подвига." },
-    { emoji: "🔥", title: "Сила серии", text: "Цепочка дней (streak) — ваш главный актив. Пропустить один день — случайность. Пропустить два — начало новой привычки. Никогда не пропускайте дважды подряд." },
-    { emoji: "🙏", title: "Благодарность перепрошивает мозг", text: "Записывая 3 благодарности ежедневно, вы тренируете мозг замечать хорошее. Через 3 недели это становится автоматическим — и уровень тревоги снижается." },
-    { emoji: "🎯", title: "Одна цель на месяц", text: "Много целей — это ноль целей. Бумажный блокнот «6 минут» просит только ОДНУ глобальную цель на месяц. Если хочется вторую — значит, первая выбрана неверно." },
-    { emoji: "↪", title: "Перенос — не провал", text: "Перенести задачу на завтра — нормально. Ненормально — переносить её пятый раз. Если задача «залипла», разбейте её на части или честно удалите: она не ваша." },
-    { emoji: "🌅", title: "Утро задаёт день", text: "Первые 6 минут дня — руль всего дня. Не берите телефон до ритуала: чужие повестки (почта, соцсети) не должны определять ваш фокус." },
-    { emoji: "🌙", title: "Вечер закрывает петли", text: "Незавершённые дела крутятся в голове и мешают спать. Вечерняя выгрузка «что сделал / что завтра» освобождает оперативную память мозга." },
-    { emoji: "📉", title: "Прогресс нелинеен", text: "Будут дни на 20% и недели провалов. Считайте не дни, а среднее за месяц. 70% выполнения на дистанции — отличный результат." },
-    { emoji: "✍️", title: "Записанное становится реальным", text: "Мысль в голове — фантазия. Мысль на бумаге (или в дневнике) — обязательство. Сам акт записи повышает вероятность выполнения в 1.5–2 раза." },
-    { emoji: "🧘", title: "Пауза — часть работы", text: "Осознанность — это не ещё одна задача в списке. Это пауза между стимулом и реакцией. 6 минут тишины учат выбирать реакцию, а не действовать на автопилоте." },
+    { emoji: "🦁", title: "Львица и Антилопа", text: "Львица не бегает за всеми антилопами сразу — она выбирает одну и догоняет. Ваша «Антилопа дня» — главная задача, которая двигает вас вперёд. Всё остальное может подождать. Поэтому утро начинается с 1–3 пунктов плана, а не с десяти." },
+    { emoji: "📊", title: "Принцип 80/20", text: "80% результата дают 20% усилий. Найдите те самые 20% дел — и поставьте их первыми пунктами утреннего плана. Остальные 80% суеты можно смело делегировать, упростить или отложить." },
+    { emoji: "⏱️", title: "6 минут — это много", text: "3 минуты плана утром и 3 минуты итогов вечером = 73 часа стратегии в год. План, записанный за три минуты, бьёт час тревожного хаоса: маленькое действие, повторённое 365 раз, сильнее разового подвига." },
+    { emoji: "🔥", title: "Сила серии", text: "Цепочка дней — актив системы, а не настроения. Пропущенный день — сноска, два подряд — уже новая привычка. Никогда не пропускайте дважды подряд." },
+    { emoji: "📝", title: "План со временем — решение", text: "«После обеда» — не время. «14:00» — решение. Утренний вопрос «с чего начнёшь — и во сколько» превращает мечту в запись в календаре." },
+    { emoji: "🎯", title: "Одна цель на месяц", text: "Много целей — это ноль целей. На месяц — ОДНА цель, и она режется планами на недели и дни. Если хочется вторую — значит, первая выбрана неверно." },
+    { emoji: "↪", title: "Перенос — не провал", text: "Перенос — нормально, хвост без решения — нет. Вечером каждый хвост получает вердикт: завтра (с временем), отказаться или делегировать. Пятый перенос — разбейте задачу или честно удалите: она не ваша." },
+    { emoji: "🌅", title: "Утро задаёт день", text: "Первые три минуты дня — руль всего дня. Сначала план, потом почта и соцсети: пусть чужие повестки не определяют ваш фокус." },
+    { emoji: "🌙", title: "Вечер закрывает петли", text: "Вечер — не про вину, а про решения: сделано / завтра / отказаться / делегировать. Хвост с решением — план, хвост без решения — тревога, которая крутится в голове и мешает спать." },
+    { emoji: "📉", title: "Прогресс нелинеен", text: "Будут дни на 20% и недели провалов. Считайте не дни, а среднее за месяц: стратегия измеряется на дистанции, 70% выполнения — отличный результат." },
+    { emoji: "✍️", title: "Записанное становится реальным", text: "Мысль в голове — фантазия. Записанная мысль — обязательство: сам акт записи повышает вероятность выполнения в 1.5–2 раза. Поэтому план утром записывают, а не обдумывают." },
+    { emoji: "🧘", title: "Пауза — часть работы", text: "Отдых — часть плана: день отдыха, запланированный заранее, не ломает серию. Пауза между стимулом и реакцией учит выбирать реакцию, а не действовать на автопилоте." },
   ];
 
   // v0.8.1: принципы под новые возможности + тематические группы
@@ -2770,7 +2770,7 @@ window.__v02stage = "after-sixmin-analytics"; if (window.__v02say) window.__v02s
     { g: "family", emoji: "🤝", title: "Семья — это расписание, которое договорилось", text: "Любовь живёт не в намерениях, а в найденных общих вечерах. Общие свободные дни — любовь, которую положили в календарь." },
     { g: "family", emoji: "🎁", title: "Договор лучше нотации", text: "Баунти: взял — сделал — сдал — автор одобрил — баллы в копилку. Правила, видимые обеим сторонам, растят человека, а не обиду." },
     { g: "family", emoji: "📅", title: "Приглашение — забота по часам", text: "Событие с приглашением — способ сказать «ты мне важен» не словом, а слотом календаря. Ответ «иду» — это обещание, которое видно всем." },
-    { g: "family", emoji: "🎂", title: "Помнить хорошо — не забывать лучше", text: "Память о днях рождения делегируется кругу: пуш близким в сам день приходит автоматически. Внимание, которое не зависит от вашей загруженности." },
+    { g: "family", emoji: "🎂", title: "Помнить хорошо — не забывать лучше", text: "Дни рождения за вас помнит круг: утром приложение подскажет, у кого праздник и в какие общие свободные дни круг может собраться. Можно попросить не напоминать или перенести напоминание на удобный день." },
     { g: "voice", emoji: "🎙️", title: "Проговорённое — значит записанное", text: "Руки, занятые поводком или коляской, — не повод терять день. Диктовка сохраняет честность мысли на скорости 90 км/ч." },
     { g: "voice", emoji: "🧊", title: "Заморозка — тоже забота", text: "Болезнь, дорога, тяжёлая неделя: день можно заморозить без вины. Серия не прервана — она поставлена на паузу вместе с вами." },
   ];
@@ -2900,11 +2900,12 @@ window.__v02stage = "after-sixmin-analytics"; if (window.__v02say) window.__v02s
     root.innerHTML = `
       <details class="sm-theory-wrap">
         <summary>
-          <span class="sm-card-emoji">📖</span> Мудрость «6 минут»
+          <span class="sm-card-emoji">📖</span> Мудрость «6 минут»: стратегия дня
           <em class="sm-theory-count">${PRINCIPLES_ALL.length} принципа</em>
           <button class="sm-ib" data-info="theory" aria-label="Как это работает">i</button>
         </summary>
         <div class="sm-theory">
+          <p style="margin:8px 4px;opacity:.85;font-size:13px;line-height:1.5">«6 минут» — не дневник успеха, а штаб дня: утром три минуты на план, вечером три минуты на итоги и решения. Принципы ниже — рабочие правила штаба.</p>
           ${GROUPS.map((g, gi) => `
           <details class="sm-card sm-card-group" ${gi === 0 ? "open" : ""}>
             <summary><span class="sm-card-emoji">${g.emoji}</span> ${g.title}
@@ -3225,6 +3226,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
         E = ev || [];
       }
     }
+    redrawAmExtra(); // v0.8.43: круги загружены — обновляем утреннюю подсказку
   }
 
   const canonTypes = (o) => JSON.stringify(Object.keys(o || {}).sort().map((k) => [k, (o[k] || {}).label, (o[k] || {}).from, (o[k] || {}).to]));
@@ -3584,6 +3586,96 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     }
     return Array.from(names).join(", ");
   }
+  // ── v0.8.43: утренняя подсказка о ДР круга: «не напоминать / напомнить в дату» ──
+  function bdayNoteState() {
+    try { return JSON.parse(localStorage.getItem("sm-bday-note") || "{}"); } catch (e) { return {}; }
+  }
+  function bdayNoteSave(st) { try { localStorage.setItem("sm-bday-note", JSON.stringify(st)); } catch (e) {} }
+  function circleSharedWin(c, today) {
+    const memberJobs = {};
+    for (const jr of (c.jobs || [])) (memberJobs[jr.user_id] = memberJobs[jr.user_id] || []).push(jr);
+    const sharers = c.members.filter((m) => m.shared !== false && (memberJobs[m.user_id] || []).length);
+    if (!sharers.length) return [];
+    const win = [];
+    for (let i = -90; i < 90; i++) {
+      const k = key(new Date(parse(today).getTime() + i * 86400000));
+      const freeAll = sharers.every((m) => (memberJobs[m.user_id] || []).filter((j) => j.work !== false).every((j) => {
+        const s = jobShift(k, j);
+        return s !== "day" && s !== "night" && !((j.shift_types || {})[s]);
+      }));
+      if (freeAll) win.push(k);
+    }
+    return win;
+  }
+  const fmtBD = (kk) => kk.slice(8, 10) + "." + kk.slice(5, 7) + " " + ["вс", "пн", "вт", "ср", "чт", "пт", "сб"][parse(kk).getDay()];
+  function bdayNotes(today) {
+    const tk = key(parse(today));
+    const st = bdayNoteState();
+    const out = [];
+    for (const c of CIRC) {
+      const win = circleSharedWin(c, today);
+      for (const m of c.members) {
+        if (!m.birthday || m.user_id === (P && P.user_id)) continue;
+        const md = String(m.birthday).slice(5, 10);
+        const yr = parse(today).getFullYear();
+        const cands = [];
+        const bi = bdayInfo(m.birthday, today);
+        if (bi) cands.push({ k: key(new Date(parse(today).getTime() + bi.inDays * 86400000)), inDays: bi.inDays, past: false });
+        const kp = (md <= tk.slice(5, 10) ? yr + "-" + md : (yr - 1) + "-" + md);
+        if (kp < tk) cands.push({ k: kp, inDays: 0, past: true });
+        for (const cd of cands) {
+          let dB = win.filter((x) => x < cd.k).pop() || "";
+          let dA = win.find((x) => x > cd.k) || "";
+          if (dB && (parse(cd.k) - parse(dB)) / 86400000 > 45) dB = "";
+          if (dA && (parse(dA) - parse(cd.k)) / 86400000 > 45) dA = "";
+          if (!dB && !dA) continue;
+          const start = dB || cd.k, end = dA || cd.k;
+          if (tk < start || tk > end) continue;
+          const id = c.id + "|" + m.user_id + "|" + cd.k.slice(0, 4);
+          const s = st[id];
+          if (s && (s.d === 1 || (s.s && tk < s.s))) continue;
+          out.push({ id: id, circle: c.name, name: m.name, k: cd.k, inDays: cd.inDays, past: cd.past,
+            candDays: win.filter((x) => x >= tk && x <= end).slice(0, 2) });
+          break;
+        }
+      }
+    }
+    return out.slice(0, 2);
+  }
+  function amExtraHTML(today) {
+    if (!CIRC.length) return "";
+    return bdayNotes(today).map((n) =>
+      '<div class="sm-bday-note"><span>🎂 Вы в курсе? В круге «' + esc(n.circle) + '» у ' + esc(n.name) +
+      (n.past ? " ДР был " + fmtBD(n.k) : " ДР " + fmtBD(n.k) + (n.inDays ? " (через " + n.inDays + " дн.)" : "")) +
+      (n.candDays.length ? ". Всем кругом можно собраться: " + n.candDays.map(fmtBD).join(", ") : "") +
+      '.</span><span class="sm-bday-btns"><button class="sm-bday-btn" type="button" data-bday-dismiss="' + esc(n.id) + '">Больше не напоминать</button>' +
+      n.candDays.map((d) => '<button class="sm-bday-btn" type="button" data-bday-snooze="' + esc(n.id + "|" + d) + '">Напомнить ' + fmtBD(d) + "</button>").join("") +
+      "</span></div>").join("");
+  }
+  function redrawAmExtra() {
+    if (!document.getElementById("sm-bday-css")) {
+      const s = document.createElement("style");
+      s.id = "sm-bday-css";
+      s.textContent = ".sm-bday-note{margin:8px 0;padding:8px 10px;border-left:3px solid var(--accent,#E30613);background:rgba(227,6,19,.08);border-radius:8px;font-size:13px;line-height:1.5}" +
+        ".sm-bday-btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}" +
+        ".sm-bday-btns button{background:transparent;border:1px solid var(--accent,#E30613);color:var(--accent,#E30613);border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer}";
+      document.head.appendChild(s);
+    }
+    const host = document.getElementById("am-extra");
+    if (host) host.innerHTML = amExtraHTML(key(new Date()));
+  }
+  window.SixMinAmExtraHTML = amExtraHTML;
+  document.addEventListener("click", (e) => {
+    const dis = e.target.closest("[data-bday-dismiss]");
+    const sno = e.target.closest("[data-bday-snooze]");
+    if (!dis && !sno) return;
+    const st = bdayNoteState();
+    if (dis) st[dis.getAttribute("data-bday-dismiss")] = { d: 1 };
+    else { const pp = sno.getAttribute("data-bday-snooze").split("|"); st[pp[0]] = { s: pp[1] }; }
+    bdayNoteSave(st);
+    redrawAmExtra();
+  });
+
   function circlesHTML(today) {
     if (!CIRC.length) return "";
     const nextBlocks = []; // v0.8.38: общие выходные кругов — одним спойлером внизу
