@@ -4213,6 +4213,19 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
     await seedOnboarding();
     await refresh();
   }
+  // v0.8.33: «пройти ещё раз» для полностью прошедших чек-лист (тест-аккаунты,
+  // пересъёмка скринов): выполненные шаги убираются, чек-лист сеется заново.
+  async function onbReset() {
+    if (!confirm("Убрать выполненные шаги онбординга и создать чек-лист заново?")) return;
+    try {
+      const uid = await SixMin.uid();
+      const { data: doneRows } = await SixMin.sb().from("tasks").select("id")
+        .eq("user_id", uid).like("title", "Онбординг ·%").eq("completed", true);
+      for (const s of doneRows || []) await SixMin.sb().rpc("circle_task_del", { p_task: s.id });
+      await seedOnboarding();
+      await refresh();
+    } catch (e) { console.error("onboarding reset:", e); }
+  }
 
   async function joinCircle(code) {
     // v0.6.5: вступление через серверный RPC circle_join_by_code — политика circles
@@ -4441,9 +4454,9 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
     // исчезала из всех списков и материалы становились недоступны (кейс владельца 18.10).
     const hist = (D.bounties || []).filter((t) => t.bounty_status === "approved");
     const histHTML = hist.length
-      ? '<div class="sm-cr-sec">✅ История одобрений · видна кругу</div>' +
-        '<p class="sm-cr-note">Кто выполнил, за сколько и доказательства (💬 с вложениями) — ' +
-        'доступно участникам и после выплаты: справедливость одобрения видна всем.</p>' +
+      ? '<details class="sm-cr-histwrap"><summary>✅ История одобрений · видна кругу (' + hist.length + ') — развернуть</summary>' +
+        '<p class="sm-cr-note">Кто выполнил, за сколько и доказательства (💬 с вложениями) — '
+         + 'доступно участникам и после выплаты: справедливость одобрения видна всем.</p>' +
         '<ul class="sm-task-list">' + hist.map((t) => {
           const d = (t.completed_at || t.updated_at || "").slice(0, 10);
           const dl = d ? d.slice(8, 10) + "." + d.slice(5, 7) : "";
@@ -4453,7 +4466,7 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
             '<span class="sm-cr-status">' + (dl ? dl + " · " : "") + "выполнил: " + SixMin.esc(nameOf(t.assignee_id || t.user_id)) + " · одобрено</span></span></div>" +
             '<div class="sm-task-actions">' + CM.buttonHTML(t, "Обсуждение задания и материалы") + '</div></div>' +
             CM.panelHTML(t) + '</li>';
-        }).join("") + '</ul>'
+        }).join("") + '</ul></details>'
       : "";
     return '<div class="sm-cr-sec">🎁 Бонусы круга · ' + cur() + ' ' + INFO_BTN("bonuses") + '</div>' +
       '<div class="sm-cr-bal"><div class="sm-cr-bal-me">Мой баланс: <b>' + balOf(D.uid) + '</b> ' + curN(balOf(D.uid)) + '</div>' +
@@ -4474,10 +4487,12 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
       '<div class="sm-cr-sec">Витрина наград</div>' +
       '<div class="sm-cr-shop">' + ((D.rewards || []).map((r) =>
         '<span class="sm-cm-chip">' + SixMin.esc(r.title) + ' · ' + r.cost_points + ' ' + curN(r.cost_points) + ' ' +
-        (isOwner ? '<b data-bact="delreward" data-id="' + r.id + '">×</b>'
-                 : (balOf(D.uid) >= r.cost_points
-                    ? '<b data-bact="spend" data-id="' + r.id + '">списать</b>'
-                    : '<b class="sm-cr-spend-off" title="Не хватает ' + (r.cost_points - balOf(D.uid)) + ' ' + curN(r.cost_points - balOf(D.uid)) + '">нужно ещё ' + (r.cost_points - balOf(D.uid)) + '</b>')) + '</span>').join("") || '<p class="sm-cr-note">Витрина пуста.</p>') + '</div>' +
+        // v0.8.33: «списать» видна ВСЕМ при достаточном балансе (раньше владелец круга
+        // видел только крестик и не мог потратить свои баллы — кейс «90 баллов, не купить за 60»)
+        (balOf(D.uid) >= r.cost_points
+          ? '<b data-bact="spend" data-id="' + r.id + '">списать</b>'
+          : '<b class="sm-cr-spend-off" title="Не хватает ' + (r.cost_points - balOf(D.uid)) + ' ' + curN(r.cost_points - balOf(D.uid)) + '">нужно ещё ' + (r.cost_points - balOf(D.uid)) + '</b>') +
+        (isOwner ? '<b data-bact="delreward" data-id="' + r.id + '">×</b>' : '') + '</span>').join("") || '<p class="sm-cr-note">Витрина пуста.</p>') + '</div>' +
       (isOwner ? '<form class="sm-cr-badd" data-role="reward">' +
         '<input class="sm-cr-input" name="t" placeholder="Награда: кино-вечер, пицца…" maxlength="80">' +
         '<input class="sm-cr-input sm-cr-num" name="p" type="number" min="1" max="9999" value="20" title="Цена">' +
@@ -4741,7 +4756,8 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
         ${onbOpen === 0 && onbTotal < 6
           ? `<button type="button" class="sm-cr-onbget" data-onbget>🎓 Шаги новичка круга: ${onbTotal === 0 ? "получить чек-лист из 6 шагов" : "добавить недостающие (" + onbTotal + " из 6 есть)"}</button>`
           : ""}
-        ${onbOpen === 0 && onbTotal >= 6 ? `<div class="sm-cr-note">🎓 Шаги новичка круга: все 6 выполнены ✓</div>` : ""}
+        ${onbOpen === 0 && onbTotal >= 6 ? `<div class="sm-cr-note">🎓 Шаги новичка круга: все 6 выполнены ✓` +
+          `<button type="button" class="sm-cr-onbreset" data-onbreset>пройти ещё раз</button></div>` : ""}
         <details class="sm-cr-members-sp">
           <summary>👥 <b>${D.members.length}</b> ${membersWord(D.members.length)} <span class="sm-cr-sp-arrow">▾</span></summary>
           <div class="sm-cr-members">
@@ -4809,6 +4825,7 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
     root.querySelectorAll("[data-csel]").forEach((b) =>
       b.addEventListener("click", () => { sel = b.dataset.csel; goalOffset = 0; CM.reset(); refresh(); }));
     root.querySelector("[data-onbget]")?.addEventListener("click", onbGet);
+    root.querySelector("[data-onbreset]")?.addEventListener("click", onbReset);
     root.querySelectorAll("[data-gshift]").forEach((b) =>
       b.addEventListener("click", async () => {
         const d = b.dataset.gshift;
@@ -5092,6 +5109,13 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
       .sm-cr-onbget{display:block;width:100%;margin:2px 0 10px;padding:11px 12px;border-radius:12px;
                     border:1px dashed rgba(227,6,19,.5);background:rgba(227,6,19,.08);color:inherit;
                     font-weight:700;font-size:13.5px;cursor:pointer;text-align:left}
+      .sm-cr-onbreset{display:inline-block;margin-left:10px;padding:4px 10px;border-radius:9px;border:1px dashed rgba(227,6,19,.5);
+                      background:rgba(227,6,19,.08);color:inherit;font-weight:700;font-size:12px;cursor:pointer}
+      .sm-cr-histwrap{margin:4px 0 10px;border:1px dashed rgba(128,128,128,.35);border-radius:12px;padding:2px 12px 6px}
+      .sm-cr-histwrap>summary{cursor:pointer;list-style:none;font-size:12.5px;font-weight:800;padding:10px 2px;opacity:.9}
+      .sm-cr-histwrap>summary::-webkit-details-marker{display:none}
+      .sm-cr-histwrap>summary::after{content:" ⌄";opacity:.7}
+      .sm-cr-histwrap[open]>summary::after{content:" ⌃"}
       .sm-cr-num{flex:0 0 64px;text-align:center}
       .sm-cr-sel{flex:0 0 130px;background:transparent;color:inherit;border:1px solid rgba(128,128,128,.25);
                  border-radius:12px;padding:10px 8px;font-size:13px}
