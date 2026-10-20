@@ -3024,7 +3024,11 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
   }
   const curNames = () => Object.assign({}, SHIFT_NAMES,
     Object.fromEntries(Object.entries(editingTypes || {}).map(([k, v]) => [k, (v && v.label) || k])));
-  const workJobsOn = (k) => (J || []).filter((j) => isWorkType(j, jobShift(k, j)));
+  // v0.8.28: «занято» (любой график с интервалом в этот тип дня, включая ритуалы)
+  // и «работа» (только графики с флагом work) — разные вещи: день с одним выгулом
+  // собак — свободный день с занятым вечером, а не смена.
+  const occupiedOn = (k) => (J || []).filter((j) => isWorkType(j, jobShift(k, j)));
+  const workJobsOn = (k) => occupiedOn(k).filter((j) => j.work !== false);
   // v0.7.6: перекрытие считаем ПО ВРЕМЕНИ: интервалы смены в минутах суток
   // (ночь через полночь = два отрезка). Нижний по приоритету график перекрывается
   // только если его интервал ПЕРЕСЕКАЕТСЯ с интервалом старшего; иначе оба активны
@@ -3041,7 +3045,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
   }
   function splitWork(k) {
     const act = [], masked = [];
-    for (const j of workJobsOn(k)) {
+    for (const j of occupiedOn(k)) { // v0.8.28: ритуалы участвуют в интервалах/перекрытиях/окнах
       const iv = dayIntervals(k, j);
       const hit = act.some((a) => a.iv.some((r1) => iv.some((r2) => r1[0] < r2[1] && r2[0] < r1[1])));
       if (hit) masked.push(j); else act.push({ j, iv });
@@ -3057,38 +3061,51 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     }
     return s;
   }
-  // v0.7.0: «на заводе/в офисе» больше нет — день либо СМЕНА (по любому графику), либо СВОБОДЕН
+  // v0.8.28: единая строка «интервалы · перекрывает · окна · свободен после».
+  // «свободен после X» показываем, только если после X ничего не начинается:
+  // кейс 21.10 — ночь с 19:30, а строка обещала «свободен после 18:00».
+  function busyMsg(k) {
+    const { act, masked } = splitWork(k);
+    const parts = act.map((a) => {
+      const tp = jobShift(k, a.j);
+      const tm = timesOfType(a.j, tp) || [];
+      const lb = tp === "night" ? "🌙 ночь" : tp === "day" ? "☀️ день" : esc(namesOf(a.j)[tp] || tp);
+      return lb + (tm.length ? " " + tm[0] + "–" + tm[1] : "") +
+        ((J || []).length > 1 ? " · " + a.j.name : "");
+    }).join(" + ");
+    const ivs = act.flatMap((a) => a.iv);
+    const ends = ivs.filter((r) => r[1] > r[0] && r[1] < 1440).map((r) => r[1]);
+    const maxEnd = ends.length ? Math.max.apply(null, ends) : 0;
+    const freeAfter = maxEnd && !ivs.some((r) => r[0] > maxEnd) ? minToHM(maxEnd) : "";
+    const sorted = ivs.slice().sort((a, b) => a[0] - b[0]);
+    const merged = [];
+    for (const r of sorted) {
+      const L = merged[merged.length - 1];
+      if (L && r[0] <= L[1]) L[1] = Math.max(L[1], r[1]); else merged.push([r[0], r[1]]);
+    }
+    const wins = [];
+    for (let i = 1; i < merged.length; i++)
+      if (merged[i][0] - merged[i - 1][1] >= 60) wins.push(minToHM(merged[i - 1][1]) + "–" + minToHM(merged[i][0]));
+    return { act, masked, msg: parts +
+      (masked.length ? " · перекрывает: " + masked.map((j) => j.name).join(", ") : "") +
+      (wins.length ? " · окно: " + wins.join(", ") : "") +
+      (freeAfter ? " · свободен после " + freeAfter : "") };
+  }
+
+  // v0.7.0: «на заводе/в офисе» больше нет; v0.8.28: день СМЕНА только по РАБОЧИМ
+  // графикам; ритуалы (work=false) дают свободный день с занятыми интервалами.
   function infoDay(k, vs) {
     if (vs && vs.has(k)) return { loc: "🏖 отпуск", free: true, msg: "отпуск · полностью свободен", dot: "#f9ab00", kind: "vac" };
     if (HOLIDAYS[k]) return { loc: "🏖 праздник", free: true, msg: "праздник • полностью свободен", dot: "#f9ab00", kind: "hol" };
     const wj = workJobsOn(k);
     if (wj.length) {
-      const { act, masked } = splitWork(k);
-      const parts = act.map((a) => {
-        const tp = jobShift(k, a.j);
-        const tm = timesOfType(a.j, tp) || [];
-        const lb = tp === "night" ? "🌙 ночь" : tp === "day" ? "☀️ день" : esc(namesOf(a.j)[tp] || tp);
-        return lb + (tm.length ? " " + tm[0] + "–" + tm[1] : "") +
-          ((J || []).length > 1 ? " · " + a.j.name : "");
-      }).join(" + ");
-      const ends = act.flatMap((a) => a.iv).filter((r) => r[1] > r[0] && r[1] < 1440).map((r) => r[1]);
-      const freeAfter = ends.length ? minToHM(Math.max.apply(null, ends)) : "";
-      // v0.8.23: свободные ОКНА внутри занятого дня (кейс: между 19:30 и 21:30 два часа,
-      // а строка говорила только «смена … свободен после 22:00»). Показываем промежутки >= 60 мин.
-      const sorted = act.flatMap((a) => a.iv).sort((a, b) => a[0] - b[0]);
-      const merged = [];
-      for (const r of sorted) {
-        const L = merged[merged.length - 1];
-        if (L && r[0] <= L[1]) L[1] = Math.max(L[1], r[1]); else merged.push([r[0], r[1]]);
-      }
-      const wins = [];
-      for (let i = 1; i < merged.length; i++)
-        if (merged[i][0] - merged[i - 1][1] >= 60) wins.push(minToHM(merged[i - 1][1]) + "–" + minToHM(merged[i][0]));
-      const msg = parts +
-        (masked.length ? " · перекрывает: " + masked.map((j) => j.name).join(", ") : "") +
-        (wins.length ? " · окно: " + wins.join(", ") : "") +
-        (freeAfter ? " · свободен после " + freeAfter : "");
-      return { loc: "🏭 смена", free: false, msg, dot: "#E30613", kind: jobShift(k, act[0].j) };
+      const bm = busyMsg(k);
+      return { loc: "🏭 смена", free: false, msg: bm.msg, dot: "#E30613", kind: jobShift(k, bm.act[0].j) };
+    }
+    // v0.8.28: работы нет, но время занято ритуалами — день СВОБОДЕН с честной строкой
+    if (occupiedOn(k).length) {
+      const bm = busyMsg(k);
+      return { loc: "🏢 свободен", free: true, msg: "занято: " + bm.msg, dot: "#30a46c", kind: jobShift(k, bm.act[0].j) };
     }
     const sp = (J || []).map((j) => ({ j, tp: jobShift(k, j) })).find((x) => x.tp === "bday" || x.tp === "hol");
     if (sp) return {
@@ -3115,6 +3132,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
           // перекрытые другими графиками смены не считаем (splitWork)
           const { act } = splitWork(k);
           for (const a of act) {
+            if (a.j.work === false) continue; // v0.8.28: часы ритуалов — не рабочие часы
             const h = parseInt(a.j.shift_hours, 10) || 0;
             hours += h;
             const pj = perJob[a.j.id] || (perJob[a.j.id] = { name: a.j.name, shifts: 0, hours: 0 });
@@ -3188,18 +3206,20 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       user_id: uid, name: job.name, anchor_date: job.anchor_date,
       cycle: job.cycle, shift_hours: job.shift_hours,
       shift_times: job.shift_times || DEF_TIMES, shift_types: job.shift_types || {},
+      work: job.work !== false, // v0.8.28
       updated_at: new Date().toISOString(),
     };
     if (!insert) row.id = job.id;
     const { error } = await SixMin.sb().from("shift_jobs").upsert(row, { onConflict: "id" });
     if (error) { SixMin.toast("Ошибка: " + error.message); return false; }
     const q = insert
-      ? await SixMin.sb().from("shift_jobs").select("id,name,anchor_date,cycle,shift_hours,shift_times,shift_types").eq("user_id", uid).order("updated_at", { ascending: false }).limit(1).maybeSingle()
-      : await SixMin.sb().from("shift_jobs").select("id,name,anchor_date,cycle,shift_hours,shift_times,shift_types").eq("id", row.id).maybeSingle();
+      ? await SixMin.sb().from("shift_jobs").select("id,name,anchor_date,cycle,shift_hours,shift_times,shift_types,work").eq("user_id", uid).order("updated_at", { ascending: false }).limit(1).maybeSingle()
+      : await SixMin.sb().from("shift_jobs").select("id,name,anchor_date,cycle,shift_hours,shift_times,shift_types,work").eq("id", row.id).maybeSingle();
     const chk = q.data;
     const same = chk && String(chk.anchor_date) === String(row.anchor_date) &&
       JSON.stringify(chk.cycle) === JSON.stringify(row.cycle) &&
       parseInt(chk.shift_hours, 10) === parseInt(row.shift_hours, 10) && chk.name === row.name &&
+      chk.work === row.work &&
       (chk.shift_times || DEF_TIMES).day[0] === row.shift_times.day[0] &&
       (chk.shift_times || DEF_TIMES).day[1] === row.shift_times.day[1] &&
       (chk.shift_times || DEF_TIMES).night[0] === row.shift_times.night[0] &&
@@ -3292,11 +3312,13 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
         night: [(root.querySelector(".sm-sh-nightfrom") || {}).value || DEF_TIMES.night[0], (root.querySelector(".sm-sh-nightto") || {}).value || DEF_TIMES.night[1]],
       },
       shift_types: JSON.parse(JSON.stringify(editingTypes || {})),
+      work: !((root.querySelector(".sm-sh-work") || {}).checked === false), // v0.8.28
     };
   }
   function jobEditorHTML(job) {
     return '<div class="sm-sh-editor">' +
       '<label class="sm-sh-lbl">Название графика <input type="text" class="sm-sh-name" maxlength="40" value="' + esc((job && job.name) || DEF.name) + '"></label>' +
+      '<label class="sm-sh-lbl"><input type="checkbox" class="sm-sh-work" ' + ((job && job.work === false) ? "" : "checked") + '> Это работа: даёт «смены», часы и занятые дни. Снять галочку — график-ритуал (выгул, треня, спа): время занято, но день свободный</label>' +
       '<label class="sm-sh-lbl">Дата, про которую точно знаете (например, последняя смена) <input type="date" class="sm-sh-anchor" value="' + ((job && job.anchor_date) || DEF.anchor) + '"></label>' +
       '<div class="sm-sh-cycwrap">' + cycleEditorInner(jobCycle(job || {})) + "</div>" +
       '<div class="sm-sh-types"><div class="sm-sh-note">Свои типы дней (кроме день/ночь/отсыпной/выходной):</div>' +
@@ -3317,7 +3339,8 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       '<div class="sm-sh-head">🔥 Мои смены</div>' +
       '<p class="sm-sh-note">График смен личный у каждого: расскажите приложению про свой цикл — ' +
       "и оно покажет ВАШИ смены, отпуска и праздники, а в кругах найдёт общие свободные дни и дни рождения. " +
-      "Работы две или больше? Создайте по графику на каждую — свободные дни считаются по всем сразу.</p>" +
+      "Работы две или больше? Создайте по графику на каждую — свободные дни считаются по всем сразу. " +
+      "График без галочки «это работа» — ритуал (выгул, треня): время занято, но день считается свободным.</p>" +
       jobEditorHTML(null) +
       "</div>";
   }
@@ -3355,7 +3378,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     const jobsRows = (J || []).map((j) =>
       '<div class="sm-sh-row"><span><b>' + esc(j.name) + "</b> · цикл " + (jobCycle(j).length) + " дн · якорь " +
       String(j.anchor_date || "").slice(8, 10) + "." + String(j.anchor_date || "").slice(5, 7) +
-      " · " + (parseInt(j.shift_hours, 10) || 0) + " ч · сегодня " + esc(SHIFT_NAMES[jobShift(today, j)] || "") +
+      " · " + (parseInt(j.shift_hours, 10) || 0) + " ч" + (j.work === false ? " · ритуал (не работа)" : "") + " · сегодня " + esc(SHIFT_NAMES[jobShift(today, j)] || "") +
       '</span><span><button class="sm-sh-icbtn" type="button" data-jup="' + j.id + '" title="Выше приоритетом">↑</button> ' +
       '<button class="sm-sh-icbtn" type="button" data-jdown="' + j.id + '" title="Ниже приоритетом">↓</button> ' +
       '<button class="sm-sh-icbtn" type="button" data-jedit="' + j.id + '" title="Редактировать график">✏️</button> ' +
@@ -3533,8 +3556,11 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       for (let i = 0; i < 14; i++) {
         const k = key(new Date(parse(today).getTime() + i * 86400000));
         if (!sharers.length) break;
-        const freeAll = sharers.every((m) => (memberJobs[m.user_id] || []).every((j) => {
-          const s = jobShift(k, j); return s !== "day" && s !== "night";
+        const freeAll = sharers.every((m) => (memberJobs[m.user_id] || []).filter((j) => j.work !== false).every((j) => {
+          // v0.8.28: общий свободный день портят только РАБОЧИЕ графики (любой занятый тип);
+          // ритуалы участников (work=false) день круга не отменяют
+          const s = jobShift(k, j);
+          return s !== "day" && s !== "night" && !((j.shift_types || {})[s]);
         }));
         if (freeAll) sharedDays.push(k.slice(8) + "." + k.slice(5, 7));
       }
