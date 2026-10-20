@@ -3597,6 +3597,12 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       const memberJobs = {};
       for (const jr of (c.jobs || [])) (memberJobs[jr.user_id] = memberJobs[jr.user_id] || []).push(jr);
       const sharers = c.members.filter((m) => m.shared !== false && (memberJobs[m.user_id] || []).length);
+      // v0.8.35: прозрачность расчёта — кого считаем, кого нет и почему
+      const counted = sharers.map((m) => memberName(m.user_id));
+      const silent = c.members.filter((m) => sharers.indexOf(m) < 0)
+        .map((m) => memberName(m.user_id) + (m.shared === false ? " — скрыл(а) график" : " — пока без графика"));
+      const legend = "Учтены: " + (counted.length ? esc(counted.join(", ")) : "никто") +
+        (silent.length ? " · Не учтены: " + esc(silent.join("; ")) : "");
       const sharedDays = [];
       const whyRows = []; // v0.8.34: кто занят по дням — объяснение «почему нет общих»
       for (let i = 0; i < 14; i++) {
@@ -3621,9 +3627,11 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
         (bds.length ? '<div class="sm-sh-row"><span>🎂 ' + esc(bds[0].name) + (bds[0].me ? " (у вас)" : "") +
           " — " + (bds[0].inDays === 0 ? "сегодня!" : "через " + bds[0].inDays + " дн.") + "</span></div>" : "") +
         (sharedDays.length ? '<details class="sm-sh-days"><summary class="sm-sh-row free"><span>Общие свободные дни (14 дн): ' + sharedDays.length + " дн. — развернуть</span></summary>" +
-          '<div class="sm-sh-dayslist">' + sharedDays.map((d) => '<span class="sm-sh-day">' + esc(d) + "</span>").join("") + "</div></details>"
+          '<div class="sm-sh-dayslist">' + sharedDays.map((d) => '<span class="sm-sh-day">' + esc(d) + "</span>").join("") + "</div>" +
+          '<div class="sm-sh-day-busy">' + legend + "</div></details>"
           : (sharers.length ? '<details class="sm-sh-days"><summary class="sm-sh-row"><span>Общих свободных дней на ближайших 14 нет — почему? кто занят по дням</span></summary>' +
-            '<div class="sm-sh-dayslist">' + whyRows.map((r) => '<div class="sm-sh-day-busy">' + r + '</div>').join("") + '</div></details>' : "")) +
+            '<div class="sm-sh-dayslist"><div class="sm-sh-day-busy">' + legend + '</div>' + whyRows.map((r) => '<div class="sm-sh-day-busy">' + r + '</div>').join("") + '</div></details>' :
+            '<div class="sm-sh-row"><span>' + legend + "</span></div>")) +
         "</div>";
     }
     return out;
