@@ -3024,10 +3024,34 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
   }
   const curNames = () => Object.assign({}, SHIFT_NAMES,
     Object.fromEntries(Object.entries(editingTypes || {}).map(([k, v]) => [k, (v && v.label) || k])));
+  // v0.8.29: область действия отпуска — по графикам (job_ids; пусто = все, как раньше).
+  let VM = null; // кэш день->отпуск, сбрасывается в load()
+  function vacMap() {
+    const m = new Map();
+    for (const v of V || []) {
+      let d = parse(v.start_date);
+      for (let i = 0; i < v.days; i++) { m.set(key(d), v); d = new Date(d.getTime() + 86400000); }
+    }
+    return m;
+  }
+  const vacOn = (k) => (VM || (VM = vacMap())).get(k) || null;
+  const vacFully = (k) => {
+    const v = vacOn(k);
+    if (!v) return false;
+    const ids = v.job_ids || [];
+    return !ids.length || (J || []).every((j) => ids.includes(j.id));
+  };
+  function jobsActive(k) {
+    const v = vacOn(k);
+    if (!v) return J || [];
+    const ids = v.job_ids || [];
+    if (!ids.length) return [];
+    return (J || []).filter((j) => !ids.includes(j.id));
+  }
   // v0.8.28: «занято» (любой график с интервалом в этот тип дня, включая ритуалы)
   // и «работа» (только графики с флагом work) — разные вещи: день с одним выгулом
   // собак — свободный день с занятым вечером, а не смена.
-  const occupiedOn = (k) => (J || []).filter((j) => isWorkType(j, jobShift(k, j)));
+  const occupiedOn = (k) => jobsActive(k).filter((j) => isWorkType(j, jobShift(k, j))); // v0.8.29: отпуск выводит график из дня
   const workJobsOn = (k) => occupiedOn(k).filter((j) => j.work !== false);
   // v0.7.6: перекрытие считаем ПО ВРЕМЕНИ: интервалы смены в минутах суток
   // (ночь через полночь = два отрезка). Нижний по приоритету график перекрывается
@@ -3095,7 +3119,8 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
   // v0.7.0: «на заводе/в офисе» больше нет; v0.8.28: день СМЕНА только по РАБОЧИМ
   // графикам; ритуалы (work=false) дают свободный день с занятыми интервалами.
   function infoDay(k, vs) {
-    if (vs && vs.has(k)) return { loc: "🏖 отпуск", free: true, msg: "отпуск · полностью свободен", dot: "#f9ab00", kind: "vac" };
+    if (vacFully(k)) return { loc: "🏖 отпуск", free: true, msg: "отпуск · полностью свободен" +
+      (vacOn(k) && (vacOn(k).job_ids || []).length ? " (по выбранным графикам)" : ""), dot: "#f9ab00", kind: "vac" };
     if (HOLIDAYS[k]) return { loc: "🏖 праздник", free: true, msg: "праздник • полностью свободен", dot: "#f9ab00", kind: "hol" };
     const wj = workJobsOn(k);
     if (wj.length) {
@@ -3124,7 +3149,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     const d = new Date(y, m, 1, 12);
     while (d.getMonth() === m) {
       const k = key(d);
-      if (vs.has(k) || HOLIDAYS[k]) { free++; vac++; }
+      if (vacFully(k) || HOLIDAYS[k]) { free++; vac++; } // v0.8.29: частичный отпуск — день считается по оставшимся графикам
       else {
         const wj = workJobsOn(k);
         if (wj.length) {
@@ -3132,11 +3157,12 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
           // перекрытые другими графиками смены не считаем (splitWork)
           const { act } = splitWork(k);
           for (const a of act) {
+            const pj = perJob[a.j.id] || (perJob[a.j.id] = { name: a.j.name, shifts: 0, hours: 0 });
+            pj.shifts++; // v0.8.29: активные дни каждого графика отдельно (и ритуалов тоже)
             if (a.j.work === false) continue; // v0.8.28: часы ритуалов — не рабочие часы
             const h = parseInt(a.j.shift_hours, 10) || 0;
             hours += h;
-            const pj = perJob[a.j.id] || (perJob[a.j.id] = { name: a.j.name, shifts: 0, hours: 0 });
-            pj.shifts++; pj.hours += h;
+            pj.hours += h;
           }
         } else free++;
       }
@@ -3177,6 +3203,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     J = jb || [];
     const { data: vc } = await sb.from("shift_vacations").select("*").eq("user_id", uid).order("start_date");
     V = vc || [];
+    VM = null; // v0.8.29: сброс кэша день->отпуск
     if (J.length) {
       const { data: ms } = await sb.from("circle_members").select("circle_id").eq("user_id", uid);
       const ids = (ms || []).map((r) => r.circle_id);
@@ -3207,19 +3234,21 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       cycle: job.cycle, shift_hours: job.shift_hours,
       shift_times: job.shift_times || DEF_TIMES, shift_types: job.shift_types || {},
       work: job.work !== false, // v0.8.28
+      pay_per_day: job.pay_per_day == null ? null : Number(job.pay_per_day), // v0.8.29
       updated_at: new Date().toISOString(),
     };
     if (!insert) row.id = job.id;
     const { error } = await SixMin.sb().from("shift_jobs").upsert(row, { onConflict: "id" });
     if (error) { SixMin.toast("Ошибка: " + error.message); return false; }
     const q = insert
-      ? await SixMin.sb().from("shift_jobs").select("id,name,anchor_date,cycle,shift_hours,shift_times,shift_types,work").eq("user_id", uid).order("updated_at", { ascending: false }).limit(1).maybeSingle()
-      : await SixMin.sb().from("shift_jobs").select("id,name,anchor_date,cycle,shift_hours,shift_times,shift_types,work").eq("id", row.id).maybeSingle();
+      ? await SixMin.sb().from("shift_jobs").select("id,name,anchor_date,cycle,shift_hours,shift_times,shift_types,work,pay_per_day").eq("user_id", uid).order("updated_at", { ascending: false }).limit(1).maybeSingle()
+      : await SixMin.sb().from("shift_jobs").select("id,name,anchor_date,cycle,shift_hours,shift_times,shift_types,work,pay_per_day").eq("id", row.id).maybeSingle();
     const chk = q.data;
     const same = chk && String(chk.anchor_date) === String(row.anchor_date) &&
       JSON.stringify(chk.cycle) === JSON.stringify(row.cycle) &&
       parseInt(chk.shift_hours, 10) === parseInt(row.shift_hours, 10) && chk.name === row.name &&
       chk.work === row.work &&
+      Number(chk.pay_per_day || 0) === Number(row.pay_per_day || 0) &&
       (chk.shift_times || DEF_TIMES).day[0] === row.shift_times.day[0] &&
       (chk.shift_times || DEF_TIMES).day[1] === row.shift_times.day[1] &&
       (chk.shift_times || DEF_TIMES).night[0] === row.shift_times.night[0] &&
@@ -3313,6 +3342,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       },
       shift_types: JSON.parse(JSON.stringify(editingTypes || {})),
       work: !((root.querySelector(".sm-sh-work") || {}).checked === false), // v0.8.28
+      pay_per_day: (() => { const v = (root.querySelector(".sm-sh-pay") || {}).value; return (v === "" || v == null) ? null : Number(v); })(), // v0.8.29
     };
   }
   function jobEditorHTML(job) {
@@ -3329,6 +3359,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       '<label class="sm-sh-lbl sm-sh-times-day"' + (jobCycle(job || {}).includes("day") ? "" : ' style="display:none"') + '>☀️ Дневная смена: с <input type="time" class="sm-sh-dayfrom" value="' + timesOf(job).day[0] + '"> до <input type="time" class="sm-sh-dayto" value="' + timesOf(job).day[1] + '"></label>' +
       '<label class="sm-sh-lbl sm-sh-times-night"' + (jobCycle(job || {}).includes("night") ? "" : ' style="display:none"') + '>🌙 Ночная смена: с <input type="time" class="sm-sh-nightfrom" value="' + timesOf(job).night[0] + '"> до <input type="time" class="sm-sh-nightto" value="' + timesOf(job).night[1] + '"></label>' +
       '<label class="sm-sh-lbl">Смена, часов <input type="number" class="sm-sh-hours" min="1" max="24" value="' + ((job && job.shift_hours) || DEF.hours) + '"></label>' +
+      '<label class="sm-sh-lbl">Оплата за день, ₽ (необязательно) <input type="number" class="sm-sh-pay" min="0" max="1000000" placeholder="—" value="' + ((job && job.pay_per_day != null) ? esc(String(job.pay_per_day)) : "") + '"></label>' +
       '<div class="sm-sh-lbl"><button class="sm-sh-save" type="button" data-jsave="1">' + (job ? "Сохранить график" : "Создать график") + "</button>" +
       (job ? ' <button class="sm-sh-cycadd" type="button" data-jcancel="1">Отмена</button>' : "") +
       "</div></div>";
@@ -3393,6 +3424,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     const vacRows = (V || []).map((v) =>
       '<div class="sm-sh-row"><span>' + v.start_date.slice(8, 10) + "." + v.start_date.slice(5, 7) + "." + v.start_date.slice(0, 4) +
       " · " + v.days + " дн · " + esc(v.kind === "harm" ? "вредность (+7)" : v.kind === "extra" ? "дополнительный" : "основной") +
+      ((v.job_ids || []).length ? " · графики: " + esc((v.job_ids || []).map((id) => (((J || []).find((j) => j.id === id)) || {}).name || "?").join(", ")) : " · все графики") +
       '</span><b class="sm-sh-del" data-vdel="' + v.id + '" title="Удалить отпуск">×</b></div>').join("");
     const holRows = Object.keys(HOLIDAYS).map((k) => {
       const inf = infoDay(k, vs);
@@ -3415,14 +3447,21 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       '<div class="sm-sh-strip">' + strip.join("") + '</div>' +
       '<div class="sm-sh-legend"><span><i style="background:#E30613"></i>смена</span><span><i style="background:#30a46c"></i>свободен</span><span><i style="background:#f9ab00"></i>праздник/отпуск</span></div>' +
       '<div class="sm-sh-stats">' +
-      '<div class="sm-sh-stat"><b>🏭 ' + cur.work + ' дн. · ' + cur.hours + ' ч.</b><span>рабочие · ' + esc(mName(now)) + '</span><em>🏢 свободен: ' + cur.free + ' дн.</em></div>' +
-      '<div class="sm-sh-stat"><b>🏭 ' + prev.work + ' дн. · ' + prev.hours + ' ч.</b><span>рабочие · ' + esc(mName(prevD)) + '</span><em>🏢 свободен: ' + prev.free + ' дн.</em></div>' +
+      // v0.8.29: карточка на КАЖДЫЙ график: дни/часы отдельно; при подневной оплате —
+      // оценка «≈ ₽» за месяц (активные дни графика, уже за вычетом его отпусков и перекрытий).
+      (J || []).map((j) => {
+        const st = cur.perJob[j.id];
+        const shifts = st ? st.shifts : 0;
+        const pay = j.pay_per_day != null ? Number(j.pay_per_day) : null;
+        return '<div class="sm-sh-stat' + (j.work === false ? " sm-sh-stat-rit" : "") + '"><b>' +
+          (j.work === false ? "🧘 " : "🏭 ") + esc(j.name) + ": " + shifts + " " + plRu(shifts, ["день", "дня", "дней"]) + " · " + (st ? st.hours : 0) + " ч.</b>" +
+          "<span>" + (j.work === false ? "ритуал — не рабочие дни" : "рабочие · " + esc(mName(now))) + "</span>" +
+          (pay != null ? "<em>💰 подневная: ≈ " + Math.round(shifts * pay).toLocaleString("ru-RU") + " ₽ (" + shifts + " дн. × " + pay + " ₽)</em>" : "") +
+          "</div>";
+      }).join("") +
+      '<div class="sm-sh-stat"><b>🏭 ' + cur.work + ' дн. · ' + cur.hours + ' ч.</b><span>итого рабочие · ' + esc(mName(now)) + '</span><em>🏢 свободен: ' + cur.free + ' дн. · 🏖 отпуск/праздники: ' + cur.vac + ' дн.</em></div>' +
+      '<div class="sm-sh-stat"><b>🏭 ' + prev.work + ' дн. · ' + prev.hours + ' ч.</b><span>итого рабочие · ' + esc(mName(prevD)) + '</span><em>🏢 свободен: ' + prev.free + ' дн.</em></div>' +
       '</div>' +
-      (perJobOn
-        ? '<div class="sm-sh-perjob"><div>📊 ' + esc(mName(now)) + ": " + pjLine(cur) + '</div>' +
-          '<div>📊 ' + esc(mName(prevD)) + ": " + pjLine(prev) + '</div>' +
-          '<button class="sm-sh-perjob-tgl" type="button" data-perjob="0">× скрыть разбивку по графикам</button></div>'
-        : '<div class="sm-sh-perjob"><button class="sm-sh-perjob-tgl" type="button" data-perjob="1">📊 показать по графикам</button></div>') +
       '<div class="sm-sh-sec">Мои графики (' + (J || []).length + ')</div>' + jobsRows + editorHtml +
       '<div class="sm-sh-lbl"><button class="sm-sh-cycadd" type="button" data-jadd="1">+ Добавить график</button></div>' +
       circlesHTML(today) +
@@ -3434,7 +3473,10 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       '<details class="sm-sh-secwrap"><summary>🏖 Отпуски</summary>' +
       '<form class="sm-sh-vac"><input type="date" class="sm-sh-vstart"><input type="number" class="sm-sh-vdays" min="1" max="366" value="14" title="Дней">' +
       '<select class="sm-sh-vkind"><option value="main">основной</option><option value="harm">вредность (+7)</option><option value="extra">дополнительный</option></select>' +
-      '<button class="sm-add-btn" type="submit">+</button></form>' +
+      '<button class="sm-add-btn" type="submit">+</button>' +
+      '<div class="sm-sh-vacjobs">Отпуск на графики: ' + ((J || []).map((j) =>
+        '<label class="sm-sh-vacjob"><input type="checkbox" class="sm-vac-job" data-jid="' + j.id + '"> ' + esc(j.name) + '</label>').join("") || "нет графиков") +
+      '<span class="sm-sh-note">ничего не отмечено — на все графики</span></div></form>' +
       (vacRows || '<p class="sm-sh-note">Отпусков не запланировано.</p>') + '</details>' +
       '<details class="sm-sh-secwrap"><summary>🎉 Праздники 2026</summary>' + holRows + '</details>' +
       '</div>';
@@ -3624,7 +3666,9 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       const kind = root.querySelector(".sm-sh-vkind").value;
       if (!s || days < 1) { SixMin.toast("Укажите дату начала и число дней"); return; }
       const uid = await SixMin.uid();
-      const { error } = await SixMin.sb().from("shift_vacations").insert({ user_id: uid, start_date: s, days, kind });
+      // v0.8.29: область отпуска: отмеченные графики; пусто = все (прежнее поведение)
+      const jobIds = Array.from(root.querySelectorAll(".sm-vac-job:checked")).map((el) => el.dataset.jid);
+      const { error } = await SixMin.sb().from("shift_vacations").insert({ user_id: uid, start_date: s, days, kind, job_ids: jobIds });
       if (error) { SixMin.toast("Ошибка: " + error.message); return; }
       SixMin.toast("Отпуск добавлен");
       await load().catch(() => {}); render();
@@ -3723,6 +3767,9 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       .sm-sh-now{font-size:12.5px;opacity:.75;margin:-2px 0 8px}
       .sm-sh-perjob{font-size:11.5px;opacity:.85;margin:-4px 0 10px;display:flex;flex-direction:column;gap:2px}
       .sm-sh-perjob-tgl{align-self:flex-start;background:none;border:0;color:var(--accent,#E30613);font-size:11.5px;cursor:pointer;padding:2px 0}
+      .sm-sh-stat-rit{opacity:.8;border-style:dashed}
+      .sm-sh-vacjobs{display:flex;gap:10px;flex-wrap:wrap;width:100%;font-size:12px;opacity:.9;margin-top:2px;align-items:center}
+      .sm-sh-vacjob{display:inline-flex;gap:4px;align-items:center}
       .sm-sh-types{margin:8px 0;padding:8px;border:1px dashed var(--line,#333);border-radius:10px}
       .sm-sh-ev{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
       .sm-sh-ev-i{background:var(--inset,#1c1c1c);border:1px solid var(--line,#333);border-radius:8px;color:inherit;padding:6px;font-size:12px;color-scheme:dark}
