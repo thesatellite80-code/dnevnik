@@ -3604,24 +3604,30 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       const legend = "Учтены: " + (counted.length ? esc(counted.join(", ")) : "никто") +
         (silent.length ? " · Не учтены: " + esc(silent.join("; ")) : "");
       const sharedDays = [];
+      const sharedAll = []; // v0.8.36: общие свободные за 90 дней — для «ближайших трёх»
       const whyRows = []; // v0.8.34: кто занят по дням — объяснение «почему нет общих»
-      for (let i = 0; i < 14; i++) {
+      for (let i = 0; i < 90; i++) {
         const k = key(new Date(parse(today).getTime() + i * 86400000));
         if (!sharers.length) break;
         const busy = [];
+        const busyIds = {}; // v0.8.37: чтобы показать, кто свободен в этот день
         for (const m of sharers) for (const j of (memberJobs[m.user_id] || []).filter((x) => x.work !== false)) {
           const s = jobShift(k, j);
-          if (s === "day" || s === "night" || (j.shift_types || {})[s]) busy.push(memberName(m.user_id) + ": " + j.job_name);
+          if (s === "day" || s === "night" || (j.shift_types || {})[s]) { busy.push(memberName(m.user_id) + ": " + j.job_name); busyIds[m.user_id] = 1; }
         }
-        whyRows.push(k.slice(8, 10) + "." + k.slice(5, 7) + " " + ["вс", "пн", "вт", "ср", "чт", "пт", "сб"][parse(k).getDay()] +
-          " — " + (busy.length ? esc(busy.join(", ")) : "все свободны"));
+        const freeNames = sharers.filter((m) => !busyIds[m.user_id]).map((m) => memberName(m.user_id));
+        if (i < 14) whyRows.push(k.slice(8, 10) + "." + k.slice(5, 7) + " " + ["вс", "пн", "вт", "ср", "чт", "пт", "сб"][parse(k).getDay()] + " — " +
+          (busy.length ? esc(busy.join(", ")) + (freeNames.length ? " · свободны: " + esc(freeNames.join(", ")) : "") : "все свободны"));
         const freeAll = sharers.every((m) => (memberJobs[m.user_id] || []).filter((j) => j.work !== false).every((j) => {
           // v0.8.28: общий свободный день портят только РАБОЧИЕ графики (любой занятый тип);
           // ритуалы участников (work=false) день круга не отменяют
           const s = jobShift(k, j);
           return s !== "day" && s !== "night" && !((j.shift_types || {})[s]);
         }));
-        if (freeAll) sharedDays.push(k.slice(8) + "." + k.slice(5, 7));
+        if (freeAll) {
+          if (i < 14) sharedDays.push(k.slice(8) + "." + k.slice(5, 7));
+          sharedAll.push(k.slice(8, 10) + "." + k.slice(5, 7) + " " + ["вс", "пн", "вт", "ср", "чт", "пт", "сб"][parse(k).getDay()]);
+        }
       }
       out += '<div class="sm-sh-circle"><b>🤝 ' + esc(c.name) + "</b>" +
         (bds.length ? '<div class="sm-sh-row"><span>🎂 ' + esc(bds[0].name) + (bds[0].me ? " (у вас)" : "") +
@@ -3632,6 +3638,10 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
           : (sharers.length ? '<details class="sm-sh-days"><summary class="sm-sh-row"><span>Общих свободных дней на ближайших 14 нет — почему? кто занят по дням</span></summary>' +
             '<div class="sm-sh-dayslist"><div class="sm-sh-day-busy">' + legend + '</div>' + whyRows.map((r) => '<div class="sm-sh-day-busy">' + r + '</div>').join("") + '</div></details>' :
             '<div class="sm-sh-row"><span>' + legend + "</span></div>")) +
+        (sharers.length ? '<div class="sm-sh-row"><span>🗓 Ближайшие общие выходные: ' +
+          (sharedAll.length ? sharedAll.slice(0, 3).map((d) => '<span class="sm-sh-day">' + esc(d) + "</span>").join("") +
+            (sharedAll.length > 3 ? " …" : "") : "в ближайшие 90 дней нет") +
+          ' · просмотрено 90 дней вперёд</span></div>' : "") +
         "</div>";
     }
     return out;
