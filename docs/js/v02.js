@@ -4043,7 +4043,14 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
     if (!ids.length) { circles = []; sel = null; return; }
     const { data: cs } = await SixMin.sb().from("circles").select("*").in("id", ids);
     circles = cs || [];
-    if (!circles.find((c) => c.id === sel)) sel = circles[0]?.id || null;
+    if (!circles.find((c) => c.id === sel)) {
+      // v0.8.31: возвращаем пользователя в тот круг, в котором он был до
+      // перезагрузки (если всё ещё участник); память — как у вкладки sixmin-tab
+      let saved = null;
+      try { saved = localStorage.getItem("sixmin-circle"); } catch (e) {}
+      sel = (saved && circles.find((c) => c.id === saved)) ? saved : (circles[0]?.id || null);
+    }
+    if (sel) { try { localStorage.setItem("sixmin-circle", sel); } catch (e) {} }
     // v0.8.25: личное состояние онбординга: всего шагов и невыполненных
     const { data: onb } = await SixMin.sb().from("tasks").select("id,completed")
       .eq("user_id", uid).like("title", "Онбординг ·%").limit(10);
@@ -4522,8 +4529,11 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
     const c = circles.find((x) => x.id === sel);
     const bal = (D.ledger || []).filter((l) => l.user_id === D.uid).reduce((s2, l) => s2 + l.delta, 0);
     if (bal < r.cost_points) { SixMin.toast("Не хватает " + (r.cost_points - bal) + " " + curWord(c?.bonus_currency, r.cost_points - bal)); return; }
-    await SixMin.sb().from("bonus_ledger").insert({ circle_id: sel, user_id: D.uid, delta: -r.cost_points, reason: "награда: " + r.title, reward_id: r.id });
-    SixMin.toast("Списано " + r.cost_points + " — наслаждайтесь 🎉");
+    // v0.8.32: проверяем вставку (иначе при ошибке тост соврёт «списано»),
+    // и показываем остаток сразу — без окна «ничего не изменилось» до перечитки
+    const { error } = await SixMin.sb().from("bonus_ledger").insert({ circle_id: sel, user_id: D.uid, delta: -r.cost_points, reason: "награда: " + r.title, reward_id: r.id });
+    if (error) { SixMin.toast("Не удалось списать: " + error.message); await refresh(); return; }
+    SixMin.toast("Списано " + r.cost_points + " — наслаждайтесь 🎉 Остаток: " + (bal - r.cost_points));
     await refresh();
   }
 
