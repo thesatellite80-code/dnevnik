@@ -24,7 +24,7 @@ window.SIXMIN_CONFIG = {
 
   // ── 3. ПРОЧЕЕ ──────────────────────────────────────────────────────
   defaultTimezone: "Europe/Moscow",
-  version: "0.8.44"
+  version: "0.8.45"
 };
 
 /* ── Контент: вопросы (свои формулировки, пул вариантов для ротации) ── */
@@ -1000,6 +1000,14 @@ const App = (() => {
 
     const st = Store.computeStreak(entries, today);
     $("today-streak").textContent = "🔥 " + st.current + (st.current === 1 ? " день" : (st.current < 5 ? " дня" : " дней"));
+    const fz = $("btn-freeze"); // v0.8.45: заморозка в шапке, видно состояние
+    if (fz) {
+      const frozen = entries.some(x => x.date === today && x.frozen);
+      fz.textContent = frozen ? "❄️ Заморожено" : "🧊 Заморозить";
+      fz.disabled = frozen;
+      fz.title = frozen ? "Сегодня заморожено: день отдыха, серия не прервётся"
+        : "Заморозить сегодня: день отдыха без вины";
+    }
 
     [["am", "card-am", "am-sub", "am-action"], ["pm", "card-pm", "pm-sub", "pm-action"]].forEach(([slot, cardId, subId, actId]) => {
       const e = entries.find(x => x.date === today && x.slot === slot && !x.frozen && hasAnswers(x));
@@ -1257,12 +1265,24 @@ const App = (() => {
   }
 
   /* ═══════════ БЫСТРАЯ ЗАПИСЬ ═══════════ */
+  // v0.8.45: строки зависят от слота и совпадают по смыслу с вопросами v0.8.42
+  // (план утром / итоги вечером). Кейс v0.8.42: плейсхолдеры жили в index.html
+  // отдельно от QUESTIONS и не поменялись вместе с вопросами.
+  const QUICK_PH = {
+    am: ["Какие планы на сегодня? 1–3 пункта.", "С чего начнёте — и во сколько?", "Что может помешать — и каков обход?"],
+    pm: ["Что успели сегодня? Запишите фактами.", "Что не успели — и какое решение?", "Что поменять в плане на завтра?"]
+  };
+  function setQuickPh() {
+    const ph = QUICK_PH[state.quick.slot] || QUICK_PH.am;
+    ["quick-1", "quick-2", "quick-3"].forEach((id, i) => { const el = $(id); if (el) el.placeholder = ph[i]; });
+  }
   function openQuick() {
     const hour = new Date().getHours();
     state.quick.slot = hour < 15 ? "am" : "pm";
     document.querySelectorAll("#quick-slot button").forEach(b =>
       b.classList.toggle("on", b.dataset.slot === state.quick.slot));
     ["quick-1", "quick-2", "quick-3"].forEach(id => $(id).value = "");
+    setQuickPh();
     show("quick");
     setTimeout(() => $("quick-1").focus(), 120);
   }
@@ -1619,6 +1639,7 @@ const App = (() => {
       b.onclick = () => {
         state.quick.slot = b.dataset.slot;
         document.querySelectorAll("#quick-slot button").forEach(x => x.classList.toggle("on", x === b));
+        setQuickPh();
       });
 
     $("btn-form-close").onclick = closeForm;
@@ -1690,7 +1711,11 @@ const App = (() => {
       ev.target.value = "";
     };
     $("btn-freeze").onclick = async () => {
-      await Store.freezeDay(Store.localDate());
+      const today = Store.localDate();
+      const frozen = (await Store.allEntries()).some(x => x.date === today && x.frozen);
+      if (frozen) { flash("❄️ Сегодня уже заморожено — серия не прервётся", "ok"); return; }
+      if (!confirm("Заморозить сегодня? День станет днём отдыха: запись не нужна, серия не прервётся.")) return;
+      await Store.freezeDay(today);
       await Cloud.sync().catch(() => {});
       flash("🧊 Сегодня заморожено — серия не прервётся", "ok");
       renderToday();

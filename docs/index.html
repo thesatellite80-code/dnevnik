@@ -304,6 +304,7 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
       <div class="streak" id="today-streak">🔥 0</div>
     </div>
     <button class="ghost-btn" id="btn-quick" title="Быстрая запись">⚡ Быстро</button>
+    <button class="ghost-btn" id="btn-freeze" title="Заморозить сегодня: день отдыха без вины">🧊 Заморозить</button>
     <button class="ghost-btn" id="btn-wisdom" title="Мудрость «6 минут»">📖</button>
   </header>
 
@@ -418,9 +419,9 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
       <button data-slot="am">☀️ Утро</button>
       <button data-slot="pm">🌙 Вечер</button>
     </div>
-    <textarea id="quick-1" rows="2" placeholder="Что хорошего сейчас?"></textarea>
-    <textarea id="quick-2" rows="2" placeholder="Что важно сегодня?"></textarea>
-    <textarea id="quick-3" rows="2" placeholder="Что возьмёшь из сегодня в завтра?"></textarea>
+    <textarea id="quick-1" rows="2" placeholder="Какие планы на сегодня? 1–3 пункта."></textarea>
+    <textarea id="quick-2" rows="2" placeholder="С чего начнёте — и во сколько?"></textarea>
+    <textarea id="quick-3" rows="2" placeholder="Что может помешать — и каков обход?"></textarea>
   </main>
   <footer class="tabbar form-bar">
     <button class="btn primary wide" id="btn-quick-save">Сохранить (10 секунд)</button>
@@ -566,12 +567,11 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
         </div>
       </details>
       <div class="btn-row">
-        <button class="btn ghost" id="btn-freeze">🧊 Заморозить сегодня</button>
         <button class="btn danger" id="btn-wipe">Стереть всё</button>
       </div>
     </div>
 
-    <p class="version"><span id="build-info">v0.8.44</span> · данные на устройстве + Supabase</p>
+    <p class="version"><span id="build-info">v0.8.45</span> · данные на устройстве + Supabase</p>
   </main>
 </section>
 
@@ -643,7 +643,7 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
   <button data-tab="settings"><span>⚙️</span>Настройки</button>
 </nav>
 
-<script defer src="js/bundle.js?v=071"></script>
-<script defer src="js/v02.js?v=103"></script>
+<script defer src="js/bundle.js?v=072"></script>
+<script defer src="js/v02.js?v=104"></script>
 </body>
 </html>

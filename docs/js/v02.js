@@ -2398,12 +2398,14 @@ window.__v02stage = "after-sixmin-tasks"; if (window.__v02say) window.__v02say("
       sb.from("tasks").select("*").eq("user_id", uid).eq("completed", true)
         .is("circle_id", null) // v0.8.30: выполнения круговых заданий — не личный ритуал
         .order("completed_at", { ascending: false }).limit(100),
-      sb.from("tasks").select("id").eq("user_id", uid).neq("completed", true)
+      sb.from("tasks").select("id,title,kind,area").eq("user_id", uid).neq("completed", true)
         .is("circle_id", null).eq("due_date", todayKey).limit(300),
     ]);
     const dayOf = (t) => (t.completed_at ? SixMin.fmtKey(new Date(t.completed_at)) : (t.due_date || ""));
     done = (d.data || []).filter((t) => dayOf(t) === todayKey).reverse(); // утром сверху
+    window.__sixminTodayOpen = o.data || []; // v0.8.45: кэш для строки «Задачи на сегодня»
     openToday = (o.data || []).length;
+    if (window.SixMinAmRedraw) window.SixMinAmRedraw();
   }
 
   function render() {
@@ -3668,8 +3670,45 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     }
     return out;
   }
+  // v0.8.45: «сколько сегодня свободно по силам» — бодрое окно 07:00–23:00 минус
+  // занятые интервалы (смены + ритуалы, merge как в busyMsg). Ночь не считаем:
+  // решение владельца 21.10.2026 (вариант «бодрое время 07–23 минус занято»).
+  const WAKE_FROM = 420, WAKE_TO = 1380;
+  const TASK_EM = { cream: "🍰", cherry: "🍒", fun: "🎈", high: "⚡", low: "📋" };
+  function fmtDur(min) {
+    const h = Math.floor(min / 60), m = min % 60;
+    return h && m ? h + " ч " + m + " м" : (h ? h + " ч" : m + " м");
+  }
+  function freeDayInfo(k) {
+    const { act } = splitWork(k);
+    const ivs = act.flatMap((a) => a.iv).slice().sort((a, b) => a[0] - b[0]);
+    const merged = [];
+    for (const r of ivs) {
+      const L = merged[merged.length - 1];
+      if (L && r[0] <= L[1]) L[1] = Math.max(L[1], r[1]); else merged.push([r[0], r[1]]);
+    }
+    let busy = 0;
+    for (const r of merged) {
+      const s = Math.max(r[0], WAKE_FROM), e = Math.min(r[1], WAKE_TO);
+      if (e > s) busy += e - s;
+    }
+    return { busy: busy, free: (WAKE_TO - WAKE_FROM) - busy };
+  }
   function amExtraHTML(today) {
+    const tk = key(parse(today));
+    const fi = freeDayInfo(tk); // v0.8.45: строка «планируйте по силам»
+    const freeLine = fi.busy > 0
+      ? '<div class="sm-free-note"><span>⏳ Сегодня по графикам свободно около ' + fmtDur(fi.free) +
+        ' (занято ' + fmtDur(fi.busy) + ') — планируйте по силам.</span></div>'
+      : "";
+    const open = window.__sixminTodayOpen || []; // v0.8.45: кэш задач от donetoday
     const rit = ritualsToday(today); // v0.8.44: напомнить о ритуалах на сегодня
+    const actLine = open.length
+      ? '<div class="sm-tasks-note"><span>📌 Задачи на сегодня: ' +
+        open.slice(0, 4).map((t) => (TASK_EM[t.kind] || "✅") + " " +
+        esc(t.title && t.title.trim() ? t.title : "(без названия)")).join(", ") +
+        (open.length > 4 ? " + ещё " + (open.length - 4) : "") + '.</span></div>'
+      : (rit.length ? '<div class="sm-bday-note"><span>🐾 Ритуалы сегодня: ' + rit.join(", ") + '.</span></div>' : "");
     const notesHtml = bdayNotes(today).map((n) =>
       '<div class="sm-bday-note"><span>🎂 Вы в курсе? В круге «' + esc(n.circle) + '» у ' + esc(n.name) +
       (n.past ? " ДР был " + fmtBD(n.k) : " ДР " + fmtBD(n.k) + (n.inDays ? " (через " + n.inDays + " дн.)" : "")) +
@@ -3677,7 +3716,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       '.</span><span class="sm-bday-btns"><button class="sm-bday-btn" type="button" data-bday-dismiss="' + esc(n.id) + '">Больше не напоминать</button>' +
       n.candDays.map((d) => '<button class="sm-bday-btn" type="button" data-bday-snooze="' + esc(n.id + "|" + d) + '">Напомнить ' + fmtBD(d) + "</button>").join("") +
       "</span></div>").join("");
-    return (rit.length ? '<div class="sm-bday-note"><span>🐾 Ритуалы сегодня: ' + rit.join(", ") + '.</span></div>' : "") + notesHtml;
+    return freeLine + actLine + notesHtml;
   }
   function redrawAmExtra() {
     if (!document.getElementById("sm-bday-css")) {
@@ -3685,13 +3724,16 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       s.id = "sm-bday-css";
       s.textContent = ".sm-bday-note{margin:8px 0;padding:8px 10px;border-left:3px solid var(--accent,#E30613);background:rgba(227,6,19,.08);border-radius:8px;font-size:13px;line-height:1.5}" +
         ".sm-bday-btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}" +
-        ".sm-bday-btns button{background:transparent;border:1px solid var(--accent,#E30613);color:var(--accent,#E30613);border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer}";
+        ".sm-bday-btns button{background:transparent;border:1px solid var(--accent,#E30613);color:var(--accent,#E30613);border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer}" +
+        ".sm-tasks-note{margin:8px 0;padding:8px 10px;border-left:3px solid #30a46c;background:rgba(48,164,108,.10);border-radius:8px;font-size:13px;line-height:1.5}" +
+        ".sm-free-note{margin:8px 0;padding:8px 10px;border-left:3px solid #4f8cff;background:rgba(79,138,255,.10);border-radius:8px;font-size:13px;line-height:1.5}";
       document.head.appendChild(s);
     }
     const host = document.getElementById("am-extra");
     if (host) host.innerHTML = amExtraHTML(key(new Date()));
   }
   window.SixMinAmExtraHTML = amExtraHTML;
+  window.SixMinAmRedraw = redrawAmExtra; // v0.8.45: donetoday дёргает после load()
   document.addEventListener("click", (e) => {
     const dis = e.target.closest("[data-bday-dismiss]");
     const sno = e.target.closest("[data-bday-snooze]");
