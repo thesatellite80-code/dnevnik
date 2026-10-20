@@ -3586,6 +3586,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
   }
   function circlesHTML(today) {
     if (!CIRC.length) return "";
+    const nextBlocks = []; // v0.8.38: общие выходные кругов — одним спойлером внизу
     let out = '<div class="sm-sh-sec">В моих кругах</div>';
     for (const c of CIRC) {
       const bds = [];
@@ -3629,6 +3630,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
           sharedAll.push(k.slice(8, 10) + "." + k.slice(5, 7) + " " + ["вс", "пн", "вт", "ср", "чт", "пт", "сб"][parse(k).getDay()]);
         }
       }
+      if (sharers.length) nextBlocks.push({ name: c.name, all: sharedAll });
       out += '<div class="sm-sh-circle"><b>🤝 ' + esc(c.name) + "</b>" +
         (bds.length ? '<div class="sm-sh-row"><span>🎂 ' + esc(bds[0].name) + (bds[0].me ? " (у вас)" : "") +
           " — " + (bds[0].inDays === 0 ? "сегодня!" : "через " + bds[0].inDays + " дн.") + "</span></div>" : "") +
@@ -3638,11 +3640,16 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
           : (sharers.length ? '<details class="sm-sh-days"><summary class="sm-sh-row"><span>Общих свободных дней на ближайших 14 нет — почему? кто занят по дням</span></summary>' +
             '<div class="sm-sh-dayslist"><div class="sm-sh-day-busy">' + legend + '</div>' + whyRows.map((r) => '<div class="sm-sh-day-busy">' + r + '</div>').join("") + '</div></details>' :
             '<div class="sm-sh-row"><span>' + legend + "</span></div>")) +
-        (sharers.length ? '<div class="sm-sh-row"><span>🗓 Ближайшие общие выходные: ' +
-          (sharedAll.length ? sharedAll.slice(0, 3).map((d) => '<span class="sm-sh-day">' + esc(d) + "</span>").join("") +
-            (sharedAll.length > 3 ? " …" : "") : "в ближайшие 90 дней нет") +
-          ' · просмотрено 90 дней вперёд</span></div>' : "") +
         "</div>";
+    }
+    if (nextBlocks.length) {
+      out += '<details class="sm-sh-secwrap"><summary>🗓 Общие выходные в моих кругах</summary>' +
+        nextBlocks.map((b) => b.all.length
+          ? '<details class="sm-sh-days"><summary class="sm-sh-row free"><span>🤝 ' + esc(b.name) + ": " + b.all.length +
+            " дн. за 90 дней · ближайший " + esc(b.all[0]) + '</span></summary><div class="sm-sh-dayslist">' +
+            b.all.map((d) => '<span class="sm-sh-day">' + esc(d) + "</span>").join("") + "</div></details>"
+          : '<div class="sm-sh-row"><span>🤝 ' + esc(b.name) + ": в ближайшие 90 дней нет</span></div>").join("") +
+        "</details>";
     }
     return out;
   }
