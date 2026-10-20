@@ -1895,11 +1895,15 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
     let today = [], overdue = [], upcoming = [], all = [], onb = [];
     // v0.8.19: шаги онбординга новичка круга (сеются seedOnboarding, v0.8.11/0.8.16)
     const IS_ONB = (t) => /^Онбординг ·/.test(t.title || "");
+    // v0.8.26: ВСЕ видимые строки задач, включая блок онбординга: обработчики кнопок
+    // раньше искали только в today/overdue/upcoming и не находили шаги блока —
+    // чекбоксы «🎓» выглядели мёртвыми (скрин 16).
+    const rowsAll = () => [...onb, ...today, ...overdue, ...upcoming];
     // комментарии + вложения: общий компонент v0.6 (тот же, что в кругах)
     const CM = SixMinComments.create({
       render: () => render(),
       scope: () => null,   // личная/рабочая задача → приватная папка <uid>/t/...
-      findTask: (id) => [...today, ...overdue, ...upcoming].find((x) => x.id === id),
+      findTask: (id) => rowsAll().find((x) => x.id === id),
     });
 
     async function load() {
@@ -1919,7 +1923,7 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
                ...rest.filter((t) => t.completed && t.due_date === todayKey)];
       overdue = open.filter((t) => t.due_date < todayKey);
       upcoming = open.filter((t) => t.due_date > todayKey);
-    const ids = [...today, ...overdue, ...upcoming].map((t) => t.id);
+    const ids = rowsAll().map((t) => t.id);
     await CM.loadCounts(ids);
     }
 
@@ -2142,7 +2146,7 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
       root.querySelectorAll("[data-act]").forEach((b) => b.addEventListener("click", (e) => {
         e.stopPropagation();
         const id = b.dataset.id;
-        const t = [...today, ...overdue, ...upcoming].find((x) => x.id === id);
+        const t = rowsAll().find((x) => x.id === id);
         if (b.dataset.act === "toggle" && t) toggle(t);
         if (b.dataset.act === "postpone" && t) postpone(t, 1);
         if (b.dataset.act === "totoday" && t) moveToday(t);
@@ -2160,7 +2164,7 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
       root.querySelectorAll("[data-ren]").forEach((sp) =>
       sp.addEventListener("click", (e) => {
         e.stopPropagation();
-        const t = [...today, ...overdue, ...upcoming].find((x) => x.id === sp.dataset.ren);
+        const t = rowsAll().find((x) => x.id === sp.dataset.ren);
         if (!t || sp.querySelector("input")) return;
         // v0.6.6: инлайн-переименование вместо системного prompt (удобно для длинных текстов)
         const input = document.createElement("input");
@@ -2238,7 +2242,7 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
           const dx = (e.changedTouches[0].clientX - (x0 ?? 0));
           li.style.transform = ""; li.style.opacity = "";
           if (dx < -70) {
-            const t = [...today, ...overdue, ...upcoming].find((x) => x.id === li.dataset.id);
+            const t = rowsAll().find((x) => x.id === li.dataset.id);
             if (t && !t.completed) postpone(t, 1);
           }
           x0 = null;
