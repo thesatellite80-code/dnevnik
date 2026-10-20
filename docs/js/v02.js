@@ -3587,6 +3587,8 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
   function circlesHTML(today) {
     if (!CIRC.length) return "";
     const nextBlocks = []; // v0.8.38: общие выходные кругов — одним спойлером внизу
+    const bdayPeople = new Map(); // v0.8.41: именинник = одна строка со списком кругов
+    const fmtK = (kk) => kk.slice(8, 10) + "." + kk.slice(5, 7) + " " + ["вс", "пн", "вт", "ср", "чт", "пт", "сб"][parse(kk).getDay()]; // v0.8.41: на уровне функции
     let out = '<div class="sm-sh-sec">В моих кругах</div>';
     for (const c of CIRC) {
       const memberJobs = {};
@@ -3627,11 +3629,10 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
         }
       }
       // v0.8.39: предупреждение о ДР — только внутри интервала общих свободных дней вокруг даты
-      const fmtK = (kk) => kk.slice(8, 10) + "." + kk.slice(5, 7) + " " + ["вс", "пн", "вт", "ср", "чт", "пт", "сб"][parse(kk).getDay()];
       const tk = key(parse(today));
-      const bdayRows = [];
       for (const m of c.members) {
         if (!m.birthday) continue;
+        if (m.user_id === (P && P.user_id)) continue; // v0.8.40: своё ДР имениннику не показываем (кругу — да)
         const md = String(m.birthday).slice(5, 10);
         const yr = parse(today).getFullYear();
         const cands = [];
@@ -3650,19 +3651,20 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
           if (!dB && !dA) continue;
           const start = dB || cd.k, end = dA || cd.k;
           if (tk < start || tk > end) continue;
-          const me = m.user_id === (P && P.user_id);
-          bdayRows.push('<div class="sm-sh-row"><span>🎂 ' + esc(m.name) + (me ? " (у вас)" : "") +
-            (cd.past
-              ? " — ДР был " + fmtK(cd.k) + " (" + Math.round((parse(today) - parse(cd.k)) / 86400000) + " дн. назад) · ближайший общий свободный после: " + (dA ? fmtK(dA) : "—")
-              : " — " + (cd.inDays === 0 ? "сегодня!" : "через " + cd.inDays + " дн. (" + fmtK(cd.k) + ")") +
-                " · общие свободные: до " + (dB ? fmtK(dB) : "—") + ", после " + (dA ? fmtK(dA) : "—")) +
-            "</span></div>");
+          const ago = Math.round((parse(today) - parse(cd.k)) / 86400000);
+          const rec = bdayPeople.get(m.user_id) || {
+            name: m.name,
+            label: cd.past ? "ДР был " + fmtK(cd.k) + " (" + ago + " дн. назад)" : (cd.inDays === 0 ? "сегодня!" : "через " + cd.inDays + " дн. (" + fmtK(cd.k) + ")"),
+            sortKey: cd.past ? -ago : cd.inDays,
+            circles: [],
+          };
+          rec.circles.push(c.name);
+          bdayPeople.set(m.user_id, rec);
           break;
         }
       }
       if (sharers.length) nextBlocks.push({ name: c.name, all: sharedAll });
       out += '<div class="sm-sh-circle"><b>🤝 ' + esc(c.name) + "</b>" +
-        bdayRows.join("") +
         (sharedDays.length ? '<details class="sm-sh-days"><summary class="sm-sh-row free"><span>Общие свободные дни (14 дн): ' + sharedDays.length + " дн. — развернуть</span></summary>" +
           '<div class="sm-sh-dayslist">' + sharedDays.map((d) => '<span class="sm-sh-day">' + esc(d) + "</span>").join("") + "</div>" +
           '<div class="sm-sh-day-busy">' + legend + "</div></details>"
@@ -3670,6 +3672,13 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
             '<div class="sm-sh-dayslist"><div class="sm-sh-day-busy">' + legend + '</div>' + whyRows.map((r) => '<div class="sm-sh-day-busy">' + r + '</div>').join("") + '</div></details>' :
             '<div class="sm-sh-row"><span>' + legend + "</span></div>")) +
         "</div>";
+    }
+    if (bdayPeople.size) {
+      const recs = Array.from(bdayPeople.values()).sort((a, b) => a.sortKey - b.sortKey);
+      out += '<details class="sm-sh-secwrap"><summary>🎂 Ближайшие дни рождения</summary>' +
+        recs.map((r) => '<div class="sm-sh-row"><span>🎂 ' + esc(r.name) + " — " + r.label +
+          " · круги: " + esc(r.circles.join(", ")) + "</span></div>").join("") +
+        "</details>";
     }
     if (nextBlocks.length) {
       out += '<details class="sm-sh-secwrap"><summary>🗓 Общие выходные в моих кругах</summary>' +
