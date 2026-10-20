@@ -1911,6 +1911,7 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
       todayKey = await SixMin.todayKey();
       const { data } = await SixMin.sb().from("tasks").select("*")
         .eq("user_id", uid).eq("area", AREA)
+        .is("circle_id", null) // v0.8.30: круговые (общие и баунти) не дублируются в Трекер
         .order("due_date", { ascending: true }).order("position", { ascending: true })
         .limit(400);
       all = data || [];
@@ -2395,9 +2396,10 @@ window.__v02stage = "after-sixmin-tasks"; if (window.__v02say) window.__v02say("
     const sb = SixMin.sb();
     const [d, o] = await Promise.all([
       sb.from("tasks").select("*").eq("user_id", uid).eq("completed", true)
+        .is("circle_id", null) // v0.8.30: выполнения круговых заданий — не личный ритуал
         .order("completed_at", { ascending: false }).limit(100),
       sb.from("tasks").select("id").eq("user_id", uid).neq("completed", true)
-        .eq("due_date", todayKey).limit(300),
+        .is("circle_id", null).eq("due_date", todayKey).limit(300),
     ]);
     const dayOf = (t) => (t.completed_at ? SixMin.fmtKey(new Date(t.completed_at)) : (t.due_date || ""));
     done = (d.data || []).filter((t) => dayOf(t) === todayKey).reverse(); // утром сверху
@@ -3447,21 +3449,22 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       '<div class="sm-sh-strip">' + strip.join("") + '</div>' +
       '<div class="sm-sh-legend"><span><i style="background:#E30613"></i>смена</span><span><i style="background:#30a46c"></i>свободен</span><span><i style="background:#f9ab00"></i>праздник/отпуск</span></div>' +
       '<div class="sm-sh-stats">' +
-      // v0.8.29: карточка на КАЖДЫЙ график: дни/часы отдельно; при подневной оплате —
-      // оценка «≈ ₽» за месяц (активные дни графика, уже за вычетом его отпусков и перекрытий).
-      (J || []).map((j) => {
-        const st = cur.perJob[j.id];
-        const shifts = st ? st.shifts : 0;
-        const pay = j.pay_per_day != null ? Number(j.pay_per_day) : null;
-        return '<div class="sm-sh-stat' + (j.work === false ? " sm-sh-stat-rit" : "") + '"><b>' +
-          (j.work === false ? "🧘 " : "🏭 ") + esc(j.name) + ": " + shifts + " " + plRu(shifts, ["день", "дня", "дней"]) + " · " + (st ? st.hours : 0) + " ч.</b>" +
-          "<span>" + (j.work === false ? "ритуал — не рабочие дни" : "рабочие · " + esc(mName(now))) + "</span>" +
-          (pay != null ? "<em>💰 подневная: ≈ " + Math.round(shifts * pay).toLocaleString("ru-RU") + " ₽ (" + shifts + " дн. × " + pay + " ₽)</em>" : "") +
-          "</div>";
-      }).join("") +
+      // v0.8.30: итоги месяца — две карточки (влезают на телефон), а разбивка по
+      // графикам — СТРОКАМИ в свёрнутом спойлере: флекс-карточки вылезали за экран (скрин 20.10).
       '<div class="sm-sh-stat"><b>🏭 ' + cur.work + ' дн. · ' + cur.hours + ' ч.</b><span>итого рабочие · ' + esc(mName(now)) + '</span><em>🏢 свободен: ' + cur.free + ' дн. · 🏖 отпуск/праздники: ' + cur.vac + ' дн.</em></div>' +
       '<div class="sm-sh-stat"><b>🏭 ' + prev.work + ' дн. · ' + prev.hours + ' ч.</b><span>итого рабочие · ' + esc(mName(prevD)) + '</span><em>🏢 свободен: ' + prev.free + ' дн.</em></div>' +
       '</div>' +
+      '<details class="sm-sh-pjwrap"><summary>📊 По графикам: ' + esc(mName(now)) + ' — дни, часы и деньги каждого</summary>' +
+      '<div class="sm-sh-pjrows">' + ((J || []).map((j) => {
+        const st = cur.perJob[j.id];
+        const shifts = st ? st.shifts : 0;
+        const pay = j.pay_per_day != null ? Number(j.pay_per_day) : null;
+        return '<div class="sm-sh-pjrow"><b>' + (j.work === false ? "🧘 " : "🏭 ") + esc(j.name) + '</b>' +
+          '<span>' + shifts + " " + plRu(shifts, ["день", "дня", "дней"]) + " · " + (st ? st.hours : 0) + " ч.</span>" +
+          (pay != null && shifts ? '<em>💰 ≈ ' + Math.round(shifts * pay).toLocaleString("ru-RU") + " ₽ (" + shifts + " × " + pay + ")</em>" : "") +
+          (j.work === false ? "<span>ритуал · не рабочие дни</span>" : "") +
+          "</div>";
+      }).join("") || '<div class="sm-sh-pjrow"><span>графиков пока нет</span></div>') + '</div></details>' +
       '<div class="sm-sh-sec">Мои графики (' + (J || []).length + ')</div>' + jobsRows + editorHtml +
       '<div class="sm-sh-lbl"><button class="sm-sh-cycadd" type="button" data-jadd="1">+ Добавить график</button></div>' +
       circlesHTML(today) +
@@ -3770,6 +3773,16 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       .sm-sh-stat-rit{opacity:.8;border-style:dashed}
       .sm-sh-vacjobs{display:flex;gap:10px;flex-wrap:wrap;width:100%;font-size:12px;opacity:.9;margin-top:2px;align-items:center}
       .sm-sh-vacjob{display:inline-flex;gap:4px;align-items:center}
+      .sm-sh-pjwrap{margin:-2px 0 10px;border:1px dashed rgba(128,128,128,.35);border-radius:12px;padding:2px 12px}
+      .sm-sh-pjwrap>summary{cursor:pointer;list-style:none;font-size:12.5px;font-weight:700;opacity:.9;padding:9px 0}
+      .sm-sh-pjwrap>summary::-webkit-details-marker{display:none}
+      .sm-sh-pjwrap>summary::after{content:" ⌄";opacity:.7}
+      .sm-sh-pjwrap[open]>summary::after{content:" ⌃"}
+      .sm-sh-pjrows{display:flex;flex-direction:column;gap:7px;padding:0 0 10px}
+      .sm-sh-pjrow{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;font-size:13px;width:100%}
+      .sm-sh-pjrow b{flex:1 1 45%;min-width:0}
+      .sm-sh-pjrow span{opacity:.85}
+      .sm-sh-pjrow em{font-style:normal;color:var(--accent,#E30613);font-weight:700}
       .sm-sh-types{margin:8px 0;padding:8px;border:1px dashed var(--line,#333);border-radius:10px}
       .sm-sh-ev{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
       .sm-sh-ev-i{background:var(--inset,#1c1c1c);border:1px solid var(--line,#333);border-radius:8px;color:inherit;padding:6px;font-size:12px;color-scheme:dark}
