@@ -3598,9 +3598,17 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       for (const jr of (c.jobs || [])) (memberJobs[jr.user_id] = memberJobs[jr.user_id] || []).push(jr);
       const sharers = c.members.filter((m) => m.shared !== false && (memberJobs[m.user_id] || []).length);
       const sharedDays = [];
+      const whyRows = []; // v0.8.34: кто занят по дням — объяснение «почему нет общих»
       for (let i = 0; i < 14; i++) {
         const k = key(new Date(parse(today).getTime() + i * 86400000));
         if (!sharers.length) break;
+        const busy = [];
+        for (const m of sharers) for (const j of (memberJobs[m.user_id] || []).filter((x) => x.work !== false)) {
+          const s = jobShift(k, j);
+          if (s === "day" || s === "night" || (j.shift_types || {})[s]) busy.push(memberName(m.user_id) + ": " + j.job_name);
+        }
+        whyRows.push(k.slice(8, 10) + "." + k.slice(5, 7) + " " + ["вс", "пн", "вт", "ср", "чт", "пт", "сб"][parse(k).getDay()] +
+          " — " + (busy.length ? esc(busy.join(", ")) : "все свободны"));
         const freeAll = sharers.every((m) => (memberJobs[m.user_id] || []).filter((j) => j.work !== false).every((j) => {
           // v0.8.28: общий свободный день портят только РАБОЧИЕ графики (любой занятый тип);
           // ритуалы участников (work=false) день круга не отменяют
@@ -3614,7 +3622,8 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
           " — " + (bds[0].inDays === 0 ? "сегодня!" : "через " + bds[0].inDays + " дн.") + "</span></div>" : "") +
         (sharedDays.length ? '<details class="sm-sh-days"><summary class="sm-sh-row free"><span>Общие свободные дни (14 дн): ' + sharedDays.length + " дн. — развернуть</span></summary>" +
           '<div class="sm-sh-dayslist">' + sharedDays.map((d) => '<span class="sm-sh-day">' + esc(d) + "</span>").join("") + "</div></details>"
-          : (sharers.length ? '<div class="sm-sh-row"><span>Общих свободных дней на ближайших 14 нет</span></div>' : "")) +
+          : (sharers.length ? '<details class="sm-sh-days"><summary class="sm-sh-row"><span>Общих свободных дней на ближайших 14 нет — почему? кто занят по дням</span></summary>' +
+            '<div class="sm-sh-dayslist">' + whyRows.map((r) => '<div class="sm-sh-day-busy">' + r + '</div>').join("") + '</div></details>' : "")) +
         "</div>";
     }
     return out;
@@ -3825,6 +3834,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       .sm-sh-days summary::-webkit-details-marker{display:none}
       .sm-sh-dayslist{display:flex;flex-wrap:wrap;gap:4px;padding:6px 8px}
       .sm-sh-day{background:var(--inset,#1c1c1c);border:1px solid var(--line,#333);border-radius:8px;padding:4px 8px;font-size:12px}
+      .sm-sh-day-busy{font-size:12px;opacity:.85;margin:3px 0;line-height:1.45}
       .sm-sh-editor{margin:6px 0}
       .sm-sh-icbtn{background:var(--inset,#1c1c1c);border:1px solid var(--line,#333);border-radius:8px;padding:2px 9px;cursor:pointer;font-size:14px;color:inherit}
       .sm-sh-icbtn:hover{border-color:var(--accent,#E30613)}
