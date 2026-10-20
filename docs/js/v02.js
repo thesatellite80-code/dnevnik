@@ -4343,6 +4343,25 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
         CM.panelHTML(t) + '</li>';
     };
     const curN = (n) => curWord(c.bonus_currency, n);
+    // v0.8.27: история одобренных заданий — прозрачность выплат и доступ к
+    // доказательствам (комментарии, 📎 вложения) ПОСЛЕ выплаты: раньше approved-задача
+    // исчезала из всех списков и материалы становились недоступны (кейс владельца 18.10).
+    const hist = (D.bounties || []).filter((t) => t.bounty_status === "approved");
+    const histHTML = hist.length
+      ? '<div class="sm-cr-sec">✅ История одобрений · видна кругу</div>' +
+        '<p class="sm-cr-note">Кто выполнил, за сколько и доказательства (💬 с вложениями) — ' +
+        'доступно участникам и после выплаты: справедливость одобрения видна всем.</p>' +
+        '<ul class="sm-task-list">' + hist.map((t) => {
+          const d = (t.completed_at || t.updated_at || "").slice(0, 10);
+          const dl = d ? d.slice(8, 10) + "." + d.slice(5, 7) : "";
+          return '<li class="sm-task-wrap" data-id="' + t.id + '"><div class="sm-task sm-task-done"><div class="sm-task-main">' +
+            '<span class="sm-cr-bounty">🎁' + t.bounty_points + '</span>' +
+            '<span class="sm-task-title">' + SixMin.esc(t.title) +
+            '<span class="sm-cr-status">' + (dl ? dl + " · " : "") + "выполнил: " + SixMin.esc(nameOf(t.assignee_id || t.user_id)) + " · одобрено</span></span></div>" +
+            '<div class="sm-task-actions">' + CM.buttonHTML(t, "Обсуждение задания и материалы") + '</div></div>' +
+            CM.panelHTML(t) + '</li>';
+        }).join("") + '</ul>'
+      : "";
     return '<div class="sm-cr-sec">🎁 Бонусы круга · ' + cur() + ' ' + INFO_BTN("bonuses") + '</div>' +
       '<div class="sm-cr-bal"><div class="sm-cr-bal-me">Мой баланс: <b>' + balOf(D.uid) + '</b> ' + curN(balOf(D.uid)) + '</div>' +
       '<div class="sm-cr-bal-hint">Как зарабатывать: возьмите задание с наградой («Взять» → сделать → «Готово ✅») или общую задачу круга — владелец одобрит, и ' + cur() + ' упадут в копилку.</div>' +
@@ -4358,6 +4377,7 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
         'выплату одобряет автор задания (или владелец круга) при приёмке «Готово ✅».</p>' +
       '<ul class="sm-task-list">' + (live.map(row).join("") || '<li class="sm-tasks-empty">Заданий с наградой пока нет — создайте первое.</li>') + '</ul>' +
       myBHTML +
+      histHTML +
       '<div class="sm-cr-sec">Витрина наград</div>' +
       '<div class="sm-cr-shop">' + ((D.rewards || []).map((r) =>
         '<span class="sm-cm-chip">' + SixMin.esc(r.title) + ' · ' + r.cost_points + ' ' + curN(r.cost_points) + ' ' +
