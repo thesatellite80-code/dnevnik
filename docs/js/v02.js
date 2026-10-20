@@ -2907,7 +2907,7 @@ window.__v02stage = "after-sixmin-analytics"; if (window.__v02say) window.__v02s
         <div class="sm-theory">
           <p style="margin:8px 4px;opacity:.85;font-size:13px;line-height:1.5">«6 минут» — не дневник успеха, а штаб дня: утром три минуты на план, вечером три минуты на итоги и решения. Принципы ниже — рабочие правила штаба.</p>
           ${GROUPS.map((g, gi) => `
-          <details class="sm-card sm-card-group" ${gi === 0 ? "open" : ""}>
+          <details class="sm-card sm-card-group" data-g="${g.id}" ${gi === 0 ? "open" : ""}>
             <summary><span class="sm-card-emoji">${g.emoji}</span> ${g.title}
               <em class="sm-theory-count">${PRINCIPLES_ALL.filter((p) => p.g === g.id).length}</em></summary>
             ${PRINCIPLES_ALL.filter((p) => p.g === g.id).map((p) => `
@@ -2948,6 +2948,20 @@ window.__v02stage = "after-sixmin-analytics"; if (window.__v02say) window.__v02s
       .sm-theory-wrap .sm-theory{padding:4px 12px 12px}
       .sm-theory-wrap .sm-ib{margin-left:4px}
       .sm-card{border:1px solid rgba(128,128,128,.18);border-radius:14px;margin-bottom:10px;overflow:hidden}
+      .sm-card-group{margin:14px 0}
+      .sm-card-group>summary{display:flex;align-items:center;gap:8px;font-weight:700;font-size:14px;
+                               padding:10px 12px;border-radius:12px;cursor:pointer;list-style:none;
+                               border:1px solid rgba(227,6,19,.40);background:rgba(227,6,19,.10)}
+      .sm-card-group>summary::-webkit-details-marker{display:none}
+      .sm-card-group>summary::after{content:"⌄";margin-left:auto;opacity:.5;transition:transform .2s;font-size:13px}
+      .sm-card-group[open]>summary::after{transform:rotate(180deg)}
+      .sm-card-group[data-g="work"]>summary{border-color:rgba(59,130,246,.45);background:rgba(59,130,246,.12)}
+      .sm-card-group[data-g="family"]>summary{border-color:rgba(244,114,182,.45);background:rgba(244,114,182,.12)}
+      .sm-card-group[data-g="voice"]>summary{border-color:rgba(34,197,94,.45);background:rgba(34,197,94,.12)}
+      .sm-card-group .sm-card{margin:8px 0 8px 14px;border-left:3px solid rgba(227,6,19,.45)}
+      .sm-card-group[data-g="work"] .sm-card{border-left-color:rgba(59,130,246,.55)}
+      .sm-card-group[data-g="family"] .sm-card{border-left-color:rgba(244,114,182,.55)}
+      .sm-card-group[data-g="voice"] .sm-card{border-left-color:rgba(34,197,94,.55)}
       .sm-card summary{padding:14px 16px;font-weight:600;font-size:15px;cursor:pointer;list-style:none;
                        display:flex;align-items:center;gap:10px;user-select:none}
       .sm-card summary::-webkit-details-marker{display:none}
@@ -3098,7 +3112,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       const tm = timesOfType(a.j, tp) || [];
       const lb = tp === "night" ? "🌙 ночь" : tp === "day" ? "☀️ день" : esc(namesOf(a.j)[tp] || tp);
       return lb + (tm.length ? " " + tm[0] + "–" + tm[1] : "") +
-        ((J || []).length > 1 ? " · " + a.j.name : "");
+        ((J || []).length > 1 && lb.indexOf(a.j.name) < 0 ? " · " + a.j.name : ""); // v0.8.44: без дубля имени
     }).join(" + ");
     const ivs = act.flatMap((a) => a.iv);
     const ends = ivs.filter((r) => r[1] > r[0] && r[1] < 1440).map((r) => r[1]);
@@ -3642,15 +3656,28 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     }
     return out.slice(0, 2);
   }
+  function ritualsToday(today) {
+    const tk = key(parse(today));
+    const out = [];
+    for (const j of (J || [])) {
+      if (j.work !== false) continue;
+      const tp = jobShift(tk, j);
+      if (!tp) continue;
+      const tm = timesOfType(j, tp) || [];
+      out.push(esc(j.name) + (tm.length ? " " + tm[0] + "–" + tm[1] : ""));
+    }
+    return out;
+  }
   function amExtraHTML(today) {
-    if (!CIRC.length) return "";
-    return bdayNotes(today).map((n) =>
+    const rit = ritualsToday(today); // v0.8.44: напомнить о ритуалах на сегодня
+    const notesHtml = bdayNotes(today).map((n) =>
       '<div class="sm-bday-note"><span>🎂 Вы в курсе? В круге «' + esc(n.circle) + '» у ' + esc(n.name) +
       (n.past ? " ДР был " + fmtBD(n.k) : " ДР " + fmtBD(n.k) + (n.inDays ? " (через " + n.inDays + " дн.)" : "")) +
       (n.candDays.length ? ". Всем кругом можно собраться: " + n.candDays.map(fmtBD).join(", ") : "") +
       '.</span><span class="sm-bday-btns"><button class="sm-bday-btn" type="button" data-bday-dismiss="' + esc(n.id) + '">Больше не напоминать</button>' +
       n.candDays.map((d) => '<button class="sm-bday-btn" type="button" data-bday-snooze="' + esc(n.id + "|" + d) + '">Напомнить ' + fmtBD(d) + "</button>").join("") +
       "</span></div>").join("");
+    return (rit.length ? '<div class="sm-bday-note"><span>🐾 Ритуалы сегодня: ' + rit.join(", ") + '.</span></div>' : "") + notesHtml;
   }
   function redrawAmExtra() {
     if (!document.getElementById("sm-bday-css")) {
@@ -4009,8 +4036,11 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     const card = document.createElement("div");
     card.className = "card"; card.id = "sm-bday-card";
     card.innerHTML = '<h3>🎂 День рождения и видимость</h3><div class="sm-bd-host"></div>';
-    const foot = content.querySelector("p.version");
-    content.insertBefore(card, foot || null);
+    // v0.8.44: владелец попросил место между «Облако» и «Telegram-бот»
+    const tgH = Array.from(content.querySelectorAll("h3")).find((h) => h.textContent.indexOf("Telegram-бот") >= 0);
+    const tgCard = tgH ? tgH.closest(".card") : null;
+    if (tgCard) content.insertBefore(card, tgCard);
+    else { const foot = content.querySelector("p.version"); content.insertBefore(card, foot || null); }
     bhost = card.querySelector(".sm-bd-host");
     bhost.addEventListener("click", async (e) => {
       if (!e.target.closest("[data-bdsave]")) return;
