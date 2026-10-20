@@ -3589,12 +3589,6 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     const nextBlocks = []; // v0.8.38: общие выходные кругов — одним спойлером внизу
     let out = '<div class="sm-sh-sec">В моих кругах</div>';
     for (const c of CIRC) {
-      const bds = [];
-      for (const m of c.members) {
-        const b = bdayInfo(m.birthday, today);
-        if (b) bds.push({ name: m.name, me: m.user_id === (P && P.user_id), ...b });
-      }
-      bds.sort((a, b) => a.inDays - b.inDays);
       const memberJobs = {};
       for (const jr of (c.jobs || [])) (memberJobs[jr.user_id] = memberJobs[jr.user_id] || []).push(jr);
       const sharers = c.members.filter((m) => m.shared !== false && (memberJobs[m.user_id] || []).length);
@@ -3606,8 +3600,9 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
         (silent.length ? " · Не учтены: " + esc(silent.join("; ")) : "");
       const sharedDays = [];
       const sharedAll = []; // v0.8.36: общие свободные за 90 дней — для «ближайших трёх»
+      const sharedWin = []; // v0.8.39: общие свободные ±90 дней — окно предупреждения о ДР
       const whyRows = []; // v0.8.34: кто занят по дням — объяснение «почему нет общих»
-      for (let i = 0; i < 90; i++) {
+      for (let i = -90; i < 90; i++) {
         const k = key(new Date(parse(today).getTime() + i * 86400000));
         if (!sharers.length) break;
         const busy = [];
@@ -3617,7 +3612,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
           if (s === "day" || s === "night" || (j.shift_types || {})[s]) { busy.push(memberName(m.user_id) + ": " + j.job_name); busyIds[m.user_id] = 1; }
         }
         const freeNames = sharers.filter((m) => !busyIds[m.user_id]).map((m) => memberName(m.user_id));
-        if (i < 14) whyRows.push(k.slice(8, 10) + "." + k.slice(5, 7) + " " + ["вс", "пн", "вт", "ср", "чт", "пт", "сб"][parse(k).getDay()] + " — " +
+        if (i >= 0 && i < 14) whyRows.push(k.slice(8, 10) + "." + k.slice(5, 7) + " " + ["вс", "пн", "вт", "ср", "чт", "пт", "сб"][parse(k).getDay()] + " — " +
           (busy.length ? esc(busy.join(", ")) + (freeNames.length ? " · свободны: " + esc(freeNames.join(", ")) : "") : "все свободны"));
         const freeAll = sharers.every((m) => (memberJobs[m.user_id] || []).filter((j) => j.work !== false).every((j) => {
           // v0.8.28: общий свободный день портят только РАБОЧИЕ графики (любой занятый тип);
@@ -3626,14 +3621,48 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
           return s !== "day" && s !== "night" && !((j.shift_types || {})[s]);
         }));
         if (freeAll) {
-          if (i < 14) sharedDays.push(k.slice(8) + "." + k.slice(5, 7));
-          sharedAll.push(k.slice(8, 10) + "." + k.slice(5, 7) + " " + ["вс", "пн", "вт", "ср", "чт", "пт", "сб"][parse(k).getDay()]);
+          if (i >= 0 && i < 14) sharedDays.push(k.slice(8) + "." + k.slice(5, 7));
+          if (i >= 0) sharedAll.push(k.slice(8, 10) + "." + k.slice(5, 7) + " " + ["вс", "пн", "вт", "ср", "чт", "пт", "сб"][parse(k).getDay()]);
+          sharedWin.push(k);
+        }
+      }
+      // v0.8.39: предупреждение о ДР — только внутри интервала общих свободных дней вокруг даты
+      const fmtK = (kk) => kk.slice(8, 10) + "." + kk.slice(5, 7) + " " + ["вс", "пн", "вт", "ср", "чт", "пт", "сб"][parse(kk).getDay()];
+      const tk = key(parse(today));
+      const bdayRows = [];
+      for (const m of c.members) {
+        if (!m.birthday) continue;
+        const md = String(m.birthday).slice(5, 10);
+        const yr = parse(today).getFullYear();
+        const cands = [];
+        const bi = bdayInfo(m.birthday, today);
+        if (bi) cands.push({ k: key(new Date(parse(today).getTime() + bi.inDays * 86400000)), inDays: bi.inDays, past: false });
+        const kp = (md <= tk.slice(5, 10) ? yr + "-" + md : (yr - 1) + "-" + md);
+        if (kp < tk) cands.push({ k: kp, inDays: 0, past: true });
+        for (const cd of cands) {
+          const bef = sharedWin.filter((x) => x < cd.k);
+          const aft = sharedWin.filter((x) => x > cd.k);
+          let dB = bef.length ? bef[bef.length - 1] : "";
+          let dA = aft.length ? aft[0] : "";
+          // v0.8.39b: общий свободный день учитывается, только если он в 45 днях от ДР
+          if (dB && (parse(cd.k) - parse(dB)) / 86400000 > 45) dB = "";
+          if (dA && (parse(dA) - parse(cd.k)) / 86400000 > 45) dA = "";
+          if (!dB && !dA) continue;
+          const start = dB || cd.k, end = dA || cd.k;
+          if (tk < start || tk > end) continue;
+          const me = m.user_id === (P && P.user_id);
+          bdayRows.push('<div class="sm-sh-row"><span>🎂 ' + esc(m.name) + (me ? " (у вас)" : "") +
+            (cd.past
+              ? " — ДР был " + fmtK(cd.k) + " (" + Math.round((parse(today) - parse(cd.k)) / 86400000) + " дн. назад) · ближайший общий свободный после: " + (dA ? fmtK(dA) : "—")
+              : " — " + (cd.inDays === 0 ? "сегодня!" : "через " + cd.inDays + " дн. (" + fmtK(cd.k) + ")") +
+                " · общие свободные: до " + (dB ? fmtK(dB) : "—") + ", после " + (dA ? fmtK(dA) : "—")) +
+            "</span></div>");
+          break;
         }
       }
       if (sharers.length) nextBlocks.push({ name: c.name, all: sharedAll });
       out += '<div class="sm-sh-circle"><b>🤝 ' + esc(c.name) + "</b>" +
-        (bds.length ? '<div class="sm-sh-row"><span>🎂 ' + esc(bds[0].name) + (bds[0].me ? " (у вас)" : "") +
-          " — " + (bds[0].inDays === 0 ? "сегодня!" : "через " + bds[0].inDays + " дн.") + "</span></div>" : "") +
+        bdayRows.join("") +
         (sharedDays.length ? '<details class="sm-sh-days"><summary class="sm-sh-row free"><span>Общие свободные дни (14 дн): ' + sharedDays.length + " дн. — развернуть</span></summary>" +
           '<div class="sm-sh-dayslist">' + sharedDays.map((d) => '<span class="sm-sh-day">' + esc(d) + "</span>").join("") + "</div>" +
           '<div class="sm-sh-day-busy">' + legend + "</div></details>"
