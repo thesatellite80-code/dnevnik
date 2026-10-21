@@ -143,33 +143,26 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
 .btn-row .btn{flex:1;min-width:130px}
 .link-btn{background:none;border:none;color:var(--accent);font-weight:600;cursor:pointer;font-size:15px}
 
-/* ── боковая навигация (v0.8.46): колонка сбоку, статичная, не прячется при скролле ── */
-:root{--nav-w:58px}
-@media (min-width:720px){:root{--nav-w:190px}}
-body.nav-off{--nav-w:0px}
+/* ── нижняя навигация (v0.8.47): по ширине контент-блоков, не шире, не прячется ── */
 .tabbar{
-  position:fixed;top:0;bottom:0;left:0;width:var(--nav-w);
-  display:flex;flex-direction:column;background:var(--card);border-right:1px solid var(--line);z-index:20;
-  overflow-y:auto;overflow-x:hidden;
+  position:fixed;bottom:0;left:50%;transform:translateX(-50%);
+  width:min(640px,100%);
+  height:calc(var(--tab-h) + env(safe-area-inset-bottom));
+  padding-bottom:env(safe-area-inset-bottom);
+  display:flex;background:var(--card);border:1px solid var(--line);border-bottom:none;
+  border-radius:14px 14px 0 0;z-index:20;
 }
-body.nav-right .tabbar{left:auto;right:0;border-right:none;border-left:1px solid var(--line)}
 .tabbar button{
-  flex:0 0 auto;background:none;border:none;color:var(--muted);
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
-  font-size:10px;cursor:pointer;padding:10px 2px;min-height:46px;
+  flex:1;background:none;border:none;color:var(--muted);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  font-size:11.5px;cursor:pointer;padding:6px 0;
 }
 .tabbar button span{font-size:20px;line-height:1}
-.tabbar button .tab-label{font-style:normal;display:none}
 .tabbar button.active{color:var(--accent);font-weight:600}
-.tabbar button.active .tab-label{display:block}
-.screen{padding-left:var(--nav-w)}
-body.nav-right .screen{padding-left:0;padding-right:var(--nav-w)}
 .form-bar{
-  position:fixed;left:var(--nav-w);right:0;top:auto;bottom:0;width:auto;height:auto;
-  flex-direction:row;border-right:none;border-left:none;border-top:1px solid var(--line);
-  overflow:visible;
+  left:0;right:0;transform:none;width:auto;border-radius:0;
+  border-left:none;border-right:none;border-top:1px solid var(--line);
 }
-body.nav-right .form-bar{left:0;right:var(--nav-w)}
 .form-bar{gap:10px;padding:10px 16px calc(10px + env(safe-area-inset-bottom))}
 .form-bar .btn{flex:1}
 .form-bar .btn.primary{flex:1.6}
@@ -274,9 +267,6 @@ body.nav-right .form-bar{left:0;right:var(--nav-w)}
 @media (min-width:720px){
   .content{max-width:640px;margin:0 auto;width:100%}
   .head{max-width:640px;margin:0 auto;width:100%}
-  .tabbar button{flex-direction:row;justify-content:flex-start;gap:10px;padding:12px 16px;font-size:13.5px;min-height:0}
-  .tabbar button .tab-label{display:block}
-  .tabbar button span{font-size:19px}
 }
 
 /* ── кнопка [i] и шторка-инструкция ─────────── */
@@ -539,17 +529,6 @@ body.nav-right .form-bar{left:0;right:var(--nav-w)}
     </div>
 
     <div class="card">
-      <h3>🧭 Меню</h3>
-      <label class="field"><span>Сторона меню вкладок</span>
-        <select id="set-navside">
-          <option value="left">Слева</option>
-          <option value="right">Справа (для левшей)</option>
-        </select>
-      </label>
-      <p class="hint-text">Меню — вертикальная колонка сбоку: не прячется при прокрутке, страница статична. Выбор хранится на этом устройстве и применяется сразу.</p>
-    </div>
-
-    <div class="card">
       <h3>⏰ Напоминания</h3>
       <label class="field"><span>Будни, утро</span><input type="time" id="set-wd-am"></label>
       <label class="field"><span>Будни, вечер</span><input type="time" id="set-wd-pm"></label>
@@ -597,7 +576,7 @@ body.nav-right .form-bar{left:0;right:var(--nav-w)}
       </div>
     </div>
 
-    <p class="version"><span id="build-info">v0.8.46</span> · данные на устройстве + Supabase</p>
+    <p class="version"><span id="build-info">v0.8.47</span> · данные на устройстве + Supabase</p>
   </main>
 </section>
 
@@ -660,16 +639,16 @@ body.nav-right .form-bar{left:0;right:var(--nav-w)}
 
 <!-- ══════════════ НИЖНЯЯ НАВИГАЦИЯ ══════════════ -->
 <nav class="tabbar" id="tabbar">
-  <button data-tab="today" class="active"><span>☀️</span><i class="tab-label">Сегодня</i></button>
-  <button data-tab="history"><span>📚</span><i class="tab-label">История</i></button>
-  <button data-tab="stats"><span>📈</span><i class="tab-label">Прогресс</i></button>
-  <button data-tab="tracker"><span>🎯</span><i class="tab-label">Трекер</i></button>
-  <button data-tab="work"><span>💼</span><i class="tab-label">Работа</i></button>
-  <button data-tab="circles"><span>🤝</span><i class="tab-label">Круги</i></button>
-  <button data-tab="settings"><span>⚙️</span><i class="tab-label">Настройки</i></button>
+  <button data-tab="today" class="active"><span>☀️</span>Сегодня</button>
+  <button data-tab="history"><span>📚</span>История</button>
+  <button data-tab="stats"><span>📈</span>Прогресс</button>
+  <button data-tab="tracker"><span>🎯</span>Трекер</button>
+  <button data-tab="work"><span>💼</span>Работа</button>
+  <button data-tab="circles"><span>🤝</span>Круги</button>
+  <button data-tab="settings"><span>⚙️</span>Настройки</button>
 </nav>
 
-<script defer src="js/bundle.js?v=073"></script>
-<script defer src="js/v02.js?v=105"></script>
+<script defer src="js/bundle.js?v=074"></script>
+<script defer src="js/v02.js?v=106"></script>
 </body>
 </html>
