@@ -2015,7 +2015,9 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
       overdue = open.filter((t) => t.due_date < todayKey);
       upcoming = open.filter((t) => t.due_date > todayKey);
     const ids = rowsAll().map((t) => t.id);
-    await CM.loadCounts(ids);
+    // v0.8.59: счётчики комментариев необязательны (иначе ошибка RLS/сети по одной
+    // задаче оставляла модуль на скелете без списков)
+    try { await CM.loadCounts(ids); } catch (e) { console.warn("[v02] tasks comment counts", e); }
     }
 
     // ---------- статистика области (для рабочего экрана) ----------
@@ -4742,7 +4744,9 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
     for (const l of todayLogs.data || []) (D.todayBy[l.circle_habit_id] = D.todayBy[l.circle_habit_id] || []).push(l.user_id);
     for (const l of myLogs.data || []) if (l.completed) (D.weekBy[l.circle_habit_id] = D.weekBy[l.circle_habit_id] || new Set()).add(l.day);
     await ensureMyProfile(sb, uid);
-    await CM.loadCounts([...D.tasks, ...D.bounties].map((x) => x.id));
+    // v0.8.59: счётчики комментариев необязательны: ошибка одного запроса
+    // не должна оставлять весь экран кругов пустым
+    try { await CM.loadCounts([...D.tasks, ...D.bounties].map((x) => x.id)); } catch (e) { console.warn("[v02] circles comment counts", e); }
   }
 
   // v0.6.1: имена участников. Раньше делали embed-запрос
@@ -5764,11 +5768,38 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
     restoreForms(snap);
   }
 
-  async function refresh() { await loadCircles(); await loadData(); render(); }
+  // v0.8.59: круги не имеют права быть «молчаливо пустыми»: любая ошибка цепочки
+  // загрузки становится читаемой карточкой с повтором; на mount сразу скелет.
+  async function refresh() {
+    try {
+      await loadCircles();
+      await loadData();
+      render();
+    } catch (e) {
+      console.error("[v02] circles refresh", e);
+      renderCirclesError(e);
+    }
+  }
+  function renderCirclesError(e) {
+    if (!root) return;
+    const msg = (e && e.message) ? e.message : String(e || "неизвестная ошибка");
+    root.innerHTML =
+      '<div class="sm-circles"><div class="sm-cr-head">🤝 Круги</div>' +
+      '<p class="sm-cr-note">Не удалось загрузить круги: ' + SixMin.esc(msg) + '.</p>' +
+      '<p class="sm-cr-note">Обычно помогает кнопка ↻ в шапке этой вкладки или выход и вход в аккаунт («Настройки»).</p>' +
+      '<button class="btn auth-compact" data-crc-retry>Повторить</button>' +
+      '<p class="sm-cr-note"><small>Если повторяется — сфотографируйте этот текст и пришлите агенту.</small></p></div>';
+    const b = root.querySelector("[data-crc-retry]");
+    if (b) b.addEventListener("click", () => refresh());
+  }
 
   function mount(container) {
     root = typeof container === "string" ? document.querySelector(container) : container;
     injectStyles();
+    try {
+      root.innerHTML = '<div class="sm-circles"><div class="sm-cr-head">🤝 Круги</div>' +
+        '<p class="sm-cr-note">Загружаем круги…</p></div>';
+    } catch (e) {}
     refresh();
   }
 
