@@ -24,7 +24,7 @@ window.SIXMIN_CONFIG = {
 
   // ── 3. ПРОЧЕЕ ──────────────────────────────────────────────────────
   defaultTimezone: "Europe/Moscow",
-  version: "0.8.45"
+  version: "0.8.46"
 };
 
 /* ── Контент: вопросы (свои формулировки, пул вариантов для ротации) ── */
@@ -955,6 +955,7 @@ const App = (() => {
     if (target) target.classList.add("active");
     const tabbar = $("tabbar");
     tabbar.style.display = (name === "form" || name === "quick" || name === "done" || name === "wisdom") ? "none" : "flex";
+    document.body.classList.toggle("nav-off", tabbar.style.display === "none"); // v0.8.46
     document.querySelectorAll("#tabbar button").forEach(b =>
       b.classList.toggle("active", b.dataset.tab === name));
     window.scrollTo(0, 0);
@@ -1472,6 +1473,11 @@ const App = (() => {
     $("set-tz").value = s.tz;
     $("set-vacation").value = s.vacation_until || "";
     $("set-rotation").value = s.rotation || "random";
+    if ($("set-navside")) { // v0.8.46: сторона меню живёт на устройстве, не в облаке
+      let ns = "left";
+      try { ns = localStorage.getItem("sixmin-nav-side") === "right" ? "right" : "left"; } catch (e) {}
+      $("set-navside").value = ns;
+    }
     $("build-info").textContent = "v" + (CFG.version || "0.1");
     renderAuth();
     renderSyncState();
@@ -1662,6 +1668,8 @@ const App = (() => {
     let st;
     $("search").oninput = e => { clearTimeout(st); st = setTimeout(() => doSearch(e.target.value), 250); };
 
+    const nsv = $("set-navside"); // v0.8.46: применяется сразу, без кнопки «сохранить»
+    if (nsv) nsv.onchange = () => applyNavSide(nsv.value);
     $("btn-save-settings").onclick = saveSettings;
     $("btn-login").onclick = login;
     $("btn-login-pass").onclick = loginPass;
@@ -1802,5 +1810,18 @@ const App = (() => {
   return { init, show, openForm, flash, state };
 })();
 
-document.addEventListener("DOMContentLoaded", () => { App.init().catch(e => { console.error(e); alert("Ошибка инициализации: " + e.message); }); });
+// v0.8.46: сторона меню вкладок — настройка устройства (как вкладка/круг по §5):
+// применяется ДО init, чтобы интерфейс не «прыгал» после загрузки; значение только left/right.
+function navSideGet() {
+  try { return localStorage.getItem("sixmin-nav-side") === "right" ? "right" : "left"; } catch (e) { return "left"; }
+}
+function applyNavSide(side) {
+  const r = side === "right";
+  document.body.classList.toggle("nav-right", r);
+  try { localStorage.setItem("sixmin-nav-side", r ? "right" : "left"); } catch (e) {}
+}
+document.addEventListener("DOMContentLoaded", () => {
+  document.body.classList.toggle("nav-right", navSideGet() === "right");
+  App.init().catch(e => { console.error(e); alert("Ошибка инициализации: " + e.message); });
+});
 

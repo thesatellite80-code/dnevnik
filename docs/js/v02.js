@@ -4988,6 +4988,10 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
             <button class="sm-cr-code" title="Скопировать код приглашения">код: <b>${esc(circle?.invite_code || "")}</b> ⧉</button>
             <button class="sm-cr-new" title="Создать ещё один круг">+ Круг</button>
+            ${isOwnerCircle
+              ? `<button class="sm-cr-mgr" data-crename title="Переименовать круг">✏️</button>` +
+                `<button class="sm-cr-mgr danger" data-cdel title="Удалить круг безвозвратно">🗑</button>`
+              : `<button class="sm-cr-mgr" data-cleave title="Выйти из круга">Выйти</button>`}
           </div>
         </div>
         ${onbOpen === 0 && onbTotal < 6
@@ -5058,6 +5062,57 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
       (navigator.clipboard?.writeText(c) || Promise.reject()).then(
         () => SixMin.toast("Код " + c + " скопирован — пришлите его близким"),
         () => SixMin.toast("Код: " + c));
+    });
+    // v0.8.46: переименовать / удалить (владелец), выйти (участник) — RPC security definer.
+    // Прямых update/delete из клиента НЕТ: политики круговых таблиц непрозрачны (урок v0.8.18).
+    const RPC_MSG = {
+      not_owner: "Это может сделать только владелец круга",
+      not_member: "Вы не состоите в этом круге",
+      not_found: "Круг не найден",
+      empty: "Название не может быть пустым",
+      too_long: "Слишком длинно: до 60 знаков",
+      owner_use_delete: "Владелец не выходит из круга — круг можно удалить (🗑)"
+    };
+    const rpcMsg = (code) => RPC_MSG[code] || ("Сервер ответил: " + code);
+    root.querySelector("[data-crename]")?.addEventListener("click", async () => {
+      const cur = circle?.name || "";
+      const n = prompt("Новое название круга (до 60 знаков):", cur);
+      if (n === null) return;
+      const nn = n.trim();
+      if (!nn) { SixMin.toast("Название не может быть пустым"); return; }
+      if (nn.length > 60) { SixMin.toast("Слишком длинно: до 60 знаков"); return; }
+      if (nn === cur) return;
+      const { data, error } = await SixMin.sb().rpc("circle_rename", { p_circle: sel, p_name: nn });
+      if (error) { SixMin.toast("Ошибка: " + error.message); return; }
+      if (data !== "ok") { SixMin.toast(rpcMsg(data)); return; }
+      SixMin.toast("Круг переименован ✓");
+      await refresh();
+    });
+    root.querySelector("[data-cdel]")?.addEventListener("click", async () => {
+      const cur = circle?.name || "";
+      if (!confirm("Удалить круг «" + cur + "» БЕЗВОЗВРАТНО?\n" +
+        "Удалятся: цели, привычки, общие задачи, награды и выписка, события и список участников.\n" +
+        "Личные дневники участников не пострадают.")) return;
+      const n = prompt("Для подтверждения введите название круга точно как сейчас:\n«" + cur + "»");
+      if (n === null) return;
+      if (n.trim() !== cur) { SixMin.toast("Название не совпало — круг НЕ удалён"); return; }
+      const { data, error } = await SixMin.sb().rpc("circle_delete", { p_circle: sel });
+      if (error) { SixMin.toast("Ошибка: " + error.message); return; }
+      if (data !== "ok") { SixMin.toast(rpcMsg(data)); return; }
+      SixMin.toast("Круг удалён");
+      sel = null; try { localStorage.removeItem("sixmin-circle"); } catch (e) {}
+      await refresh();
+    });
+    root.querySelector("[data-cleave]")?.addEventListener("click", async () => {
+      const cur = circle?.name || "";
+      if (!confirm("Выйти из круга «" + cur + "»?\n" +
+        "Общие строки, которые вы создавали, останутся кругу. Личный дневник не пострадает.")) return;
+      const { data, error } = await SixMin.sb().rpc("circle_leave", { p_circle: sel });
+      if (error) { SixMin.toast("Ошибка: " + error.message); return; }
+      if (data !== "ok") { SixMin.toast(rpcMsg(data)); return; }
+      SixMin.toast("Вы вышли из круга");
+      sel = null; try { localStorage.removeItem("sixmin-circle"); } catch (e) {}
+      await refresh();
     });
     root.querySelectorAll("[data-csel]").forEach((b) =>
       b.addEventListener("click", () => { sel = b.dataset.csel; goalOffset = 0; CM.reset(); refresh(); }));
@@ -5239,6 +5294,8 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
     css.textContent = `
       .sm-circles{font-family:system-ui,sans-serif}
       .sm-cr-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+      .sm-cr-mgr{border:1px solid var(--line,#444);background:transparent;color:var(--muted,#aaa);border-radius:999px;padding:4px 10px;font-size:12px;cursor:pointer}
+      .sm-cr-mgr.danger{border-color:rgba(227,6,19,.5);color:var(--accent,#E30613)}
       .sm-cr-head{font-weight:800;font-size:16px}
       .sm-cr-code{border:1px solid rgba(127,111,240,.4);background:var(--accent-soft,#FDE9E9);color:var(--accent,#E30613);border-radius:999px;
                   padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer}
