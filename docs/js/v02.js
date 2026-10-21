@@ -3011,6 +3011,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
   // v0.7.0: графиков может быть НЕСКОЛЬКО (офис + завод): у каждого свой цикл.
   // J — списки работ; P — личные настройки человека (день рождения, видимость для кругов).
   let root = null, P = null, J = [], V = [], loggedOut = false, resCache = null, CIRC = [], editing = null, E = [];
+  let T = []; // v0.8.52: облачные шаблоны циклов (shift_templates)
   let editingTypes = {}; // v0.7.8: кастомные типы дней редактируемого графика
   const plRu = (n, f) => { const a = Math.abs(n) % 100, b = a % 10; return (a > 10 && a < 20) ? f[2] : (b > 1 && b < 5) ? f[1] : (b === 1) ? f[0] : f[2]; };
 
@@ -3224,6 +3225,23 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     const { data: vc } = await sb.from("shift_vacations").select("*").eq("user_id", uid).order("start_date");
     V = vc || [];
     VM = null; // v0.8.29: сброс кэша день->отпуск
+    // v0.8.52: облачные шаблоны циклов; без таблицы (SQL не применён) деградируем в пресеты
+    const { data: tp } = await sb.from("shift_templates").select("id,name,cycle,created_at").eq("user_id", uid).order("created_at");
+    T = tp || [];
+    try {
+      const local = tplMine(); // одноразовый перенос локальных «моих» шаблонов в облако
+      if (local && local.length) {
+        for (const t of local) {
+          if (!T.some((x) => x.name === t.name)) {
+            const ie = await sb.from("shift_templates").insert({ user_id: uid, name: t.name, cycle: t.cycle });
+            if (ie.error) console.warn("tpl migrate:", ie.error.message);
+          }
+        }
+        localStorage.removeItem("sm-sh-tpl");
+        const { data: tp2 } = await sb.from("shift_templates").select("id,name,cycle,created_at").eq("user_id", uid).order("created_at");
+        T = tp2 || [];
+      }
+    } catch (e) { console.warn("tpl migrate:", e && e.message); }
     if (J.length) {
       const { data: ms } = await sb.from("circle_members").select("circle_id").eq("user_id", uid);
       const ids = (ms || []).map((r) => r.circle_id);
@@ -3347,7 +3365,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
   function tplMineSave(list) { try { localStorage.setItem("sm-sh-tpl", JSON.stringify(list)); } catch (e) {} }
   function tplInner() {
     return TPL_PRESETS.map((t, i) => '<button type="button" class="sm-sh-tplchip" data-tpl="' + i + '">' + esc(t.name) + "</button>").join("") +
-      tplMine().map((t) => '<button type="button" class="sm-sh-tplchip on" data-tplmy="' + esc(t.id) + '">' + esc(t.name) +
+      T.map((t) => '<button type="button" class="sm-sh-tplchip on" data-tplmy="' + esc(t.id) + '">' + esc(t.name) +
         ' <b class="sm-sh-del" data-tpldel="' + esc(t.id) + '" title="Удалить шаблон">×</b></button>').join("") +
       ' <button type="button" class="sm-sh-cycadd" data-tplsave="1">💾 Сохранить текущую цепочку как шаблон</button>';
   }
@@ -3462,7 +3480,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       '<label class="sm-sh-lbl">Дата, про которую точно знаете (например, последняя смена) <input type="date" class="sm-sh-anchor" value="' + ((job && job.anchor_date) || DEF.anchor) + '"></label>' +
       '<div class="sm-sh-sec2">Шаблоны циклов</div>' +
       '<div class="sm-sh-tplwrap">' + tplInner() + "</div>" +
-      '<p class="sm-sh-note">Тап по шаблону — подставить цепочку (якорь и время смен не трогаются). «Мои» шаблоны хранятся на этом устройстве.</p>' +
+      '<p class="sm-sh-note">Тап по шаблону — подставить цепочку (якорь и время смен не трогаются). «Мои» шаблоны хранятся в облаке — видны на всех ваших устройствах.</p>' +
       '<div class="sm-sh-cycwrap">' + cycleEditorInner(jobCycle(job || {})) + "</div>" +
       '<div class="sm-sh-types"><div class="sm-sh-note">Свои типы дней (кроме день/ночь/отсыпной/выходной):</div>' +
       '<div class="sm-sh-types-chips sm-sh-dayslist">' + typesChipsHTML() + '</div>' +
@@ -4221,10 +4239,11 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
   }
 
   // v0.8.1: данные для экспорта .ics: смены на 90 дней, события, отпуска, ДР
-  function icsData() {
+  function icsData(opts) {
+    const days = Math.min(365, Math.max(7, parseInt((opts && opts.days) || 90, 10) || 90)); // v0.8.52: горизонт
     const out = { shifts: [], events: [], vacations: (V || []).slice(), birthday: (P && P.birthday) || null };
     const t0 = new Date(); t0.setHours(0, 0, 0, 0);
-    for (let i = 0; i < 90; i++) {
+    for (let i = 0; i < days; i++) {
       const k = key(new Date(t0.getTime() + i * 86400000));
       for (const j of (J || [])) {
         const tp = jobShift(k, j);
@@ -4240,7 +4259,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     root = typeof container === "string" ? document.querySelector(container) : container;
     injectStyles();
     // делегированные события редактора цепочки (переживают перерисовки карточки)
-    root.addEventListener("click", (e) => {
+    root.addEventListener("click", async (e) => {
       const dr = e.target.closest("[data-dayk]");
       if (dr) { openDay(dr.dataset.dayk); return; }
       const tadd = e.target.closest("[data-tadd]");
@@ -4271,10 +4290,12 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
         const ed = btn.closest(".sm-sh-editor");
         if (!ed) return;
         if (tpldel) {
-          tplMineSave(tplMine().filter((t) => t.id !== tpldel.dataset.tpldel));
+          const de = await SixMin.sb().from("shift_templates").delete().eq("id", tpldel.dataset.tpldel);
+          if (de.error) { SixMin.toast("Ошибка: " + de.error.message); return; }
+          T = T.filter((t) => t.id !== tpldel.dataset.tpldel);
           SixMin.toast("Шаблон удалён");
         } else if (tplmy) {
-          const t = tplMine().find((x) => x.id === tplmy.dataset.tplmy);
+          const t = T.find((x) => x.id === tplmy.dataset.tplmy);
           if (t && Array.isArray(t.cycle) && t.cycle.length >= 2) applyCycleToEditor(ed, t.cycle.slice());
         } else if (tpl) {
           const p = TPL_PRESETS[parseInt(tpl.dataset.tpl, 10)];
@@ -4284,9 +4305,11 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
           if (cyc.length < 2) { SixMin.toast("В шаблон: минимум 2 дня цепочки"); return; }
           const nmEl = ed.querySelector(".sm-sh-name");
           const name = "Мои: " + (((nmEl && nmEl.value.trim()) || "цикл")) + " (" + cyc.length + ")";
-          const list = tplMine();
-          list.push({ id: "t" + Date.now().toString(36), name: name, cycle: cyc });
-          tplMineSave(list);
+          const uid = await SixMin.uid();
+          const ie = await SixMin.sb().from("shift_templates").insert({ user_id: uid, name: name, cycle: cyc });
+          if (ie.error) { SixMin.toast("Ошибка: " + ie.error.message); return; }
+          const { data: tp3 } = await SixMin.sb().from("shift_templates").select("id,name,cycle,created_at").eq("user_id", uid).order("created_at");
+          T = tp3 || [];
           SixMin.toast("Шаблон сохранён: " + name);
         }
         const tw = ed.querySelector(".sm-sh-tplwrap");

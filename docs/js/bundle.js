@@ -24,7 +24,7 @@ window.SIXMIN_CONFIG = {
 
   // ── 3. ПРОЧЕЕ ──────────────────────────────────────────────────────
   defaultTimezone: "Europe/Moscow",
-  version: "0.8.51"
+  version: "0.8.52"
 };
 
 /* ── Контент: вопросы (свои формулировки, пул вариантов для ротации) ── */
@@ -153,7 +153,9 @@ window.DEFAULT_SETTINGS = {
   channels: { telegram: true, webpush: false, ics: false },
   vacation_until: null,
   rotation: "random",
-  weekly_digest_time: "20:00"
+  weekly_digest_time: "20:00",
+  ics_days: 90,
+  ics_shifts_only: false
 };
 
 ;
@@ -612,10 +614,24 @@ const Cloud = (() => {
     let pushed = 0;
     for (let i = 0; i < dirty.length; i += 50) {
       const batch = dirty.slice(i, i + 50).map(rowOf);
-      const { error } = await client.from("entries").upsert(batch, { onConflict: "user_id,date,slot" });
-      if (error) { console.warn("push", error.message); continue; }
+      // v0.8.52: id НЕ отправляем: после локальной смены date/slot upsert со старым id
+      // бил по PK (409 Conflict, запись v0.8.21). Конфликт решаем по (user_id,date,slot).
+      const rows = batch.map((r) => { const c = Object.assign({}, r); delete c.id; return c; });
+      const { error } = await client.from("entries").upsert(rows, { onConflict: "user_id,date,slot" });
+      if (error) { console.warn("push", error.message, error.code || "", error.details || ""); continue; }
+      // сверка id: сервер мог слить строку в свой id; осиротевший локальный id убираем
+      const dates = batch.map((r) => r.date);
+      const sel = await client.from("entries").select("id,date,slot").eq("user_id", user.id).in("date", dates);
+      const byKey = {};
+      for (const r of (sel.data || [])) byKey[r.date + "|" + r.slot] = r.id;
       for (const e of dirty.slice(i, i + 50)) {
-        await Store.saveEntry(Object.assign({}, e, { dirty: false }));
+        const sid = byKey[e.date + "|" + e.slot];
+        if (sid && sid !== e.id) {
+          await client.from("entries").delete().eq("id", e.id); // 0 строк, если его не было на сервере
+          await Store.saveEntry(Object.assign({}, e, { id: sid, dirty: false }));
+        } else {
+          await Store.saveEntry(Object.assign({}, e, { id: sid || e.id, dirty: false }));
+        }
       }
       pushed += batch.length;
     }
@@ -664,18 +680,35 @@ const Cloud = (() => {
   }
 
   /* ── настройки напоминаний ───────────────────────────────────────── */
+  // v0.8.52: строка reminder_settings собирается ТОЛЬКО здесь и только из валидных значений:
+  // любое поле с мусором (пустое время, кривая дата, неизвестная ротация) заменяется дефолтом,
+  // чтобы upsert не уезжал в 400 (invalid input / not-null). Дефолты = DEFAULT_SETTINGS.
+  const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+  const tOr = (v, d) => (typeof v === "string" && TIME_RE.test(v.trim()) ? v.trim() : d);
+  function settingsRow(s) {
+    const D = window.DEFAULT_SETTINGS;
+    const src = Object.assign({}, D, s || {});
+    return {
+      user_id: user.id,
+      tz: (typeof src.tz === "string" && src.tz.trim()) ? src.tz.trim().slice(0, 64) : D.tz,
+      wd_am: tOr(src.wd_am, D.wd_am), wd_pm: tOr(src.wd_pm, D.wd_pm),
+      we_am: tOr(src.we_am, D.we_am), we_pm: tOr(src.we_pm, D.we_pm),
+      followup_min: Math.min(240, Math.max(0, parseInt(src.followup_min, 10) || D.followup_min)),
+      quiet_from: src.quiet_from ? tOr(src.quiet_from, null) : null,
+      quiet_to: src.quiet_to ? tOr(src.quiet_to, null) : null,
+      channels: (src.channels && typeof src.channels === "object") ? src.channels : D.channels,
+      vacation_until: (typeof src.vacation_until === "string" && /^\d{4}-\d{2}-\d{2}/.test(src.vacation_until)) ? src.vacation_until.slice(0, 10) : null,
+      rotation: ["fixed", "random", "weekly"].includes(src.rotation) ? src.rotation : D.rotation,
+      weekly_digest_time: tOr(src.weekly_digest_time, D.weekly_digest_time),
+      updated_at: new Date().toISOString()
+    };
+  }
   async function pushSettings(s) {
     if (!user) return false;
     await ensureClient();
-    const row = {
-      user_id: user.id, tz: s.tz, wd_am: s.wd_am, wd_pm: s.wd_pm, we_am: s.we_am, we_pm: s.we_pm,
-      followup_min: Number(s.followup_min) || 60, quiet_from: s.quiet_from || null, quiet_to: s.quiet_to || null,
-      channels: s.channels || {}, vacation_until: s.vacation_until || null,
-      rotation: s.rotation || "random", weekly_digest_time: s.weekly_digest_time || "20:00",
-      updated_at: new Date().toISOString()
-    };
+    const row = settingsRow(s);
     const { error } = await client.from("reminder_settings").upsert(row, { onConflict: "user_id" });
-    if (error) { console.warn("settings", error.message); return false; }
+    if (error) { console.warn("settings", error.message, error.code || "", error.details || "", JSON.stringify(row)); return false; }
     return true;
   }
 
@@ -821,7 +854,8 @@ const ICS = (() => {
     const WE = "BYDAY=SA,SU";
     const desc = "Дневник «шесть минут»: три вопроса. Открыть приложение — " + (appUrl || "на домашнем экране iPhone");
 
-    const events = [
+    const only = !!settings.ics_shifts_only; // v0.8.52: режим «только смены»
+    const events = only ? [] : [
       vevent({
         uid: "sixmin-am-wd@local", start: nextOccurrence(settings.wd_am, tz), rrule: "FREQ=DAILY;" + WD,
         title: "☀️ 6 минут: утро", description: desc, url: appUrl ? appUrl + "?slot=am" : null
@@ -846,7 +880,7 @@ const ICS = (() => {
     ];
 
     // v0.8.1: смены, события кругов, отпуска и ДР — из модуля смен
-    const xd = (window.SixMinShifts && window.SixMinShifts.icsData) ? window.SixMinShifts.icsData() : null;
+    const xd = (window.SixMinShifts && window.SixMinShifts.icsData) ? window.SixMinShifts.icsData({ days: parseInt(settings.ics_days, 10) || 90, shiftsOnly: only }) : null;
     if (xd) {
       const mk = (ymd, hhmm) => {
         const y = +ymd.slice(0, 4), m = +ymd.slice(5, 7), d = +ymd.slice(8, 10);
@@ -863,15 +897,15 @@ const ICS = (() => {
           ? vevent({ uid: "sixmin-shift-" + s.date + "-" + n + "@local", start: mk(s.date, s.from), minutes: dur(s.date, s.from, s.to), title: "🏭 " + s.title, description: desc })
           : vevent({ uid: "sixmin-shift-" + s.date + "-" + n + "@local", allday: true, dateYMD: s.date.replace(/-/g, ""), endDateYMD: ymdPlus(s.date.replace(/-/g, ""), 1), title: "🏭 " + s.title, description: desc }));
       });
-      xd.events.forEach((ev, n) => {
+      if (!only) xd.events.forEach((ev, n) => {
         events.push(ev.from
           ? vevent({ uid: "sixmin-ev-" + ev.date + "-" + n + "@local", start: mk(ev.date, ev.from), minutes: ev.to ? dur(ev.date, ev.from, ev.to) : 60, title: "📅 " + ev.title, description: desc })
           : vevent({ uid: "sixmin-ev-" + ev.date + "-" + n + "@local", allday: true, dateYMD: ev.date.replace(/-/g, ""), endDateYMD: ymdPlus(ev.date.replace(/-/g, ""), 1), title: "📅 " + ev.title, description: desc }));
       });
-      (xd.vacations || []).forEach((v) => {
+      if (!only) (xd.vacations || []).forEach((v) => {
         events.push(vevent({ uid: "sixmin-vac-" + v.id + "@local", allday: true, dateYMD: String(v.start_date).replace(/-/g, ""), endDateYMD: ymdPlus(String(v.start_date).replace(/-/g, ""), v.days || 1), title: "🏖 Отпуск", description: desc }));
       });
-      if (xd.birthday) {
+      if (!only && xd.birthday) {
         const b = String(xd.birthday).slice(0, 10);
         const yy = new Date().getFullYear();
         const md = b.slice(5);
@@ -1472,6 +1506,8 @@ const App = (() => {
     $("set-tz").value = s.tz;
     $("set-vacation").value = s.vacation_until || "";
     $("set-rotation").value = s.rotation || "random";
+    const icsDaysEl = $("set-ics-days"); if (icsDaysEl) icsDaysEl.value = String(s.ics_days || 90);
+    const icsOnlyEl = $("set-ics-only"); if (icsOnlyEl) icsOnlyEl.checked = !!s.ics_shifts_only;
     $("build-info").textContent = "v" + (CFG.version || "0.1");
     renderAuth();
     renderSyncState();
@@ -1685,6 +1721,17 @@ const App = (() => {
       const s = await Store.getSettings();
       ICS.download(s, CFG.appUrl);
       flash("Файл six-minutes.ics сохранён. iPhone: открыть файл → «Добавить всё».", "ok");
+    };
+    // v0.8.52: горизонт и состав .ics — настройки устройства (боту не нужны, в облако не шлём)
+    const icsDaysSel = $("set-ics-days");
+    if (icsDaysSel) icsDaysSel.onchange = async () => {
+      await Store.saveSettings({ ics_days: parseInt(icsDaysSel.value, 10) || 90 });
+      flash("Календарь: смены за " + (parseInt(icsDaysSel.value, 10) || 90) + " дн.");
+    };
+    const icsOnlyChk = $("set-ics-only");
+    if (icsOnlyChk) icsOnlyChk.onchange = async () => {
+      await Store.saveSettings({ ics_shifts_only: icsOnlyChk.checked });
+      flash(icsOnlyChk.checked ? "Календарь: только смены." : "Календарь: полный состав.");
     };
 
     $("btn-export-json").onclick = async () => {
