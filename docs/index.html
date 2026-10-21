@@ -159,10 +159,8 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
 }
 .tabbar button span{font-size:20px;line-height:1}
 .tabbar button.active{color:var(--accent);font-weight:600}
-.form-bar{
-  left:0;right:0;transform:none;width:auto;border-radius:0;
-  border-left:none;border-right:none;border-top:1px solid var(--line);
-}
+/* v0.8.53: панель кнопок ритуала — в пределах основного каркаса, как меню v0.8.47
+   (запрос владельца 21.10: «сжать до пределов основного каркаса»); фулл-блид оверрайд убран */
 .form-bar{gap:10px;padding:10px 16px calc(10px + env(safe-area-inset-bottom))}
 .form-bar .btn{flex:1}
 .form-bar .btn.primary{flex:1.6}
@@ -584,7 +582,7 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
       </div>
     </div>
 
-    <p class="version"><span id="build-info">v0.8.52</span> · данные на устройстве + Supabase</p>
+    <p class="version"><span id="build-info">v0.8.53</span> · данные на устройстве + Supabase</p>
   </main>
 </section>
 
@@ -656,7 +654,7 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
   <button data-tab="settings"><span>⚙️</span>Настройки</button>
 </nav>
 
-<script defer src="js/bundle.js?v=079"></script>
-<script defer src="js/v02.js?v=111"></script>
+<script defer src="js/bundle.js?v=080"></script>
+<script defer src="js/v02.js?v=112"></script>
 </body>
 </html>

@@ -1,11 +1,11 @@
 /* sw.js — офлайн-кэш приложения (cache-first, навигация → index.html) */
-const CACHE = "sixmin-v0.4.52";
+const CACHE = "sixmin-v0.4.53";
 const ASSETS = [
   "./",
   "index.html",
   "manifest.webmanifest",
-  "js/bundle.js?v=079",
-  "js/v02.js?v=111",
+  "js/bundle.js?v=080",
+  "js/v02.js?v=112",
   "js/vendor/supabase.min.js?v=014",
   "icons/icon-192.png",
   "icons/icon-512.png"
