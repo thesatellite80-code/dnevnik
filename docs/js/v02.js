@@ -3741,8 +3741,18 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     const sno = e.target.closest("[data-bday-snooze]");
     if (!dis && !sno) return;
     const st = bdayNoteState();
-    if (dis) st[dis.getAttribute("data-bday-dismiss")] = { d: 1 };
-    else { const pp = sno.getAttribute("data-bday-snooze").split("|"); st[pp[0]] = { s: pp[1] }; }
+    if (dis) {
+      st[dis.getAttribute("data-bday-dismiss")] = { d: 1 };
+      SixMin.toast("Не буду напоминать про этот день рождения");
+    } else {
+      // v0.8.49: id подсказки сам содержит "|" (круг|человек|год), поэтому дата — это
+      // ПОСЛЕДНИЙ сегмент атрибута, а id — всё до неё. Старый split("|")[0]/[1] ломал
+      // ключ, и кнопка «Напомнить» выглядела мёртвой (кейс 21.10).
+      const pp = sno.getAttribute("data-bday-snooze").split("|");
+      const day = pp.pop();
+      st[pp.join("|")] = { s: day };
+      SixMin.toast("🎂 Напомню " + day.slice(8, 10) + "." + day.slice(5, 7));
+    }
     bdayNoteSave(st);
     redrawAmExtra();
   });
