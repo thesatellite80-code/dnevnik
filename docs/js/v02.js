@@ -16,6 +16,18 @@
 
 window.__v02stage = "v02-start";
 
+// v0.8.60: строка описания задачи — helper НА ВЕРХНЕМ УРОВНЕ файла, виден всем модулям.
+// История: появился в v0.8.55 (taskNoteHTML), в v0.8.56 переименован в noteHTML
+// с пометкой «единая closure, доступен всем модулям», но физически оказался ВНУТРИ
+// модуля «Круги» — а «Задачи» (личные и рабочие) вызывали его из другой closure:
+// ReferenceError при любой задаче с описанием (баг владельца 22.10: карточка
+// «noteHTML is not defined» в Кругах + молча пустые списки Трекера/Работы).
+// Вызывается только в рантайм — SixMin.esc к этому моменту уже готов.
+function noteHTML(note) {
+  const n = String(note == null ? "" : note).trim();
+  return n ? '<div class="task-note">' + SixMin.esc(n) + '</div>' : "";
+}
+
 
 // app/js/sixmin-common.js — общие утилиты для модулей v0.2
 // Подключается ПЕРЕД остальными модулями v0.2.
@@ -5391,12 +5403,8 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
         </div>`;
     }).join("");
 
-  // v0.8.55/v0.8.56: необязательное описание задачи (личные, «на всех», баунти) —
-  // приглушённая строка под заголовком; класс .task-note — в каноне CSS index.html
-  function noteHTML(note) {
-    const n = String(note == null ? "" : note).trim();
-    return n ? '<div class="task-note">' + esc(n) + '</div>' : "";
-  }
+  // v0.8.60: noteHTML живёт на верхнем уровне файла (см. начало v02.js) —
+  // раньше определение было локальным здесь и не было видно модулю задач.
   // v0.8.56: редактировать общую задачу могут автор задачи и владелец круга
   const canEditShared = (t) => t.user_id === (D && D.uid) || isOwnerCircle;
   function editSharedHTML(t) {
