@@ -309,6 +309,7 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
     <button class="ghost-btn" id="btn-quick" title="Быстрая запись">⚡ Быстро</button>
     <button class="ghost-btn" id="btn-freeze" title="Заморозить сегодня: день отдыха без вины">🧊 Заморозить</button>
     <button class="ghost-btn" id="btn-wisdom" title="Мудрость «6 минут»">📖</button>
+    <button class="ghost-btn" data-reload title="Обновить страницу" aria-label="Обновить страницу">↻</button>
   </header>
 
   <div id="flash" class="flash" hidden></div>
@@ -436,6 +437,7 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
   <header class="head">
     <h1 class="page-title">История</h1>
     <input type="search" id="search" placeholder="Поиск…">
+    <button class="ghost-btn" data-reload title="Обновить страницу" aria-label="Обновить страницу">↻</button>
   </header>
   <main class="content">
     <div class="month-nav">
@@ -458,7 +460,7 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
 
 <!-- ══════════════ СТАТИСТИКА ══════════════ -->
 <section id="screen-stats" class="screen">
-  <header class="head"><h1 class="page-title">Прогресс</h1></header>
+  <header class="head"><h1 class="page-title">Прогресс</h1><button class="ghost-btn" data-reload title="Обновить страницу" aria-label="Обновить страницу">↻</button></header>
   <main class="content" id="stats-content">
     <div class="stat-cards">
       <div class="card stat"><span id="stat-streak">0</span><label>серия, дней</label></div>
@@ -491,7 +493,7 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
 
 <!-- ══════════════ НАСТРОЙКИ ══════════════ -->
 <section id="screen-settings" class="screen">
-  <header class="head"><h1 class="page-title">Настройки</h1></header>
+  <header class="head"><h1 class="page-title">Настройки</h1><button class="ghost-btn" data-reload title="Обновить страницу" aria-label="Обновить страницу">↻</button></header>
   <main class="content">
 
     <div class="card">
@@ -582,13 +584,13 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
       </div>
     </div>
 
-    <p class="version"><span id="build-info">v0.8.53</span> · данные на устройстве + Supabase</p>
+    <p class="version"><span id="build-info">v0.8.55</span> · данные на устройстве + Supabase</p>
   </main>
 </section>
 
 <!-- ══════════════ МУДРОСТЬ ══════════════ -->
 <section id="screen-wisdom" class="screen">
-  <header class="head"><h1 class="page-title">📖 Мудрость «6 минут»</h1></header>
+  <header class="head"><h1 class="page-title">📖 Мудрость «6 минут»</h1><button class="ghost-btn" data-reload title="Обновить страницу" aria-label="Обновить страницу">↻</button></header>
   <main class="content">
     <div id="wisdom-daily"></div>
     <div id="wisdom-host"></div>
@@ -609,7 +611,7 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
 
 <!-- ══════════════ ЭКРАН ТРЕКЕР (v0.2) ══════════════ -->
 <section id="screen-tracker" class="screen">
-  <header class="head"><h1 class="page-title">Трекер</h1></header>
+  <header class="head"><h1 class="page-title">Трекер</h1><button class="ghost-btn" data-reload title="Обновить страницу" aria-label="Обновить страницу">↻</button></header>
   <main class="content">
     <div class="card"><div id="habits-host"></div></div>
     <div class="card"><div id="focus-host"></div></div>
@@ -619,7 +621,7 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
 
 <!-- ══════════════ ЭКРАН РАБОТА (v0.2.1) ══════════════ -->
 <section id="screen-work" class="screen">
-  <header class="head"><h1 class="page-title">Работа</h1></header>
+  <header class="head"><h1 class="page-title">Работа</h1><button class="ghost-btn" data-reload title="Обновить страницу" aria-label="Обновить страницу">↻</button></header>
   <main class="content">
     <div class="card"><div id="shifts-host"></div></div>
     <div class="card"><div id="work-host"></div></div>
@@ -628,7 +630,7 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
 
 <!-- ══════════════ ЭКРАН КРУГИ (v0.5) ══════════════ -->
 <section id="screen-circles" class="screen">
-  <header class="head"><h1 class="page-title">Круги</h1></header>
+  <header class="head"><h1 class="page-title">Круги</h1><button class="ghost-btn" data-reload title="Обновить страницу" aria-label="Обновить страницу">↻</button></header>
   <main class="content">
     <div class="card"><div id="circles-host"></div></div>
   </main>
@@ -654,7 +656,7 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
   <button data-tab="settings"><span>⚙️</span>Настройки</button>
 </nav>
 
-<script defer src="js/bundle.js?v=080"></script>
-<script defer src="js/v02.js?v=112"></script>
+<script defer src="js/bundle.js?v=082"></script>
+<script defer src="js/v02.js?v=114"></script>
 </body>
 </html>

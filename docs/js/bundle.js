@@ -24,7 +24,7 @@ window.SIXMIN_CONFIG = {
 
   // ── 3. ПРОЧЕЕ ──────────────────────────────────────────────────────
   defaultTimezone: "Europe/Moscow",
-  version: "0.8.53"
+  version: "0.8.55"
 };
 
 /* ── Контент: вопросы (свои формулировки, пул вариантов для ротации) ── */
@@ -1715,6 +1715,15 @@ const App = (() => {
     };
     const bw = $("btn-wisdom"); if (bw) bw.onclick = () => show("wisdom");
     const bwc = $("btn-wisdom-close"); if (bwc) bwc.onclick = () => show(lastMainTab());
+    // v0.8.55: явная кнопка обновления страницы (iOS PWA/standalone: pull-to-refresh ненадёжен).
+    // Одна делегированная точка на все шапки: тост-отдача и перезагрузка.
+    document.addEventListener("click", (e) => {
+      const rl = e.target && e.target.closest ? e.target.closest("[data-reload]") : null;
+      if (!rl) return;
+      e.preventDefault();
+      SixMin.toast("Обновляю страницу…");
+      setTimeout(() => location.reload(), 400);
+    });
     $("btn-logout").onclick = async () => { await Cloud.signOut(); renderAuth(); flash("Вы вышли из облака"); };
     $("btn-gen-code").onclick = genLinkCode;
     $("btn-ics").onclick = async () => {

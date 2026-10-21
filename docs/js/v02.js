@@ -3515,7 +3515,10 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     if (loggedOut) {
       root.innerHTML = '<div class="sm-sh"><div class="sm-sh-head">🔥 Мои смены</div>' +
         '<p class="sm-sh-note">Смены, отпуска и поиск свободных дней живут в облаке. ' +
-        'Войдите в аккаунт — и карточка появится здесь.</p></div>';
+        'Войдите в аккаунт — и карточка появится здесь.</p>' +
+        '<button class="btn auth-compact" data-goto-settings>Открыть «Настройки» и войти</button></div>';
+      root.querySelector("[data-goto-settings]")?.addEventListener("click", () =>
+        document.querySelector('[data-tab="settings"]')?.click());
       return;
     }
     if (!J.length) { editingTypes = {}; root.innerHTML = setupHTML(); wireSetup(); return; }
@@ -3566,7 +3569,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     }).join("");
     const resHtml = resCache
       ? '<details open class="sm-sh-reswrap"><summary>Результаты: ' + resCache.length +
-        ' дн. <span class="sm-sh-hide">× скрыть</span></summary><div class="sm-sh-res">' +
+        ' дн. — развернуть / скрыть</summary><div class="sm-sh-res">' +
         resCache.map((r) => '<div class="sm-sh-row sm-sh-dayrow' + (r.inf.free ? " free" : "") + '" data-dayk="' + r.k + '" title="Открыть детали дня"><span>' + r.k.slice(8, 10) + "." + r.k.slice(5, 7) +
         " " + r.wd + '</span><b>' + esc(r.inf.loc) + '</b><i class="sm-sh-msg">' + esc(r.inf.msg) +
         (r.bday ? " · 🎂 " + esc(r.bday) : "") + "</i></div>").join("") + "</div></details>"
@@ -3601,7 +3604,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       eventsHTML() + eventFormHTML() +
       '<details class="sm-sh-secwrap"' + (resCache ? " open" : "") + '><summary>🔍 Найти свободные дни</summary>' +
       '<form class="sm-sh-find"><input type="date" class="sm-sh-from" value="' + today + '"><input type="date" class="sm-sh-to" value="' +
-      key(new Date(now.getTime() + 30 * 86400000)) + '"><button class="sm-add-btn" type="submit">🧮</button></form>' +
+      key(new Date(now.getTime() + 30 * 86400000)) + '"><span class="sm-sh-note">пересчёт — при выборе дат; результат ниже, спойлером</span></form>' +
       resHtml + '</details>' +
       '<details class="sm-sh-secwrap"><summary>🏖 Отпуски</summary>' +
       '<form class="sm-sh-vac"><input type="date" class="sm-sh-vstart"><input type="number" class="sm-sh-vdays" min="1" max="366" value="14" title="Дней">' +
@@ -3706,7 +3709,8 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       '<input type="date" class="sm-sh-ev-i" name="d">' +
       '<input type="time" class="sm-sh-ev-i" name="f" value="19:00"><input type="time" class="sm-sh-ev-i" name="tt">' +
       '<select class="sm-sh-ev-i" name="c">' + CIRC.map((c) => '<option value="' + c.id + '">' + esc(c.name) + "</option>").join("") + '</select>' +
-      '<button class="sm-sh-cycadd" type="submit">+ пригласить круг</button></form></details>';
+      '<button class="sm-sh-cycadd" type="submit">+ пригласить круг</button></form>' +
+      '<div class="hint-text">Участники с привязанным Telegram получат уведомление о событии и напоминание в день события; отключить — /circle_off в боте.</div></details>';
   }
   function circleBirthdaysOn(k) {
     const names = new Set();
@@ -3999,11 +4003,9 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       "(завод до 19:30, спортзал с 20:30) — день занят оба интервала, и то и другое видно в статусе." +
       "Приоритет: отпуск → праздник → смена. Графики видят участники ваших кругов, если в «Настройках» " +
       "включена видимость; дни рождения приходят из кругов и попадают в подсказки и поиск.</p>"));
-    root.querySelector(".sm-sh-reswrap .sm-sh-hide")?.addEventListener("click", (e) => {
-      e.preventDefault(); resCache = null; render();
-    });
-    root.querySelector(".sm-sh-find")?.addEventListener("submit", (e) => {
-      e.preventDefault();
+    // v0.8.55: кнопки «посчитать» нет — поиск идёт сам при смене дат и при открытии
+    // спойлера (если ещё не считали); результаты — спойлер с читаемой шапкой.
+    function runFind() {
       const a = root.querySelector(".sm-sh-from").value, b = root.querySelector(".sm-sh-to").value;
       if (!a || !b) { SixMin.toast("Выберите даты"); return; }
       const wd = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
@@ -4016,6 +4018,11 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
         d = new Date(d.getTime() + 86400000);
       }
       render();
+    }
+    root.querySelector(".sm-sh-find")?.addEventListener("submit", (e) => { e.preventDefault(); runFind(); });
+    root.querySelectorAll(".sm-sh-find input").forEach((i) => i.addEventListener("change", runFind));
+    root.querySelector(".sm-sh-find")?.closest("details")?.addEventListener("toggle", (ev) => {
+      if (ev.target.open && !resCache) runFind();
     });
     function vs() { return vacSet(); }
     root.querySelector(".sm-sh-vac")?.addEventListener("submit", async (e) => {
@@ -4061,7 +4068,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
         time_from: f.f.value || null, time_to: f.tt.value || null,
       });
       if (error) { SixMin.toast("Ошибка: " + error.message); return; }
-      SixMin.toast("Событие создано: круг увидит его в «Мои смены» и в деталях дня");
+      SixMin.toast("Событие создано: круг увидит его в «Мои смены», участники с привязанным Telegram получат уведомление");
       await load().catch(() => {}); render();
     });
     root.querySelector(".sm-sh-evpick")?.addEventListener("change", (e) => {
@@ -4810,12 +4817,16 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
     await refresh();
   }
 
-  async function addSharedTask(title) {
+  async function addSharedTask(title, note) {
     const uid = await SixMin.uid();
-    const { error } = await SixMin.sb().from("tasks").insert({
+    const row = {
       user_id: uid, title: title.trim(), due_date: D.today,
       area: "personal", kind: newKind, circle_id: sel,
-    });
+    };
+    // v0.8.55: описание необязательно; пустое поле НЕ уходит в строку (колонка note nullable)
+    const nt = String(note == null ? "" : note).trim();
+    if (nt) row.note = nt;
+    const { error } = await SixMin.sb().from("tasks").insert(row);
     if (error) { SixMin.toast("Ошибка: " + error.message); return; }
     await refresh();
   }
@@ -5118,6 +5129,7 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
         </div>`;
       root.querySelector("[data-goto-settings]")?.addEventListener("click", () =>
         document.querySelector('[data-tab="settings"]')?.click());
+      wireInfo(); // v0.8.55: (i) в заглушке работала в пустоту — слушатели вешаются и здесь
       restoreForms(snap);
       return;
     }
@@ -5181,6 +5193,12 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
         </div>`;
     }).join("");
 
+  // v0.8.55: необязательное описание задачи «на всех» — приглушённая строка под заголовком
+  function taskNoteHTML(note) {
+    const n = String(note == null ? "" : note).trim();
+    return n ? '<div class="sm-cr-tasknote">' + esc(n) + '</div>' : "";
+  }
+
     const tasks = D.tasks.map((t) => `
       <li class="sm-task-wrap" data-id="${t.id}"><div class="sm-task">
         <div class="sm-task-main">
@@ -5194,6 +5212,7 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
           <button class="sm-task-btn sm-task-del" data-sdel="${t.id}">×</button>
         </div>
       </div>
+      ${taskNoteHTML(t.note)}
       ${CM.panelHTML(t)}
       </li>`).join("");
 
@@ -5257,6 +5276,7 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
           </div>
           <form class="sm-cr-tadd">
             <input class="sm-cr-input" placeholder="Задача для всех…" maxlength="120">
+            <input class="sm-cr-input sm-cr-taddnote" placeholder="Описание (необязательно)…" maxlength="300">
             <button class="sm-add-btn" type="submit">+</button>
           </form>
         </section>
@@ -5444,7 +5464,11 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
     root.querySelector(".sm-cr-tadd")?.addEventListener("submit", (e) => {
       e.preventDefault();
       const inp = e.target.querySelector("input");
-      if (inp.value.trim()) { addSharedTask(inp.value); inp.value = ""; }
+      const noteInp = e.target.querySelector(".sm-cr-taddnote");
+      if (inp.value.trim()) {
+        addSharedTask(inp.value, noteInp ? noteInp.value : "");
+        inp.value = ""; if (noteInp) noteInp.value = "";
+      }
     });
     root.querySelectorAll("[data-st]").forEach((b) =>
       b.addEventListener("click", () => toggleShared(D.tasks.find((t) => t.id === b.dataset.st))));
@@ -5536,6 +5560,9 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
       .sm-cr-switch{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
       .sm-cr-note{font-size:13px;opacity:.65;line-height:1.55;margin:0 0 12px}
       .sm-cr-create,.sm-cr-join,.sm-cr-hadd,.sm-cr-tadd{display:flex;gap:8px;margin-bottom:10px}
+      .sm-cr-tadd{flex-wrap:wrap}
+      .sm-cr-tadd .sm-cr-taddnote{flex:1 1 100%}
+      .sm-cr-tasknote{margin:-2px 0 8px 34px;color:var(--muted);font-size:12.5px;line-height:1.4;white-space:pre-wrap;opacity:.85}
       .sm-cr-join-more{margin-top:16px;opacity:.85}
       .sm-cr-input{flex:1;padding:10px 13px;border-radius:12px;border:1px solid rgba(128,128,128,.25);
                    background:transparent;color:inherit;font-size:14px;outline:none;min-width:0}
