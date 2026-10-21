@@ -2509,7 +2509,7 @@ window.__v02stage = "after-sixmin-donetoday"; if (window.__v02say) window.__v02s
 // app/js/sixmin-analytics.js — v0.2: Инфографика и сводки
 //  - Heatmap-календарь как на GitHub (последние ~17 недель)
 //  - Текущая и лучшая серия (streak) по привычкам
-//  - Автоматические выводы: самая частая благодарность, пропущенные дни,
+//  - Автоматические выводы: самое частое слово утренних планов, пропущенные дни,
 //    самая стабильная привычка, самые переносимые задачи
 // API: SixMinAnalytics.mount(container)
 
@@ -2533,7 +2533,7 @@ window.__v02stage = "after-sixmin-donetoday"; if (window.__v02say) window.__v02s
       SixMin.sb().from("tasks").select("title,postpone_count,completed,due_date")
         .eq("user_id", uid).gte("due_date", from),
       // живая схема: ответы плоские (a1..a3 утро, e1..e3 вечер, w1..w5 неделя);
-      // благодарность — утренний первый ответ a1
+      // v0.8.50: утренняя строка плана a1 (до v0.8.42 на её месте была благодарность)
       SixMin.sb().from("entries").select("date,slot,a1")
         .eq("user_id", uid).gte("date", from).lte("date", to).limit(500)
         .then((r) => (r.error ? { data: [] } : r)),
@@ -2616,7 +2616,7 @@ window.__v02stage = "after-sixmin-donetoday"; if (window.__v02say) window.__v02s
     }
     if (missed > 0) out.push(`🕳️ Пропущенных дней за период: <b>${missed}</b>`);
 
-    // 3. Самая частая благодарность (тексты ищем в answers jsonb по типовым ключам)
+    // 3. Самое частое слово утренних планов (тексты a1, стоп-слова, порог 3+)
     const words = {};
     const STOP = new Set("это что как для и в на с не но а из за то все весь очень меня мой моя мне нас вам вам был была были спасибо".split(" "));
     for (const e of D.entries) {
@@ -2628,14 +2628,14 @@ window.__v02stage = "after-sixmin-donetoday"; if (window.__v02say) window.__v02s
       }
     }
     const top = Object.entries(words).sort((a, b) => b[1] - a[1])[0];
-    if (top && top[1] >= 3) out.push(`🙏 Самая частая благодарность: <b>«${SixMin.esc(top[0])}»</b> (${top[1]} раз)`);
+    if (top && top[1] >= 3) out.push(`🙏 Самое частое слово утренних планов: <b>«${SixMin.esc(top[0])}»</b> (${top[1]} раз)`);
 
     // 4. Задачи-«беглецы»
     const runners = D.tasks.filter((t) => (t.postpone_count || 0) >= 2)
       .sort((a, b) => b.postpone_count - a.postpone_count)[0];
     if (runners) out.push(`↪ Чаще всего переносится: <b>«${SixMin.esc(runners.title)}»</b> — уже ${runners.postpone_count} раз. Разбить на части?`);
 
-    if (!out.length) out.push("✨ Начните отмечать привычки и писать благодарности — через неделю здесь появятся первые выводы.");
+    if (!out.length) out.push("✨ Начните отмечать привычки и писать утренние строки — через неделю здесь появятся первые выводы.");
     return out;
   }
 
@@ -2700,7 +2700,7 @@ window.__v02stage = "after-sixmin-donetoday"; if (window.__v02say) window.__v02s
     root.querySelector('[data-info="analytics"]')?.addEventListener("click", () => SixMin.info("Инфографика",
       "<p><b>Heatmap</b> — календарь активности как на GitHub: чем темнее квадратик дня, тем больше привычек выполнено и была ли запись дневника. Сегодняшний день обведён.</p>" +
       "<p>🔥 — текущая серия дней подряд (день с любой записью или всеми привычками засчитывается; сегодня ещё не закончилось и не рвёт серию). 🏅 — лучшая серия за период.</p>" +
-      "<p><b>Выводы</b> — автоматические наблюдения: самая стабильная и проседающая привычка, пропущенные дни, самая частая благодарность (по утренним ответам), задачи-«беглецы» с переносами.</p>" +
+      "<p><b>Выводы</b> — автоматические наблюдения: самая стабильная и проседающая привычка, пропущенные дни, самое частое слово утренних планов, задачи-«беглецы» с переносами.</p>" +
       "<p>Данные: отметки привычек, записи дневника и задачи обеих областей — личной и рабочей.</p>"));
   }
 
@@ -4746,11 +4746,13 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
         '<input class="sm-cr-input" name="t" placeholder="Награда: кино-вечер, пицца…" maxlength="80">' +
         '<input class="sm-cr-input sm-cr-num" name="p" type="number" min="1" max="9999" value="20" title="Цена">' +
         '<button class="sm-add-btn" type="submit">+</button></form>' : '') +
-      '<div class="sm-cr-sec">Моя выписка</div>' +
+      // v0.8.50: выписка — в спойлер (запрос владельца): блок растягивал экран круга,
+      // образец вида — «✅ История одобрений» (details/summary, sm-cr-histwrap).
+      '<details class="sm-cr-histwrap"><summary>📜 Моя выписка · только вам (' + myLedger.length + ') — развернуть</summary>' +
       '<div class="sm-cr-ledger">' + (myLedger.map((l) =>
         '<div class="sm-cr-led-row"><span>' + new Date(l.created_at).toLocaleDateString("ru-RU", { day: "numeric", month: "short" }) +
         ' · ' + SixMin.esc(l.reason) + '</span><b class="' + (l.delta >= 0 ? "plus" : "minus") + '">' + (l.delta >= 0 ? "+" : "") + l.delta + '</b></div>').join("")
-        || '<p class="sm-cr-note">Операций пока нет.</p>') + '</div>';
+        || '<p class="sm-cr-note">Операций пока нет.</p>') + '</div></details>';
   }
 
   async function bountyAct(act, id) {
@@ -5720,7 +5722,7 @@ window.__v02stage = "after-sixmin-swipe"; if (window.__v02say) window.__v02say("
       ["#screen-history", "history", "История",
         "<p>Календарь за выбранный месяц: каждая клетка — день. <b>Тёмная</b> — заполнены оба блока (утро и вечер), " +
         "<b>светлая</b> — один, <b>пунктир</b> — день в заморозке, <b>пустая</b> — записей не было.</p>" +
-        "<p>Нажмите на день — откроется запись дня (ответы, благодарности, задачи). ‹ › — листать месяцы. " +
+        "<p>Нажмите на день — откроется запись дня (ответы, задачи). ‹ › — листать месяцы. " +
         "Поиск сверху ищет по всем записям за всё время.</p>"],
       ["#screen-stats", "stats", "Прогресс",
         "<p>Верхние карточки: 🔥 текущая серия дней с записями, рекордная серия, число дней с записями за месяц и среднее время записи.</p>" +
