@@ -1959,6 +1959,7 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
       const { error } = await SixMin.sb().from("tasks").insert({
         user_id: uid, title: title.trim(), due_date: extra.due || todayKey,
         due_time: extra.dueTime || null, remind_at: extra.remindAt || null,
+        note: extra.note || null,
         area: AREA,
         kind: newKind, position: today.length,
       });
@@ -2079,6 +2080,7 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
           <button class="sm-task-btn sm-task-del" data-act="del" data-id="${t.id}" title="Удалить">×</button>
         </div>
       </div>
+      ${noteHTML(t.note)}
       ${CM.panelHTML(t)}
       </li>`;
     }
@@ -2113,6 +2115,7 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
         <form class="sm-task-add">
           <textarea class="sm-task-add-input" rows="1" maxlength="120" placeholder="${ph}" autocomplete="off"></textarea>
           <button class="sm-task-add-btn" type="submit">+</button>
+          <input class="sm-task-add-note" maxlength="300" placeholder="Описание (необязательно)…" autocomplete="off">
           <div class="sm-task-add-opts">
             <label class="sm-add-lbl">Дедлайн<span class="sm-add-wrap"><input type="date" class="sm-add-due"><i class="sm-add-hint">Укажите дату</i></span><span class="sm-add-wrap"><input type="time" class="sm-add-duetime"><i class="sm-add-hint">Укажите время</i></span></label>
             <label class="sm-add-lbl">Напоминание<span class="sm-add-wrap"><input type="datetime-local" class="sm-add-remind"><i class="sm-add-hint">Укажите дату и время</i></span></label>
@@ -2217,11 +2220,14 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
         const due = root.querySelector(".sm-add-due")?.value || "";
         const dueTime = root.querySelector(".sm-add-duetime")?.value || "";
         const remind = root.querySelector(".sm-add-remind")?.value || "";
+        const noteInpT = root.querySelector(".sm-task-add-note");
+        const noteV = noteInpT ? noteInpT.value.trim() : "";
         addInp.value = "";
+        if (noteInpT) noteInpT.value = "";
         addInp.style.height = "auto";
         const dt = root.querySelector(".sm-add-duetime"); if (dt) dt.value = "";
         const rm = root.querySelector(".sm-add-remind"); if (rm) rm.value = "";
-        add(v, { due, dueTime, remindAt: remind ? new Date(remind).toISOString() : null });
+        add(v, { due, dueTime, remindAt: remind ? new Date(remind).toISOString() : null, note: noteV || null });
         addInp.focus();
       });
 
@@ -2340,6 +2346,8 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
       .sm-kind-head{font-size:12px;font-weight:700;opacity:.6;margin:10px 0 4px}
       .sm-task-add{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
       .sm-task-add-opts{display:flex;gap:8px;flex-wrap:wrap;width:100%}
+      .sm-task-add-note{width:100%;margin-top:6px;padding:9px 13px;border-radius:10px;
+        border:1px solid rgba(128,128,128,.25);background:var(--inset,#1c1c1c);color:inherit;font:inherit;font-size:13px}
       .sm-add-lbl{display:flex;align-items:center;gap:4px;font-size:11px;opacity:.85}
       .sm-add-lbl input{background:var(--inset,#1c1c1c);border:1px solid var(--line,#333);border-radius:8px;color:inherit;padding:4px 6px;font-size:12px;color-scheme:dark}
       .sm-add-wrap{position:relative;display:inline-block}
@@ -3587,6 +3595,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       '<div class="sm-sh-stat"><b>🏭 ' + cur.work + ' дн. · ' + cur.hours + ' ч.</b><span>итого рабочие · ' + esc(mName(now)) + '</span><em>🏢 свободен: ' + cur.free + ' дн. · 🏖 отпуск/праздники: ' + cur.vac + ' дн.</em></div>' +
       '<div class="sm-sh-stat"><b>🏭 ' + prev.work + ' дн. · ' + prev.hours + ' ч.</b><span>итого рабочие · ' + esc(mName(prevD)) + '</span><em>🏢 свободен: ' + prev.free + ' дн.</em></div>' +
       '</div>' +
+      '<div class="sm-sh-block"><div class="sm-sh-block-h">📊 Мои графики (' + (J || []).length + ')</div>' +
       '<details class="sm-sh-pjwrap"><summary>📊 По графикам: ' + esc(mName(now)) + ' — дни, часы и деньги каждого</summary>' +
       '<div class="sm-sh-pjrows">' + ((J || []).map((j) => {
         const st = cur.perJob[j.id];
@@ -3598,10 +3607,11 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
           (j.work === false ? "<span>ритуал · не рабочие дни</span>" : "") +
           "</div>";
       }).join("") || '<div class="sm-sh-pjrow"><span>графиков пока нет</span></div>') + '</div></details>' +
-      '<div class="sm-sh-sec">Мои графики (' + (J || []).length + ')</div>' + jobsRows + editorHtml +
-      '<div class="sm-sh-lbl"><button class="sm-sh-cycadd" type="button" data-jadd="1">+ Добавить график</button></div>' +
-      circlesHTML(today) +
-      eventsHTML() + eventFormHTML() +
+      jobsRows + editorHtml +
+      '<div class="sm-sh-lbl"><button class="sm-sh-cycadd" type="button" data-jadd="1">+ Добавить график</button></div></div>' +
+      (CIRC.length ? '<div class="sm-sh-block">' + circlesHTML(today) + '</div>' : "") +
+      (CIRC.length ? '<div class="sm-sh-block">' + eventsHTML() + eventFormHTML() + '</div>' : "") +
+      '<div class="sm-sh-block"><div class="sm-sh-block-h">🔍 Поиск и календари</div>' +
       '<details class="sm-sh-secwrap"' + (resCache ? " open" : "") + '><summary>🔍 Найти свободные дни</summary>' +
       '<form class="sm-sh-find"><input type="date" class="sm-sh-from" value="' + today + '"><input type="date" class="sm-sh-to" value="' +
       key(new Date(now.getTime() + 30 * 86400000)) + '"><span class="sm-sh-note">пересчёт — при выборе дат; результат ниже, спойлером</span></form>' +
@@ -3615,6 +3625,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       '<span class="sm-sh-note">ничего не отмечено — на все графики</span></div></form>' +
       (vacRows || '<p class="sm-sh-note">Отпусков не запланировано.</p>') + '</details>' +
       '<details class="sm-sh-secwrap"><summary>🎉 Праздники 2026</summary>' + holRows + '</details>' +
+      '</div>' +
       '</div>';
     updateNow();
     wire();
@@ -3698,7 +3709,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
             '<button class="sm-sh-icbtn" type="button" data-rsvp="' + ev.id + '" data-s="no"' + (mine && mine.status === "no" ? ' style="border-color:var(--accent,#E30613)"' : "") + '>не могу</button></span>') +
         "</div>";
     }).join("");
-    return '<div class="sm-sh-sec">📅 События моих кругов</div>' + rows;
+    return '<div class="sm-sh-block-h">📅 События кругов</div>' + rows;
   }
   function eventFormHTML() {
     if (!CIRC.length) return "";
@@ -3877,7 +3888,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     const nextBlocks = []; // v0.8.38: общие выходные кругов — одним спойлером внизу
     const bdayPeople = new Map(); // v0.8.41: именинник = одна строка со списком кругов
     const fmtK = (kk) => kk.slice(8, 10) + "." + kk.slice(5, 7) + " " + ["вс", "пн", "вт", "ср", "чт", "пт", "сб"][parse(kk).getDay()]; // v0.8.41: на уровне функции
-    let out = '<div class="sm-sh-sec">В моих кругах</div>';
+    let out = '<div class="sm-sh-block-h">🤝 В моих кругах</div>';
     for (const c of CIRC) {
       const memberJobs = {};
       for (const jr of (c.jobs || [])) (memberJobs[jr.user_id] = memberJobs[jr.user_id] || []).push(jr);
@@ -4172,6 +4183,10 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       .sm-sh-note{font-size:12.5px;opacity:.7;line-height:1.5}
       .sm-sh-reswrap{margin-bottom:8px}
       .sm-sh-reswrap summary{cursor:pointer;font-size:13px;font-weight:700;opacity:.9}
+      .sm-sh-block{background:var(--card,#161616);border:1px solid var(--line,#2A2A2A);border-radius:14px;
+        padding:12px 14px;margin-bottom:12px;transition:border-color .15s,background .15s}
+      .sm-sh-block:hover{border-color:rgba(227,6,19,.55);background:var(--block,#1D1D1D)}
+      .sm-sh-block-h{font-size:15px;font-weight:700;margin:0 0 10px}
       .sm-sh-hide{color:var(--accent,#E30613);font-weight:400;font-size:12px;margin-left:8px;cursor:pointer}
       .sm-sh-cfg{margin-top:10px;font-size:13px}
       .sm-sh-cfg summary{cursor:pointer;opacity:.85}
@@ -4414,6 +4429,7 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
   let circles = [], sel = null;
   let D = null; // загруженные данные круга
   let newKind = "high";
+  let editSharedId = null; // v0.8.56: id общей задачи с открытой панелью правки
 
   const GOAL_COUNT = 3;
   // v0.6.6: коды без неоднозначных символов (0/O/1/I) — конец путанице «О против нуля»
@@ -4908,7 +4924,7 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
         '<span class="sm-cr-bounty">🎁' + t.bounty_points + '</span>' +
         '<span class="sm-task-title">' + SixMin.esc(t.title) + '<span class="sm-cr-status">' + status + '</span></span></div>' +
         '<div class="sm-task-actions">' + CM.buttonHTML(t, "Обсуждение задания") + acts + '</div></div>' +
-        CM.panelHTML(t) + '</li>';
+        noteHTML(t.note) + CM.panelHTML(t) + '</li>';
     };
     const curN = (n) => curWord(c.bonus_currency, n);
     // v0.8.27: история одобренных заданий — прозрачность выплат и доступ к
@@ -4937,6 +4953,7 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
         '<span class="sm-cr-member' + (x.u === D.uid ? " me" : "") + '">' + (i + 1) + '. ' + SixMin.esc(nameOf(x.u)) + ' · ' + x.b + '</span>').join("") + '</div></div>' +
       '<form class="sm-cr-badd" data-role="bounty">' +
         '<input class="sm-cr-input" name="t" placeholder="Задание с наградой: что сделать" maxlength="120">' +
+        '<input class="sm-cr-input sm-cr-taddnote" name="n" placeholder="Описание (необязательно)…" maxlength="300">' +
         '<input class="sm-cr-input sm-cr-num" name="p" type="number" min="1" max="999" value="10" title="Награда">' +
         '<select class="sm-cr-input sm-cr-sel" name="w"><option value="">кто возьмёт</option>' +
         D.members.filter((m) => m.user_id !== D.uid).map((m) => '<option value="' + m.user_id + '">' + SixMin.esc(nameOf(m.user_id)) + '</option>').join("") +
@@ -5193,10 +5210,20 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
         </div>`;
     }).join("");
 
-  // v0.8.55: необязательное описание задачи «на всех» — приглушённая строка под заголовком
-  function taskNoteHTML(note) {
+  // v0.8.55/v0.8.56: необязательное описание задачи (личные, «на всех», баунти) —
+  // приглушённая строка под заголовком; класс .task-note — в каноне CSS index.html
+  function noteHTML(note) {
     const n = String(note == null ? "" : note).trim();
-    return n ? '<div class="sm-cr-tasknote">' + esc(n) + '</div>' : "";
+    return n ? '<div class="task-note">' + esc(n) + '</div>' : "";
+  }
+  // v0.8.56: редактировать общую задачу могут автор задачи и владелец круга
+  const canEditShared = (t) => t.user_id === (D && D.uid) || isOwnerCircle;
+  function editSharedHTML(t) {
+    return '<div class="sm-cr-edit">' +
+      '<input class="sm-cr-input" data-etitle maxlength="120" placeholder="Название">' +
+      '<input class="sm-cr-input" data-enote maxlength="300" placeholder="Описание (необязательно)">' +
+      '<button type="button" data-esave="' + t.id + '">Сохранить</button>' +
+      '<button type="button" data-ecancel="' + t.id + '">Отмена</button></div>';
   }
 
     const tasks = D.tasks.map((t) => `
@@ -5209,10 +5236,12 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
         </div>
         <div class="sm-task-actions">
           ${CM.buttonHTML(t)}
+          ${canEditShared(t) ? `<button class="sm-task-btn" data-sedit="${t.id}" title="Изменить задачу">✏️</button>` : ""}
           <button class="sm-task-btn sm-task-del" data-sdel="${t.id}">×</button>
         </div>
       </div>
-      ${taskNoteHTML(t.note)}
+      ${noteHTML(t.note)}
+      ${editSharedId === t.id ? editSharedHTML(t) : ""}
       ${CM.panelHTML(t)}
       </li>`).join("");
 
@@ -5470,6 +5499,44 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
         inp.value = ""; if (noteInp) noteInp.value = "";
       }
     });
+    // v0.8.56: правка общей задачи (автор или владелец круга) — панель под строкой
+    const edT = D.tasks.find((t) => t.id === editSharedId);
+    if (edT) {
+      const p = root.querySelector(".sm-cr-edit");
+      if (p) {
+        p.querySelector("[data-etitle]").value = edT.title || "";
+        p.querySelector("[data-enote]").value = edT.note || "";
+      }
+    }
+    root.querySelectorAll("[data-sedit]").forEach((b) =>
+      b.addEventListener("click", () => { editSharedId = b.dataset.sedit; render(); }));
+    root.querySelectorAll("[data-ecancel]").forEach((b) =>
+      b.addEventListener("click", () => { editSharedId = null; render(); }));
+    root.querySelectorAll("[data-esave]").forEach((b) =>
+      b.addEventListener("click", async () => {
+        const panel = b.closest(".sm-cr-edit");
+        const r = await SixMin.sb().rpc("circle_task_edit", {
+          p_task: b.dataset.esave,
+          p_title: panel.querySelector("[data-etitle]").value,
+          p_note: panel.querySelector("[data-enote]").value,
+        });
+        const code = r.error ? r.error.message : r.data;
+        if (code === "ok") {
+          SixMin.toast("Задача обновлена");
+          editSharedId = null;
+          await refresh();
+          return;
+        }
+        const MSG = {
+          not_found: "Задача не найдена (возможно, удалена)",
+          not_member: "Вы не участник этого круга",
+          not_author: "Изменить может автор задачи или владелец круга",
+          empty_title: "Название не может быть пустым",
+          title_long: "Название: не длиннее 120 символов",
+          note_long: "Описание: не длиннее 300 символов",
+        };
+        SixMin.toast(MSG[code] || ("Не удалось изменить: " + code));
+      }));
     root.querySelectorAll("[data-st]").forEach((b) =>
       b.addEventListener("click", () => toggleShared(D.tasks.find((t) => t.id === b.dataset.st))));
     root.querySelectorAll("[data-sdel]").forEach((b) =>
@@ -5490,9 +5557,10 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
       e.preventDefault();
       const f = e.target, title = f.t.value.trim(), pts = parseInt(f.p.value, 10) || 10, who = f.w.value || null;
       if (!title) return;
-      f.t.value = ""; f.p.value = "10"; f.w.value = ""; // rev.10: очищаем ДО перерисовки
+      const noteB = f.n ? String(f.n.value || "").trim() : "";
+      f.t.value = ""; f.p.value = "10"; f.w.value = ""; if (f.n) f.n.value = ""; // rev.10: очищаем ДО перерисовки
       const r = await SixMin.sb().rpc("circle_bounty_add", {
-        p_circle: sel, p_title: title, p_points: pts, p_assignee: who,
+        p_circle: sel, p_title: title, p_points: pts, p_assignee: who, p_note: noteB || null,
       });
       if (r.error) { SixMin.toast("Не удалось создать задание: " + r.error.message); return; }
       await refresh();
@@ -5561,8 +5629,10 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
       .sm-cr-note{font-size:13px;opacity:.65;line-height:1.55;margin:0 0 12px}
       .sm-cr-create,.sm-cr-join,.sm-cr-hadd,.sm-cr-tadd{display:flex;gap:8px;margin-bottom:10px}
       .sm-cr-tadd{flex-wrap:wrap}
-      .sm-cr-tadd .sm-cr-taddnote{flex:1 1 100%}
-      .sm-cr-tasknote{margin:-2px 0 8px 34px;color:var(--muted);font-size:12.5px;line-height:1.4;white-space:pre-wrap;opacity:.85}
+      .sm-cr-tadd .sm-cr-taddnote,.sm-cr-badd .sm-cr-taddnote{flex:1 1 100%}
+      .sm-cr-edit{display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 8px 34px}
+      .sm-cr-edit .sm-cr-input{flex:1 1 45%}
+      .sm-cr-edit button{border:1px solid var(--line,#333);background:var(--inset,#1c1c1c);color:inherit;border-radius:10px;padding:6px 10px;font-size:12px}
       .sm-cr-join-more{margin-top:16px;opacity:.85}
       .sm-cr-input{flex:1;padding:10px 13px;border-radius:12px;border:1px solid rgba(128,128,128,.25);
                    background:transparent;color:inherit;font-size:14px;outline:none;min-width:0}

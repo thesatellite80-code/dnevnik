@@ -1,5 +1,5 @@
 /* ВНИМАНИЕ: браузер НЕ загружает этот файл. Канон CSS = inline <style> в index.html.
-   Это синхронизированная копия для чтения и диффов (синхронизация: .patch/p0853.py, v0.8.53).
+   Это синхронизированная копия для чтения и диффов (синхронизация: .patch/p0856b.py, v0.8.56).
    Править CSS — в index.html, затем пересинхронизировать сюда. */
 /* «Шесть минут с собой» — стили, mobile-first, iOS-friendly */
 
@@ -70,6 +70,7 @@ textarea{resize:vertical;min-height:96px;line-height:1.5}
 input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:transparent}
 .muted{color:var(--muted);font-size:15px}
 .hint-text{color:var(--muted);font-size:13.5px;margin-top:10px}
+.task-note{color:var(--muted);font-size:12.5px;line-height:1.4;margin:-2px 0 8px 34px;white-space:pre-wrap;opacity:.85}
 
 /* ── экраны ───────────────────────────────── */
 .screen{display:none;min-height:100vh;min-height:100dvh;flex-direction:column}
