@@ -1504,6 +1504,26 @@ window.__v02stage = "after-sixmin-habits"; if (window.__v02say) window.__v02say(
   let moveIdx = null; // индекс карточки, у которой открыт выбор периода
   let moveOff = 1;    // сдвиг выбранного периода от текущего
 
+  // v0.8.58: микро-подсказка при постановке цели (ТЗ, приоритет 3). После blur
+  // заполненной цели под полем появляется ссылка «💡 Представь: цель достигается сама,
+  // без усилий. Как это выглядит?» (текст финальный, владелец 22.10; «ИКР» — внутреннее
+  // название метода, в UI не показывается). Клик раскрывает поле — формулировка живёт
+  // ТОЛЬКО в localStorage (ключ на период+цель), БД не трогается, сохранение цели не блокируется.
+  let icrOpen = null;          // goal_index карточки с раскрытым полем формулировки
+  const icrShown = new Set();  // цели, у которых в этой сессии был blur с текстом
+  const icrKey = (index) => { const p = periodOf(tab); return "triz_icr_" + p.type + "_" + p.key + "_" + index; };
+  const icrGet = (index) => { try { return localStorage.getItem(icrKey(index)) || ""; } catch (e) { return ""; } };
+  const icrPut = (index, v) => { try { v ? localStorage.setItem(icrKey(index), v) : localStorage.removeItem(icrKey(index)); } catch (e) {} };
+  const icrLinkHTML = (index) =>
+    `<button type="button" class="sm-triz-link" data-icr="${index}">💡 Представь: цель достигается сама, без усилий. Как это выглядит?${icrGet(index) ? " ✓" : ""}</button>`;
+  function icrHintHTML(index, title) {
+    if (!String(title || "").trim()) return "";
+    if (!icrGet(index) && !icrShown.has(index)) return "";
+    return icrLinkHTML(index) + (icrOpen === index
+      ? `<div class="sm-triz-icr"><textarea rows="2" maxlength="280" class="sm-triz-in-icr" data-icr-in="${index}" placeholder="Цель уже достигнута — как это выглядит?">${SixMin.esc(icrGet(index))}</textarea><div class="sm-triz-icr-cap">Сохраняется только на твоём устройстве — никому не видно.</div></div>`
+      : "");
+  }
+
   const periodOf = (t) => {
     if (t === "day") return { type: "day", key: SixMin.fmtKey(now), count: 1 };
     if (t === "week") return { type: "week", key: SixMin.weekKeyISO(now), count: 2 };
@@ -1568,6 +1588,7 @@ window.__v02stage = "after-sixmin-habits"; if (window.__v02say) window.__v02say(
     else if (tab === "week") now.setDate(now.getDate() + dir * 7);
     else now.setMonth(now.getMonth() + dir);
     moveIdx = null; // v0.8.14: листаем период — закрываем пикер переноса
+    icrOpen = null; // v0.8.58: другой период — другие цели
     refresh();
   }
 
@@ -1596,6 +1617,7 @@ window.__v02stage = "after-sixmin-habits"; if (window.__v02say) window.__v02say(
         </div>
         <textarea class="sm-focus-title" data-idx="${index}" rows="${cfg.rows || 2}"
           placeholder="${cfg.placeholder}">${SixMin.esc(title)}</textarea>
+        ${icrHintHTML(index, title)}
         ${cfg.subtasks ? `
         <div class="sm-focus-subs">
           ${subs.map((s, si) => `
@@ -1700,7 +1722,7 @@ window.__v02stage = "after-sixmin-habits"; if (window.__v02say) window.__v02say(
       "<p>Текст сохраняется сам через секунду после того, как вы перестали печатать. ⬜/✅ справа — отметить выполненным. Стрелки ‹ › листают дни / недели / месяцы.</p>" +
       "<p><b>Месяц без простыни:</b> в списке видны только заполненные цели, а пустые слоты спрятаны в спойлер «➕ Добавить цель месяца»: раскрыли, написали — цель уехала в общий список.</p>"));
     root.querySelectorAll("[data-tab]").forEach((b) =>
-      b.addEventListener("click", () => { tab = b.dataset.tab; moveIdx = null; refresh(); }));
+      b.addEventListener("click", () => { tab = b.dataset.tab; moveIdx = null; icrOpen = null; refresh(); }));
     // v0.8.16: запоминаем, раскрыт ли спойлер добавления целей месяца
     const addDet = root.querySelector(".sm-focus-add");
     if (addDet) addDet.addEventListener("toggle", () => { addOpen = addDet.open; });
@@ -1725,8 +1747,29 @@ window.__v02stage = "after-sixmin-habits"; if (window.__v02say) window.__v02say(
       }));
     root.querySelectorAll("[data-mvgo]").forEach((b) =>
       b.addEventListener("click", () => moveGo(Number(b.dataset.mvgo))));
-    root.querySelectorAll(".sm-focus-title").forEach((t) =>
-      t.addEventListener("input", () => saveTitle(Number(t.dataset.idx), t.value)));
+    root.querySelectorAll(".sm-focus-title").forEach((t) => {
+      t.addEventListener("input", () => saveTitle(Number(t.dataset.idx), t.value));
+      // v0.8.58: blur заполненной цели — показать ссылку-подсказку (без полного рендера)
+      t.addEventListener("blur", () => {
+        const idx = Number(t.dataset.idx);
+        if (!t.value.trim() || icrShown.has(idx)) return;
+        icrShown.add(idx);
+        if (root.querySelector('[data-icr="' + idx + '"]')) return;
+        const wrap = document.createElement("div");
+        wrap.innerHTML = icrLinkHTML(idx);
+        const link = wrap.firstElementChild;
+        if (link) t.after(link);
+      });
+    });
+    root.querySelectorAll("[data-icr]").forEach((b) =>
+      b.addEventListener("click", () => {
+        const i = Number(b.dataset.icr);
+        icrOpen = icrOpen === i ? null : i;
+        render();
+        if (icrOpen === i) { const ta = root.querySelector('[data-icr-in="' + i + '"]'); if (ta) ta.focus(); }
+      }));
+    root.querySelectorAll("[data-icr-in]").forEach((ta) =>
+      ta.addEventListener("input", () => icrPut(Number(ta.dataset.icrIn), ta.value.trim())));
     root.querySelectorAll(".sm-sub-input").forEach((inp) => {
       inp.addEventListener("input", () => {
         const idx = Number(inp.dataset.idx);
@@ -1906,6 +1949,53 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
       findTask: (id) => rowsAll().find((x) => x.id === id),
     });
 
+    // v0.8.58: микро-подсказка «зависших» задач (ТЗ, приоритет 2). Зависшая = создана
+    // >3 дней назад и не выполнена (подзадач у задач нет — они только у фокус-целей).
+    // Спойлер «🔍 Посмотреть под другим углом»: два чипа, ответы живут ТОЛЬКО в памяти
+    // экземпляра (БД не трогаем). Показ не чаще 1 раза в 7 дней на задачу: флаг
+    // triz_task_seen_<id> пишется при открытии спойлера или по «✕»; открытый спойлер
+    // перерисовкой не захлопывается и не исчезает (guard trizOpen — как wasOpen в «Сегодня выполнено»).
+    const TRIZ_STALL_MS = 3 * 86400000, TRIZ_COOL_MS = 7 * 86400000;
+    const trizOpen = {};   // id задачи -> спойлер раскрыт
+    const trizState = {};  // id задачи -> { word, follow, ten } — ответы чипов (память)
+    const trizStalled = (t) => {
+      if (!t || t.completed || IS_ONB(t)) return false;
+      const c = t.created_at ? new Date(t.created_at).getTime() : NaN;
+      return !isNaN(c) && (Date.now() - c) > TRIZ_STALL_MS;
+    };
+    const trizSeen = (id) => {
+      try {
+        const v = Number(localStorage.getItem("triz_task_seen_" + id) || 0);
+        return !!v && (Date.now() - v) < TRIZ_COOL_MS;
+      } catch (e) { return false; }
+    };
+    const trizMark = (id) => { try { localStorage.setItem("triz_task_seen_" + id, String(Date.now())); } catch (e) {} };
+    function trizSpoilerHTML(t) {
+      if (!trizStalled(t) || (trizSeen(t.id) && !trizOpen[t.id])) return "";
+      const st = trizState[t.id] || {};
+      const word = st.word !== undefined;
+      return `<details class="sm-triz-spoiler" data-triz="${t.id}"${trizOpen[t.id] ? " open" : ""}>
+        <summary>🔍 Посмотреть под другим углом</summary>
+        <div class="sm-triz-body">
+          <button type="button" class="sm-triz-x" data-triz-x="${t.id}" title="Скрыть подсказку на 7 дней" aria-label="Скрыть подсказку">✕</button>
+          <div class="sm-triz-chips">
+            <button type="button" class="sm-triz-chip${word ? " on" : ""}" data-triz-c="1" data-triz-id="${t.id}">Что мешает? Запиши одно слово</button>
+            ${word ? `<input class="sm-triz-in" data-triz-word="${t.id}" maxlength="40" placeholder="Одно слово…" value="${SixMin.esc(st.word)}">` : ""}
+            ${st.follow ? `<div class="sm-triz-follow">А что будет, если сделать наоборот?</div>` : ""}
+            <button type="button" class="sm-triz-chip${st.ten !== undefined ? " on" : ""}" data-triz-c="2" data-triz-id="${t.id}">Представь: у тебя есть 10 часов на это. Что бы ты сделал первым?</button>
+            ${st.ten !== undefined ? `<input class="sm-triz-in" data-triz-ten="${t.id}" maxlength="120" placeholder="Первым делом…" value="${SixMin.esc(st.ten)}">` : ""}
+          </div>
+        </div>
+      </details>`;
+    }
+    function trizCommitWord(id) {
+      const st = trizState[id];
+      if (!st || st.follow) return;
+      if (!String(st.word || "").trim()) return;
+      st.follow = true;
+      render();
+    }
+
     async function load() {
       const uid = await SixMin.uid().catch(() => "00000000-0000-0000-0000-000000000000");
       todayKey = await SixMin.todayKey();
@@ -2082,6 +2172,7 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
       </div>
       ${noteHTML(t.note)}
       ${CM.panelHTML(t)}
+      ${isUpcoming ? "" : trizSpoilerHTML(t)}
       </li>`;
     }
 
@@ -2195,6 +2286,40 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
           if (ev.key === "Escape") { done = true; render(); }
         });
       }));
+    // v0.8.58: спойлер зависшей задачи — открытие/закрытие, «✕», чипы, слово и follow-up
+      root.querySelectorAll("details[data-triz]").forEach((d) =>
+        d.addEventListener("toggle", () => {
+          trizOpen[d.dataset.triz] = d.open;
+          if (d.open) trizMark(d.dataset.triz); // увидел содержимое — 7 дней не показываем
+        }));
+      root.querySelectorAll("[data-triz-x]").forEach((b) =>
+        b.addEventListener("click", (e) => {
+          e.preventDefault(); e.stopPropagation();
+          const id = b.dataset.trizX;
+          trizMark(id); delete trizOpen[id]; delete trizState[id];
+          render();
+        }));
+      root.querySelectorAll("[data-triz-c]").forEach((b) =>
+        b.addEventListener("click", () => {
+          const id = b.dataset.trizId;
+          const st = trizState[id] || (trizState[id] = {});
+          if (b.dataset.trizC === "1") { if (st.word === undefined) st.word = ""; }
+          else if (st.ten === undefined) st.ten = "";
+          trizOpen[id] = true;
+          render();
+          const inp = root.querySelector(b.dataset.trizC === "1" ? '[data-triz-word="' + id + '"]' : '[data-triz-ten="' + id + '"]');
+          if (inp) inp.focus();
+        }));
+      root.querySelectorAll("[data-triz-word]").forEach((inp) => {
+        const id = inp.dataset.trizWord;
+        inp.addEventListener("input", () => { (trizState[id] = trizState[id] || {}).word = inp.value; });
+        inp.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); inp.blur(); } });
+        inp.addEventListener("blur", () => trizCommitWord(id));
+      });
+      root.querySelectorAll("[data-triz-ten]").forEach((inp) => {
+        const id = inp.dataset.trizTen;
+        inp.addEventListener("input", () => { (trizState[id] = trizState[id] || {}).ten = inp.value; });
+      });
     root.querySelectorAll("[data-kind]").forEach((b) =>
         b.addEventListener("click", () => { newKind = b.dataset.kind; render(); }));
       const addForm = root.querySelector(".sm-task-add");
@@ -3844,7 +3969,9 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       '.</span><span class="sm-bday-btns"><button class="sm-bday-btn" type="button" data-bday-dismiss="' + esc(n.id) + '">Больше не напоминать</button>' +
       n.candDays.map((d) => '<button class="sm-bday-btn" type="button" data-bday-snooze="' + esc(n.id + "|" + d) + '">Напомнить ' + fmtBD(d) + "</button>").join("") +
       "</span></div>").join("");
-    return freeLine + actLine + notesHtml;
+    // v0.8.58: разминка — маленькая кнопка прямо под утренними вопросами
+    const warmLine = '<div><button type="button" class="sm-warm-btn" data-warm-open="1">🧠 Размять мозг (1 мин)</button></div>';
+    return warmLine + freeLine + actLine + notesHtml;
   }
   function redrawAmExtra() {
     if (!document.getElementById("sm-bday-css")) {
@@ -3862,6 +3989,56 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
   }
   window.SixMinAmExtraHTML = amExtraHTML;
   window.SixMinAmRedraw = redrawAmExtra; // v0.8.45: donetoday дёргает после load()
+
+  // v0.8.58: утренняя разминка (ТЗ, приоритет 4). Пары — window.WARMUP_PAIRS (bundle.js);
+  // за день не повторяются (triz_warm_used_<дата> — индексы в localStorage); ответ не
+  // сохраняется нигде; шторка на канон-классах .sheet живёт на body и не зависит от
+  // перерисовок «Сегодня» (redrawAmExtra её не трогает).
+  function warmPickPair() {
+    const pairs = window.WARMUP_PAIRS || [];
+    if (!pairs.length) return null;
+    const dk = key(new Date());
+    let used = [];
+    try { used = JSON.parse(localStorage.getItem("triz_warm_used_" + dk) || "[]"); } catch (e) { used = []; }
+    if (!Array.isArray(used) || used.length >= pairs.length) used = []; // день закрыт — заново
+    const free = [];
+    for (let i = 0; i < pairs.length; i++) if (used.indexOf(i) === -1) free.push(i);
+    const idx = free[Math.floor(Math.random() * free.length)];
+    used.push(idx);
+    try {
+      localStorage.setItem("triz_warm_used_" + dk, JSON.stringify(used));
+      Object.keys(localStorage).forEach((k) => {
+        if (k.indexOf("triz_warm_used_") === 0 && k !== "triz_warm_used_" + dk) localStorage.removeItem(k);
+      });
+    } catch (e) {}
+    return pairs[idx];
+  }
+  function closeWarm() { const w = document.getElementById("sm-warm-sheet"); if (w) w.remove(); }
+  function openWarm() {
+    closeWarm();
+    const pair = warmPickPair();
+    if (!pair) { SixMin.toast("Пар для разминки нет — попробуйте завтра"); return; }
+    const wrap = document.createElement("div");
+    wrap.id = "sm-warm-sheet";
+    wrap.className = "sheet";
+    wrap.innerHTML =
+      '<div class="sheet-back" data-warm-x="1"></div>' +
+      '<div class="sheet-card sm-warm-card">' +
+        '<div class="sm-warm-head"><b>🧠 Размять мозг</b>' +
+        '<button type="button" class="ghost-btn" data-warm-x="1" aria-label="Закрыть">✕</button></div>' +
+        '<p class="sm-warm-q">Найди 3 общих признака:<br>«' + esc(pair[0]) + '» и «' + esc(pair[1]) + '».</p>' +
+        '<textarea rows="3" maxlength="280" placeholder="Три общих признака…"></textarea>' +
+        '<p class="sm-warm-note">Ответ нигде не сохраняется — это разминка, а не запись.</p>' +
+        '<div class="sm-warm-acts"><button type="button" class="btn primary" data-warm-x="1">Готово</button></div>' +
+      '</div>';
+    wrap.addEventListener("click", (e) => { if (e.target.closest("[data-warm-x]")) closeWarm(); });
+    document.body.appendChild(wrap);
+    const ta = wrap.querySelector("textarea");
+    if (ta) ta.focus({ preventScroll: true });
+  }
+  document.addEventListener("click", (e) => {
+    if (e.target.closest("[data-warm-open]")) openWarm();
+  });
   document.addEventListener("click", (e) => {
     const dis = e.target.closest("[data-bday-dismiss]");
     const sno = e.target.closest("[data-bday-snooze]");

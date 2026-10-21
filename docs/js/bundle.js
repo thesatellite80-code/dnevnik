@@ -24,7 +24,7 @@ window.SIXMIN_CONFIG = {
 
   // ── 3. ПРОЧЕЕ ──────────────────────────────────────────────────────
   defaultTimezone: "Europe/Moscow",
-  version: "0.8.57"
+  version: "0.8.58"
 };
 
 /* ── Контент: вопросы (свои формулировки, пул вариантов для ротации) ── */
@@ -99,6 +99,22 @@ window.QUESTIONS = {
 
 /* ── Теги (под ваши сферы: работа, здоровье, семья, быт, свои проекты) ── */
 window.TAGS = ["работа", "здоровье", "семья", "быт", "свои проекты", "спорт", "деньги", "отдых", "учёба"];
+
+/* ── v0.8.58: пары для утренней разминки «найди 3 общих признака» ──────
+   Кнопка «🧠 Размять мозг (1 мин)» на экране «Сегодня» (логика в v02.js).
+   В течение дня пара не повторяется (localStorage); пользователь не видит
+   никаких методологических названий — только простое упражнение. */
+window.WARMUP_PAIRS = [
+  ["чайник", "будильник"], ["зонтик", "парашют"], ["плитка", "пазл"], ["велосипед", "швейная машинка"],
+  ["гитара", "лук"], ["хлеб", "кирпич"], ["мыло", "ластик"], ["самолёт", "птица"],
+  ["вентилятор", "вертолёт"], ["дверь", "книга"], ["река", "дорога"], ["зеркало", "окно"],
+  ["мяч", "колесо"], ["рюкзак", "холодильник"], ["стакан", "ведро"], ["подушка", "облако"],
+  ["лопата", "вилка"], ["печка", "термос"], ["ключ", "кнопка"], ["кольцо", "монета"],
+  ["конверт", "чемодан"], ["мост", "игла"], ["почтовый ящик", "копилка"], ["шарф", "ремень"],
+  ["кастрюля", "барабан"], ["дерево", "дом"], ["телевизор", "картина"], ["лимон", "лампочка"],
+  ["тапочки", "ласты"], ["щётка", "швабра"], ["пульт", "телефон"], ["кресло", "гамак"],
+  ["тент", "крыша"], ["фонарь", "маяк"], ["медаль", "пуговица"], ["термометр", "линейка"]
+];
 
 /* ── Подкрепляющие фразы после сохранения ─────────────────────────── */
 window.QUOTES = [
@@ -1168,8 +1184,63 @@ const App = (() => {
     return f.slot === "pm" ? f.total + 1 : f.total;
   }
 
+  /* ═══════════ v0.8.58: микро-подсказка вечернего вопроса №3 (e3) ═══════════
+     Тупиковый момент: ответ пустой или односложный — под полем появляется мягкая
+     подсказка, сдвигающая угол зрения. Без терминологии, без блокировки сохранения.
+     - не чаще 1 раза в день: флаг triz_pm3_seen_<дата> в localStorage;
+     - кнопка «✕» закрывает; повторный показ в этот день — только на следующий;
+     - проверка отложенная (220 мс): blur из-за нажатия «Дальше»/«Отмена» отменяется
+       в renderStep/closeForm — подсказка не вспыхивает на переходе и флаг не тратится. */
+  const TRIZ_PM3_STOP = ["ничего", "нормально", "ок", "—"];
+  let trizPm3Timer = null;
+  function trizPm3Remove() {
+    if (trizPm3Timer) { clearTimeout(trizPm3Timer); trizPm3Timer = null; }
+    const old = $("q-triz");
+    if (old && old.remove) old.remove();
+  }
+  function trizPm3Show() {
+    const f = state.form;
+    if (!f || f.slot !== "pm") return;
+    const q = f.bank[f.step];
+    if (!q || q.id !== "e3") return;
+    const step = $("q-step");
+    const input = $("q-input");
+    if (!step || !input || step.hidden) return;
+    const v = String(input.value || "").trim();
+    const stuck = !v || v.length <= 5 || TRIZ_PM3_STOP.indexOf(v.toLowerCase()) > -1;
+    if (!stuck) { trizPm3Remove(); return; }
+    const day = Store.localDate();
+    try { if (localStorage.getItem("triz_pm3_seen_" + day)) return; } catch (e) {}
+    if ($("q-triz")) return;
+    try {
+      localStorage.setItem("triz_pm3_seen_" + day, String(Date.now()));
+      Object.keys(localStorage).forEach((k) => {
+        if (k.indexOf("triz_pm3_seen_") === 0 && k !== "triz_pm3_seen_" + day) localStorage.removeItem(k);
+      });
+    } catch (e) {}
+    const box = document.createElement("div");
+    box.className = "q-triz";
+    box.id = "q-triz";
+    const txt = document.createElement("span");
+    txt.textContent = "Попробуй посмотреть с другой стороны: если бы завтра всё получилось само — что бы ты поменял(а) в плане?";
+    const x = document.createElement("button");
+    x.type = "button";
+    x.className = "q-triz-x";
+    x.textContent = "✕";
+    x.title = "Скрыть подсказку";
+    x.onclick = () => { box.remove(); };
+    box.appendChild(txt);
+    box.appendChild(x);
+    step.appendChild(box);
+  }
+  function trizPm3Schedule() {
+    if (trizPm3Timer) clearTimeout(trizPm3Timer);
+    trizPm3Timer = setTimeout(() => { trizPm3Timer = null; trizPm3Show(); }, 220);
+  }
+
   function renderStep() {
     const f = state.form;
+    trizPm3Remove(); // v0.8.58: подсказка e3 не переживает смену шага
     const ratingStep = f.slot === "pm" && f.step === f.total;
     $("q-step").hidden = ratingStep;
     $("rate-step").hidden = !ratingStep;
@@ -1271,6 +1342,7 @@ const App = (() => {
 
   function closeForm() {
     clearInterval(state.timerId);
+    trizPm3Remove(); // v0.8.58
     state.form = null;
     show(lastMainTab());
   }
@@ -1682,6 +1754,10 @@ const App = (() => {
     $("btn-next").onclick = nextStep;
     $("btn-prev").onclick = prevStep;
     $("btn-mic").onclick = toggleMic;
+    // v0.8.58: микро-подсказка e3 — проверка по blur и Enter; ввод длинного ответа убирает её
+    $("q-input").addEventListener("blur", trizPm3Schedule);
+    $("q-input").addEventListener("input", trizPm3Schedule);
+    $("q-input").addEventListener("keydown", (ev) => { if (ev.key === "Enter") trizPm3Schedule(); });
     $("btn-done-close").onclick = () => show("today");
     document.querySelectorAll("[data-info]").forEach(b =>
       b.onclick = (ev) => { ev.stopPropagation(); openInfo(b.dataset.info); });
