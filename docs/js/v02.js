@@ -3304,7 +3304,10 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     return '<label class="sm-sh-lbl">Какой день был в эту дату? <select class="sm-sh-atype">' + opts(a0) + "</select></label>" +
       '<p class="sm-sh-note">Цепочка дней по порядку, начиная с этого дня (минимум 2):</p>' +
       '<div class="sm-sh-cycle">' + cycle.map((c, i) =>
-        '<span class="sm-sh-slot"><select data-cyc="' + i + '">' + opts(NM[c] ? c : "off") + "</select>" +
+        '<span class="sm-sh-slot"><span class="sm-sh-grip" title="Потяните, чтобы переставить">⠿</span>' +
+        '<button type="button" class="sm-sh-mv" data-cycmove="' + i + '" data-dir="-1" title="Раньше в цепочке">◀</button>' +
+        '<select data-cyc="' + i + '">' + opts(NM[c] ? c : "off") + "</select>" +
+        '<button type="button" class="sm-sh-mv" data-cycmove="' + i + '" data-dir="1" title="Позже в цепочке">▶</button>' +
         (cycle.length > 2 ? '<button type="button" class="sm-sh-del" data-cycdel="' + i + '" title="Убрать этот день">×</button>' : "") + "</span>").join("") +
       '</div><div class="sm-sh-lbl"><button class="sm-sh-cycadd" type="button" data-cycadd="1">+ Добавить день</button></div>' +
       '<p class="sm-sh-note sm-sh-preview"></p>';
@@ -3331,6 +3334,92 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     const NM = curNames();
     pv.textContent = "Сегодня по этому циклу: " + (NM[cyc[idxOf(t)]] || cyc[idxOf(t)]) +
       ", завтра: " + (NM[cyc[idxOf(new Date(t.getTime() + 86400000))]] || cyc[idxOf(new Date(t.getTime() + 86400000))]) + ".";
+    updateDiff(ed);
+  }
+  // ── v0.8.51: шаблоны циклов, перестановка слотов, превью «что изменится» ──
+  const TPL_PRESETS = [
+    { name: "2/2: день, ночь, отсыпной, выходной", cycle: ["day", "night", "rest", "off"] },
+    { name: "1/3: день и три выходных", cycle: ["day", "off", "off", "off"] },
+    { name: "2/2: два дня рабочих, два выходных", cycle: ["day", "day", "off", "off"] },
+    { name: "5/2: пн–пт день", cycle: ["day", "day", "day", "day", "day", "off", "off"] },
+  ];
+  function tplMine() { try { return JSON.parse(localStorage.getItem("sm-sh-tpl") || "[]"); } catch (e) { return []; } }
+  function tplMineSave(list) { try { localStorage.setItem("sm-sh-tpl", JSON.stringify(list)); } catch (e) {} }
+  function tplInner() {
+    return TPL_PRESETS.map((t, i) => '<button type="button" class="sm-sh-tplchip" data-tpl="' + i + '">' + esc(t.name) + "</button>").join("") +
+      tplMine().map((t) => '<button type="button" class="sm-sh-tplchip on" data-tplmy="' + esc(t.id) + '">' + esc(t.name) +
+        ' <b class="sm-sh-del" data-tpldel="' + esc(t.id) + '" title="Удалить шаблон">×</b></button>').join("") +
+      ' <button type="button" class="sm-sh-cycadd" data-tplsave="1">💾 Сохранить текущую цепочку как шаблон</button>';
+  }
+  function applyCycleToEditor(ed, cyc) {
+    const cw = ed.querySelector(".sm-sh-cycwrap");
+    if (cw) cw.innerHTML = cycleEditorInner(cyc);
+    updatePreview(ed);
+  }
+  function moveCycle(cyc, i, dir) {
+    const j = i + dir;
+    if (j < 0 || j >= cyc.length) return cyc.slice();
+    const c = cyc.slice();
+    const t = c[i]; c[i] = c[j]; c[j] = t;
+    return c;
+  }
+  function diffDays(saved, cur, today) {
+    const NM = curNames();
+    const wd = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
+    const out = [];
+    for (let i = 0; i < 14; i++) {
+      const d = new Date(parse(today).getTime() + i * 86400000);
+      const k = key(d);
+      const tb = jobShift(k, cur);
+      const b = NM[tb] || tb;
+      if (saved) {
+        const ta = jobShift(k, saved);
+        const a = NM[ta] || ta;
+        if (a === b) continue;
+        out.push({ k: k, wd: wd[d.getDay()], a: a, b: b });
+      } else out.push({ k: k, wd: wd[d.getDay()], a: null, b: b });
+    }
+    return out;
+  }
+  function monthJobStats(job, y, m) {
+    let shifts = 0, hours = 0;
+    const d = new Date(y, m, 1, 12);
+    while (d.getMonth() === m) {
+      const k = key(d);
+      if (!HOLIDAYS[k] && isWorkType(job, jobShift(k, job))) { shifts++; if (job.work !== false) hours += parseInt(job.shift_hours, 10) || 0; } // часы ритуала — не рабочие
+      d.setDate(d.getDate() + 1);
+    }
+    return { shifts: shifts, hours: hours };
+  }
+  const cap1 = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+  function updateDiff(ed) {
+    const host = ed && ed.querySelector(".sm-sh-diff");
+    if (!host) return;
+    const cur = readEditor(ed);
+    const saved = (editing && editing !== "__new") ? (J || []).find((j) => j.id === editing) : null;
+    const today = key(new Date());
+    const lines = diffDays(saved, cur, today);
+    const rows = [];
+    const dayRow = (l) => '<div class="sm-sh-diffline">' + l.k.slice(8) + "." + l.k.slice(5, 7) + " (" + l.wd + "): " +
+      (l.a ? '<s class="sm-sh-was">' + esc(l.a) + "</s> → " : "") + "<b>" + esc(l.b) + "</b></div>";
+    const shown = lines.slice(0, 6);
+    for (const l of shown) rows.push(dayRow(l));
+    if (lines.length > shown.length) rows.push('<div class="sm-sh-diffline">…и ещё ' + (lines.length - shown.length) + " дн. из ближайших двух недель.</div>");
+    const now = new Date();
+    const mName = cap1(now.toLocaleString("ru-RU", { month: "long" }));
+    const mNew = monthJobStats(cur, now.getFullYear(), now.getMonth());
+    if (saved) {
+      if (!lines.length) rows.push('<div class="sm-sh-diffline sm-sh-ok">Дни ближайших двух недель по типу не меняются.</div>');
+      const mOld = monthJobStats(saved, now.getFullYear(), now.getMonth());
+      if (mOld.shifts !== mNew.shifts || mOld.hours !== mNew.hours)
+        rows.push('<div class="sm-sh-diffline">' + mName + ': смен <s class="sm-sh-was">' + mOld.shifts + '</s> → <b>' + mNew.shifts + '</b> · часов <s class="sm-sh-was">' + mOld.hours + '</s> → <b>' + mNew.hours + "</b></div>");
+      if (!!saved.work !== !!cur.work) rows.push('<div class="sm-sh-diffline">' + (cur.work === false ? "Станет ритуалом: дни перестанут считаться сменами." : "Станет работой: дни будут считаться сменами.") + "</div>");
+      host.querySelector("summary").textContent = "🔍 Что изменится после сохранения (дней меняется: " + lines.length + " из 14)";
+    } else {
+      rows.push('<div class="sm-sh-diffline">' + mName + ": смен <b>" + mNew.shifts + "</b> · часов <b>" + mNew.hours + "</b></div>");
+      host.querySelector("summary").textContent = "🔍 Как будет в ближайшие две недели";
+    }
+    host.querySelector(".sm-sh-diffbody").innerHTML = rows.join("");
   }
   function typesChipsHTML() {
     const es = Object.entries(editingTypes || {});
@@ -3371,6 +3460,9 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       '<label class="sm-sh-lbl">Название графика <input type="text" class="sm-sh-name" maxlength="40" value="' + esc((job && job.name) || DEF.name) + '"></label>' +
       '<label class="sm-sh-lbl"><input type="checkbox" class="sm-sh-work" ' + ((job && job.work === false) ? "" : "checked") + '> Это работа: даёт «смены», часы и занятые дни. Снять галочку — график-ритуал (выгул, треня, спа): время занято, но день свободный</label>' +
       '<label class="sm-sh-lbl">Дата, про которую точно знаете (например, последняя смена) <input type="date" class="sm-sh-anchor" value="' + ((job && job.anchor_date) || DEF.anchor) + '"></label>' +
+      '<div class="sm-sh-sec2">Шаблоны циклов</div>' +
+      '<div class="sm-sh-tplwrap">' + tplInner() + "</div>" +
+      '<p class="sm-sh-note">Тап по шаблону — подставить цепочку (якорь и время смен не трогаются). «Мои» шаблоны хранятся на этом устройстве.</p>' +
       '<div class="sm-sh-cycwrap">' + cycleEditorInner(jobCycle(job || {})) + "</div>" +
       '<div class="sm-sh-types"><div class="sm-sh-note">Свои типы дней (кроме день/ночь/отсыпной/выходной):</div>' +
       '<div class="sm-sh-types-chips sm-sh-dayslist">' + typesChipsHTML() + '</div>' +
@@ -3381,8 +3473,9 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       '<label class="sm-sh-lbl sm-sh-times-night"' + (jobCycle(job || {}).includes("night") ? "" : ' style="display:none"') + '>🌙 Ночная смена: с <input type="time" class="sm-sh-nightfrom" value="' + timesOf(job).night[0] + '"> до <input type="time" class="sm-sh-nightto" value="' + timesOf(job).night[1] + '"></label>' +
       '<label class="sm-sh-lbl">Смена, часов <input type="number" class="sm-sh-hours" min="1" max="24" value="' + ((job && job.shift_hours) || DEF.hours) + '"></label>' +
       '<label class="sm-sh-lbl">Оплата за день, ₽ (необязательно) <input type="number" class="sm-sh-pay" min="0" max="1000000" placeholder="—" value="' + ((job && job.pay_per_day != null) ? esc(String(job.pay_per_day)) : "") + '"></label>' +
+      '<details class="sm-sh-diff" open><summary>🔍 Что изменится после сохранения</summary><div class="sm-sh-diffbody"></div></details>' +
       '<div class="sm-sh-lbl"><button class="sm-sh-save" type="button" data-jsave="1">' + (job ? "Сохранить график" : "Создать график") + "</button>" +
-      (job ? ' <button class="sm-sh-cycadd" type="button" data-jcancel="1">Отмена</button>' : "") +
+      ((job || (J || []).length) ? ' <button class="sm-sh-cycadd" type="button" data-jcancel="1">Отмена</button>' : "") +
       "</div></div>";
   }
 
@@ -4064,6 +4157,18 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       .sm-sh-save{margin-top:8px;border:0;border-radius:10px;background:var(--accent,#E30613);color:#fff;font-weight:700;padding:8px 14px;cursor:pointer}
       .sm-sh-slot{display:inline-flex;align-items:center;gap:2px;padding:2px 6px 2px 0;border-right:1px dashed var(--line,#333);margin-right:4px}
       .sm-sh-slot:last-child{border-right:0;margin-right:0}
+      .sm-sh-sec2{font-weight:700;font-size:13px;margin:10px 0 4px;opacity:.9}
+      .sm-sh-tplwrap{display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 4px;align-items:center}
+      .sm-sh-tplchip{border:1px solid var(--line,#333);border-radius:999px;background:var(--card,#1c1c1c);color:var(--ink,#eee);padding:5px 10px;font-size:12px;cursor:pointer}
+      .sm-sh-tplchip.on{border-color:var(--accent,#E30613);background:var(--accent-soft,#2a1518)}
+      .sm-sh-grip{cursor:grab;touch-action:none;opacity:.55;user-select:none;padding:0 3px;font-size:13px}
+      .sm-sh-mv{border:0;background:var(--bg,#242424);color:var(--ink,#bbb);border-radius:6px;width:20px;height:20px;font-size:10px;cursor:pointer;padding:0}
+      .sm-sh-slot.sm-sh-drag{opacity:.5;outline:1px dashed var(--accent,#E30613)}
+      .sm-sh-diff{border:1px dashed var(--line,#555);border-radius:12px;padding:8px 12px;margin:10px 0;background:var(--card,#191919)}
+      .sm-sh-diff summary{font-size:13px;font-weight:700;cursor:pointer}
+      .sm-sh-diffline{font-size:12.5px;margin:5px 0;line-height:1.45}
+      .sm-sh-was{opacity:.65}
+      .sm-sh-diffline.sm-sh-ok{color:var(--ok,#8bd48b)}
       .sm-sh-cycadd{white-space:nowrap;border:0;border-radius:10px;background:var(--accent,#E30613);color:#fff;font-weight:700;padding:7px 12px;cursor:pointer;font-size:12px}
       .sm-sh-cfg .sm-sh-save{position:sticky;bottom:12px;box-shadow:0 6px 14px rgba(0,0,0,.45)}
       .sm-sh-days summary{list-style:none;cursor:pointer}
@@ -4156,6 +4261,50 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
         refreshTypes(ed);
         return;
       }
+      // v0.8.51: шаблоны циклов (пресеты + «мои» из localStorage)
+      const tpldel = e.target.closest("[data-tpldel]");
+      const tplmy = e.target.closest("[data-tplmy]");
+      const tpl = e.target.closest("[data-tpl]");
+      const tplsave = e.target.closest("[data-tplsave]");
+      if (tpldel || tplmy || tpl || tplsave) {
+        const btn = tpldel || tplmy || tpl || tplsave;
+        const ed = btn.closest(".sm-sh-editor");
+        if (!ed) return;
+        if (tpldel) {
+          tplMineSave(tplMine().filter((t) => t.id !== tpldel.dataset.tpldel));
+          SixMin.toast("Шаблон удалён");
+        } else if (tplmy) {
+          const t = tplMine().find((x) => x.id === tplmy.dataset.tplmy);
+          if (t && Array.isArray(t.cycle) && t.cycle.length >= 2) applyCycleToEditor(ed, t.cycle.slice());
+        } else if (tpl) {
+          const p = TPL_PRESETS[parseInt(tpl.dataset.tpl, 10)];
+          if (p) applyCycleToEditor(ed, p.cycle.slice());
+        } else {
+          const cyc = Array.from(ed.querySelectorAll("[data-cyc]")).map((s) => s.value);
+          if (cyc.length < 2) { SixMin.toast("В шаблон: минимум 2 дня цепочки"); return; }
+          const nmEl = ed.querySelector(".sm-sh-name");
+          const name = "Мои: " + (((nmEl && nmEl.value.trim()) || "цикл")) + " (" + cyc.length + ")";
+          const list = tplMine();
+          list.push({ id: "t" + Date.now().toString(36), name: name, cycle: cyc });
+          tplMineSave(list);
+          SixMin.toast("Шаблон сохранён: " + name);
+        }
+        const tw = ed.querySelector(".sm-sh-tplwrap");
+        if (tw) tw.innerHTML = tplInner();
+        return;
+      }
+      // v0.8.51: сдвиг слота кнопками ◀ ▶
+      const mvb = e.target.closest("[data-cycmove]");
+      if (mvb) {
+        const ed = mvb.closest(".sm-sh-editor");
+        if (!ed) return;
+        const cyc = Array.from(ed.querySelectorAll("[data-cyc]")).map((s) => s.value);
+        const nc = moveCycle(cyc, parseInt(mvb.dataset.cycmove, 10), parseInt(mvb.dataset.dir, 10));
+        const cw = ed.querySelector(".sm-sh-cycwrap");
+        if (cw) cw.innerHTML = cycleEditorInner(nc);
+        updatePreview(ed);
+        return;
+      }
       const add = e.target.closest("[data-cycadd]");
       const del = e.target.closest("[data-cycdel]");
       if (!add && !del) return;
@@ -4185,6 +4334,36 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
         const ed = root.querySelector(".sm-sh-editor");
         if (ed) updatePreview(ed);
       }
+    });
+    // v0.8.51: перетаскивание слотов цепочки за ⠿ (pointer-события, мышь и палец)
+    root.addEventListener("pointerdown", (e) => {
+      const grip = e.target.closest(".sm-sh-grip");
+      if (!grip) return;
+      const slot = grip.closest(".sm-sh-slot");
+      const ed = grip.closest(".sm-sh-editor");
+      if (!slot || !ed) return;
+      e.preventDefault();
+      slot.classList.add("sm-sh-drag");
+      const move = (ev) => {
+        const el = document.elementFromPoint(ev.clientX, ev.clientY);
+        const over = el && el.closest(".sm-sh-slot");
+        if (!over || over === slot || over.closest(".sm-sh-editor") !== ed) return;
+        const cycEl = ed.querySelector(".sm-sh-cycle");
+        if (!cycEl) return;
+        const r = over.getBoundingClientRect();
+        cycEl.insertBefore(slot, ev.clientX < r.left + r.width / 2 ? over : over.nextSibling);
+      };
+      const up = () => {
+        document.removeEventListener("pointermove", move);
+        document.removeEventListener("pointerup", up);
+        slot.classList.remove("sm-sh-drag");
+        const cyc = Array.from(ed.querySelectorAll("[data-cyc]")).map((s) => s.value);
+        const cw = ed.querySelector(".sm-sh-cycwrap");
+        if (cw) cw.innerHTML = cycleEditorInner(cyc);
+        updatePreview(ed);
+      };
+      document.addEventListener("pointermove", move);
+      document.addEventListener("pointerup", up);
     });
     mountBdayCard();
     if (!nowTimer) nowTimer = setInterval(updateNow, 30000);
