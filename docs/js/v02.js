@@ -3129,8 +3129,9 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     const wins = [];
     for (let i = 1; i < merged.length; i++)
       if (merged[i][0] - merged[i - 1][1] >= 60) wins.push(minToHM(merged[i - 1][1]) + "–" + minToHM(merged[i][0]));
+    // v0.8.48: хвост «перекрывает: …» убран (вода по слову владельца): в строке дня
+    // видим только приоритетные графики; masked не светится в интерфейсе.
     return { act, masked, msg: parts +
-      (masked.length ? " · перекрывает: " + masked.map((j) => j.name).join(", ") : "") +
       (wins.length ? " · окно: " + wins.join(", ") : "") +
       (freeAfter ? " · свободен после " + freeAfter : "") };
   }
@@ -3463,7 +3464,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       '<div class="sm-sh">' +
       '<div class="sm-sh-head">🔥 Мои смены <button class="sm-ib" data-shinfo="1">i</button></div>' +
       '<div class="sm-sh-now"></div>' +
-      '<div class="sm-sh-today">' + esc(ti.loc) + ' · ' + esc(ti.msg) + esc(bdaysMine) + '</div>' +
+      '<div class="sm-sh-today">' + (ti.free ? esc(ti.loc) + ' · ' : '🏭 Сегодня работа в: ') + esc(ti.msg) + esc(bdaysMine) + '</div>' +
       '<div class="sm-sh-strip">' + strip.join("") + '</div>' +
       '<div class="sm-sh-legend"><span><i style="background:#E30613"></i>смена</span><span><i style="background:#30a46c"></i>свободен</span><span><i style="background:#f9ab00"></i>праздник/отпуск</span></div>' +
       '<div class="sm-sh-stats">' +
@@ -3518,7 +3519,8 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       const tm = timesOfType(a.j, tp) || [];
       rows.push("🏭 " + esc(namesOf(a.j)[tp] || tp) + (tm.length ? " " + tm[0] + "–" + tm[1] : "") + " · " + esc(a.j.name));
     }
-    for (const j of masked) rows.push("🚫 " + esc(j.name) + " — перекрыт другим графиком");
+    // v0.8.48: перекрытые графики в деталях не перечисляем (владелец: скрыть всё,
+    // что перекрывается, оставить приоритет). Переменная masked больше не используется.
     if (inf.kind === "vac") rows.push("🏖 отпуск");
     if (HOLIDAYS[k]) rows.push("🎉 " + esc(HOLIDAYS[k]));
     const bday = circleBirthdaysOn(k);
