@@ -3279,7 +3279,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       if (merged[i][0] - merged[i - 1][1] >= 60) wins.push(minToHM(merged[i - 1][1]) + "–" + minToHM(merged[i][0]));
     // v0.8.48: хвост «перекрывает: …» убран (вода по слову владельца): в строке дня
     // видим только приоритетные графики; masked не светится в интерфейсе.
-    return { act, masked, msg: parts +
+    return { act, masked, parts, msg: parts +
       (wins.length ? " · окно: " + wins.join(", ") : "") +
       (freeAfter ? " · свободен после " + freeAfter : "") };
   }
@@ -3298,7 +3298,11 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     // v0.8.28: работы нет, но время занято ритуалами — день СВОБОДЕН с честной строкой
     if (occupiedOn(k).length) {
       const bm = busyMsg(k);
-      return { loc: "🏢 свободен", free: true, msg: "занято: " + bm.msg, dot: "#30a46c", kind: jobShift(k, bm.act[0].j) };
+      // v0.8.61: свободный день с ритуалами = «свободен, кроме: …» (кейс владельца 22.10:
+      // 25.10 свободен весь день, кроме выгула 21:30–22:00, а строка говорила
+      // «занято: … · свободен после 22:00» — читалось как «занят до 22:00»).
+      // Окна и хвост «после» при «кроме» подразумеваются — не дублируем.
+      return { loc: "🏢 свободен", free: true, msg: "свободен, кроме: " + bm.parts, dot: "#30a46c", kind: jobShift(k, bm.act[0].j) };
     }
     const sp = (J || []).map((j) => ({ j, tp: jobShift(k, j) })).find((x) => x.tp === "bday" || x.tp === "hol");
     if (sp) return {
