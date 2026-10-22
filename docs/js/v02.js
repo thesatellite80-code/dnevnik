@@ -28,6 +28,62 @@ function noteHTML(note) {
   return n ? '<div class="task-note">' + SixMin.esc(n) + '</div>' : "";
 }
 
+// ── v0.8.62: экран не имеет права молчать (аудит 22.10.2026, классы А/Б/Г) ──────────
+// Помощники живут НА ВЕРХНЕМ УРОВНЕ файла: их вызывают несколько модулей (урок v0.8.60:
+// noteHTML положили внутрь closure «Кругов» — «Задачи» получили ReferenceError).
+// Новый CSS не нужен: .card (index.html:115) и .btn.auth-compact (index.html:297) глобальные.
+function smErrorCard(title, e) {
+  const msg = (e && e.message) ? e.message : String(e || "неизвестная ошибка");
+  return '<div class="card" style="border-color:rgba(227,6,19,.45)">' +
+    '<h3 style="margin:0 0 6px;font-size:15px">' + SixMin.esc(title) + '</h3>' +
+    '<p style="font-size:13px;line-height:1.5;opacity:.85;margin:0 0 6px">Не удалось загрузить: ' + SixMin.esc(msg) + '.</p>' +
+    '<p style="font-size:13px;line-height:1.5;opacity:.7;margin:0 0 10px">Обычно помогает кнопка ↻ в шапке этой вкладки или выход и вход в аккаунт («Настройки»).</p>' +
+    '<button class="btn auth-compact" data-sm-retry>Повторить</button>' +
+    '<p style="font-size:12px;opacity:.55;margin:10px 0 0">Если повторяется — сфотографируйте этот текст и пришлите агенту.</p></div>';
+}
+// Компактный вариант для маленьких карточек («Сегодня выполнено» на экране «Сегодня»):
+// одна строка с причиной и кнопкой, чтобы не перекрывать весь экран.
+function smErrorNote(title, e) {
+  const msg = (e && e.message) ? e.message : String(e || "неизвестная ошибка");
+  return '<p style="font-size:12.5px;line-height:1.6;opacity:.85;margin:0 0 8px">' +
+    'Не удалось загрузить «' + SixMin.esc(title) + '»: ' + SixMin.esc(msg) + '. ' +
+    '<button class="btn auth-compact" data-sm-retry style="padding:4px 10px;font-size:12px">' +
+    'Повторить</button></p>';
+}
+function smBindRetry(root, fn) {
+  if (!root || !root.querySelector) return;
+  const b = root.querySelector("[data-sm-retry]");
+  if (b && b.addEventListener) {
+    b.addEventListener("click", function () {
+      try { fn(); } catch (e2) { console.error("[v02] retry", e2); }
+    });
+  }
+}
+// v0.8.62: ответ Supabase с полем error больше не считается данными. Раньше брали только
+// data — и экран показывал «данных нет» при RLS/500/отсутствующей таблице (класс Б аудита:
+// защита v0.8.59 ловит только брошенные исключения, а PostgREST возвращает error объектом).
+function smMust(res, what) {
+  if (res && res.error) {
+    const e = new Error((what ? what + ": " : "") + (res.error.message || "ошибка сервера"));
+    e.smServerError = res.error;
+    throw e;
+  }
+  return res;
+}
+
+// v0.8.63: «готово» говорим только когда сервер принял запись. Supabase-js не бросает
+// исключение на ошибку запроса — он возвращает { error }, поэтому «await sb.update(...)»
+// без проверки выглядит как успех (аудит 22.10, класс В).
+function smWrote(res, what) {
+  if (res && res.error) {
+    console.error("[v02] запись не принята:", what, res.error);
+    SixMin.toast("Не сохранилось: " + what + ". Нажмите ↻ — вернётся к сохранённому.");
+    return false;
+  }
+  return true;
+}
+
+
 
 // app/js/sixmin-common.js — общие утилиты для модулей v0.2
 // Подключается ПЕРЕД остальными модулями v0.2.
@@ -1233,11 +1289,15 @@ window.__v02stage = "after-sixmin-voice"; if (window.__v02say) window.__v02say("
   async function refresh() {
     try { await load(); render(); }
     catch (e) {
-      if (root) root.innerHTML = '<p style="font-size:13px;opacity:.7">' +
-        (/auth|session/i.test(String(e.message || e))
-          ? "Войдите в облако, чтобы видеть голосовые записи со всех устройств."
-          : "Не удалось загрузить записи: " + SixMin.esc(e.message || e)) +
-        '</p>';
+      console.error("[v02] voicelist refresh", e);
+      if (!root) return;
+      if (/auth|session/i.test(String(e.message || e))) {
+        root.innerHTML = '<p style="font-size:13px;opacity:.7">' +
+          "Войдите в облако, чтобы видеть голосовые записи со всех устройств.</p>";
+        return;
+      }
+      root.innerHTML = smErrorCard("Голосовые записи", e);
+      smBindRetry(root, refresh);
     }
   }
 
@@ -1307,6 +1367,7 @@ window.__v02stage = "after-sixmin-voicelist"; if (window.__v02say) window.__v02s
       SixMin.sb().from("habit_logs").select("habit_id, day, completed")
         .eq("user_id", uid).gte("day", keys[0]).lte("day", keys[6]),
     ]);
+    smMust(h, "привычки"); smMust(l, "отметки привычек");
     state.habits = h.data || [];
     state.logs = {};
     for (const row of l.data || []) state.logs[row.habit_id + "|" + row.day] = row.completed;
@@ -1335,9 +1396,11 @@ window.__v02stage = "after-sixmin-voicelist"; if (window.__v02say) window.__v02s
     const nowDone = !state.logs[key];
     state.logs[key] = nowDone; // оптимистично
     render();
-    await SixMin.sb().from("habit_logs").upsert({
+    const rh = await SixMin.sb().from("habit_logs").upsert({
       habit_id: habitId, user_id: uid, day: dayKey, completed: nowDone, updated_at: new Date().toISOString(),
     });
+    // v0.8.63: сервер не принял отметку — клетка возвращается назад, владелец видит причину
+    if (!smWrote(rh, "отметка привычки")) { state.logs[key] = !nowDone; render(); }
   }
 
   async function addHabit(name) {
@@ -1358,7 +1421,8 @@ window.__v02stage = "after-sixmin-voicelist"; if (window.__v02say) window.__v02s
 
   async function removeHabit(id) {
     if (!confirm("Удалить привычку и её отметки?")) return;
-    await SixMin.sb().from("habits").update({ archived: true }).eq("id", id);
+    const r = await SixMin.sb().from("habits").update({ archived: true }).eq("id", id);
+    if (!smWrote(r, "удаление привычки")) return; // v0.8.63: привычка остаётся в списке
     await load(); render();
   }
 
@@ -1441,7 +1505,16 @@ window.__v02stage = "after-sixmin-voicelist"; if (window.__v02say) window.__v02s
     });
   }
 
-  async function refresh() { await load(); render(); }
+  // v0.8.62: reject из refresh больше не оставляет Трекер «молча пустым»
+  async function refresh() {
+    try { await load(); render(); }
+    catch (e) {
+      console.error("[v02] habits refresh", e);
+      if (!root) return;
+      root.innerHTML = smErrorCard("Привычки", e);
+      smBindRetry(root, refresh);
+    }
+  }
 
   function mount(container) {
     root = typeof container === "string" ? document.querySelector(container) : container;
@@ -1545,10 +1618,10 @@ window.__v02stage = "after-sixmin-habits"; if (window.__v02say) window.__v02say(
   async function load() {
     const uid = await SixMin.uid().catch(() => "00000000-0000-0000-0000-000000000000");
     const p = periodOf(tab);
-    const { data } = await SixMin.sb().from("focus_goals")
+    const rf = smMust(await SixMin.sb().from("focus_goals")
       .select("*").eq("user_id", uid).eq("period_type", p.type).eq("period_key", p.key)
-      .order("goal_index");
-    goals = data || [];
+      .order("goal_index"), "фокус-цели");
+    goals = rf.data || [];
   }
 
   async function ensureGoal(index) {
@@ -1569,7 +1642,8 @@ window.__v02stage = "after-sixmin-habits"; if (window.__v02say) window.__v02say(
   const saveTitle = SixMin.debounce(async (index, title) => {
     const g = await ensureGoal(index);
     if (!g) return;
-    await SixMin.sb().from("focus_goals").update({ title, updated_at: new Date().toISOString() }).eq("id", g.id);
+    const r = await SixMin.sb().from("focus_goals").update({ title, updated_at: new Date().toISOString() }).eq("id", g.id);
+    if (!smWrote(r, "заголовок цели")) return; // v0.8.63: локально не «сохраняем» то, что сервер не принял
     g.title = title;
   }, 700);
 
@@ -1580,8 +1654,9 @@ window.__v02stage = "after-sixmin-habits"; if (window.__v02say) window.__v02say(
   async function persistSubs(index, subs) {
     const g = await ensureGoal(index);
     if (!g) return;
-    await SixMin.sb().from("focus_goals")
+    const r = await SixMin.sb().from("focus_goals")
       .update({ subtasks: subs, updated_at: new Date().toISOString() }).eq("id", g.id);
+    if (!smWrote(r, "подзадачи цели")) return; // v0.8.63
     g.subtasks = subs;
   }
   const saveSubtasks = SixMin.debounce(persistSubs, 700);
@@ -1590,7 +1665,9 @@ window.__v02stage = "after-sixmin-habits"; if (window.__v02say) window.__v02say(
     const g = await ensureGoal(index);
     if (!g) return;
     g.done = !g.done;
-    await SixMin.sb().from("focus_goals").update({ done: g.done, updated_at: new Date().toISOString() }).eq("id", g.id);
+    const r = await SixMin.sb().from("focus_goals").update({ done: g.done, updated_at: new Date().toISOString() }).eq("id", g.id);
+    // v0.8.63: отметку, которую сервер не принял, снимаем обратно
+    if (!smWrote(r, "отметка «цель достигнута»")) { g.done = !g.done; render(); return; }
     render();
   }
 
@@ -1848,7 +1925,16 @@ window.__v02stage = "after-sixmin-habits"; if (window.__v02say) window.__v02say(
     await refresh();
   }, 350);
 
-  async function refresh() { await load(); render(); }
+  // v0.8.62: reject из refresh больше не оставляет Фокус «молча пустым»
+  async function refresh() {
+    try { await load(); render(); }
+    catch (e) {
+      console.error("[v02] focus refresh", e);
+      if (!root) return;
+      root.innerHTML = smErrorCard("Фокус", e);
+      smBindRetry(root, refresh);
+    }
+  }
 
   function mount(container) {
     root = typeof container === "string" ? document.querySelector(container) : container;
@@ -2011,12 +2097,12 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
     async function load() {
       const uid = await SixMin.uid().catch(() => "00000000-0000-0000-0000-000000000000");
       todayKey = await SixMin.todayKey();
-      const { data } = await SixMin.sb().from("tasks").select("*")
+      const rt = smMust(await SixMin.sb().from("tasks").select("*")
         .eq("user_id", uid).eq("area", AREA)
         .is("circle_id", null) // v0.8.30: круговые (общие и баунти) не дублируются в Трекер
         .order("due_date", { ascending: true }).order("position", { ascending: true })
-        .limit(400);
-      all = data || [];
+        .limit(400), AREA === "work" ? "рабочие задачи" : "задачи");
+      all = rt.data || [];
       // v0.8.19: неполные шаги онбординга не теряются в общем списке —
       // их рисует отдельный блок onbBlock() сверху карточки.
       onb = all.filter((t) => !t.completed && IS_ONB(t));
@@ -2072,11 +2158,15 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
     }
 
     async function toggle(t) {
+      const was = { completed: t.completed, completed_at: t.completed_at }; // v0.8.63: для отката
       t.completed = !t.completed;
       t.completed_at = t.completed ? new Date().toISOString() : null;
       render();
-      await SixMin.sb().from("tasks")
+      const r = await SixMin.sb().from("tasks")
         .update({ completed: t.completed, completed_at: t.completed_at }).eq("id", t.id);
+      if (!smWrote(r, "галочка задачи")) {
+        t.completed = was.completed; t.completed_at = was.completed_at; render(); return;
+      }
       await load(); render();
     }
 
@@ -2093,12 +2183,15 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
       overdue = overdue.filter((x) => x.id !== t.id);
       upcoming = upcoming.filter((x) => x.id !== t.id);
       render();
+      // v0.8.63: сначала сервер принимает запись, потом говорим «перенесено»
+      const r = await SixMin.sb().from("tasks").update(patch).eq("id", t.id);
+      if (!smWrote(r, "перенос задачи")) { await refresh(); return; }
       SixMin.toast(days === 1 ? "Перенесено на завтра ↪" : `Перенесено на ${newKey.split("-").reverse().slice(0, 2).join(".")} ↪`);
-      await SixMin.sb().from("tasks").update(patch).eq("id", t.id);
     }
 
     async function moveToday(t) {
-      await SixMin.sb().from("tasks").update({ due_date: todayKey }).eq("id", t.id);
+      const r = await SixMin.sb().from("tasks").update({ due_date: todayKey }).eq("id", t.id);
+      if (!smWrote(r, "возврат задачи на сегодня")) { await refresh(); return; } // v0.8.63
       SixMin.toast("Вернулась на сегодня ✅");
       await load(); render();
     }
@@ -2153,16 +2246,18 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
 
     async function postponeAllOverdue() {
       // переносим все просроченные ТЕКУЩЕЙ области
-      let n = 0;
+      let n = 0, failed = 0; // v0.8.63: счётчик не должен врать
       for (const t of overdue) {
-        await SixMin.sb().from("tasks").update({
+        const r = await SixMin.sb().from("tasks").update({
           due_date: todayKey,
           postponed_from: t.postponed_from || t.due_date,
           postpone_count: (t.postpone_count || 0) + 1,
         }).eq("id", t.id);
-        n++;
+        if (r && r.error) { failed++; console.error("[v02] postponeAllOverdue", r.error); } else { n++; }
       }
-      SixMin.toast(`Перенесено на сегодня: ${n}`);
+      SixMin.toast(failed
+        ? `Перенесено на сегодня: ${n}. Не перенеслось: ${failed} — проверьте связь и нажмите ↻.`
+        : `Перенесено на сегодня: ${n}`);
       await load(); render();
     }
 
@@ -2289,8 +2384,10 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
           done = true;
           const v = input.value.trim();
           if (v && v !== t.title) {
+            const prev = t.title; // v0.8.63: для отката
             t.title = v;
-            await SixMin.sb().from("tasks").update({ title: v }).eq("id", t.id);
+            const r = await SixMin.sb().from("tasks").update({ title: v }).eq("id", t.id);
+            if (!smWrote(r, "новое название задачи")) { t.title = prev; }
           }
           render();
         };
@@ -2396,7 +2493,16 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
       });
     }
 
-    async function refresh() { await load(); render(); }
+    // v0.8.62: reject из refresh больше не оставляет список задач «молча пустым»
+    async function refresh() {
+      try { await load(); render(); }
+      catch (e) {
+        console.error("[v02] tasks refresh", e);
+        if (!root) return;
+        root.innerHTML = smErrorCard(AREA === "work" ? "Рабочие задачи" : "Задачи", e);
+        smBindRetry(root, refresh);
+      }
+    }
 
     function mount(container) {
       root = typeof container === "string" ? document.querySelector(container) : container;
@@ -2508,8 +2614,18 @@ window.__v02stage = "after-sixmin-focus"; if (window.__v02say) window.__v02say("
     return { mount, refresh };
   }
 
+  // v0.8.64: реестр живых экземпляров — задачи монтируются дважды («Трекер» и «Работа»),
+  // а наружу модуль отдавал только mount, поэтому обновление вкладки задачи не подтягивало.
+  const TASK_INSTANCES = [];
   window.SixMinTasks = {
-    mount: (container, opts) => createInstance(opts).mount(container),
+    mount: (container, opts) => {
+      const inst = createInstance(opts);
+      TASK_INSTANCES.push(inst);
+      return inst.mount(container);
+    },
+    refresh: () => TASK_INSTANCES.forEach((inst) => {
+      try { inst.refresh(); } catch (e) { console.error("[v02] tasks refresh", e); }
+    }),
   };
 })();
 window.__v02stage = "after-sixmin-tasks"; if (window.__v02say) window.__v02say("v02 stage: after-sixmin-tasks");
@@ -2548,6 +2664,7 @@ window.__v02stage = "after-sixmin-tasks"; if (window.__v02say) window.__v02say("
       sb.from("tasks").select("id,title,kind,area").eq("user_id", uid).neq("completed", true)
         .is("circle_id", null).eq("due_date", todayKey).limit(300),
     ]);
+    smMust(d, "выполненные задачи"); smMust(o, "задачи на сегодня");
     const dayOf = (t) => (t.completed_at ? SixMin.fmtKey(new Date(t.completed_at)) : (t.due_date || ""));
     done = (d.data || []).filter((t) => dayOf(t) === todayKey).reverse(); // утром сверху
     window.__sixminTodayOpen = o.data || []; // v0.8.45: кэш для строки «Задачи на сегодня»
@@ -2589,7 +2706,15 @@ window.__v02stage = "after-sixmin-tasks"; if (window.__v02say) window.__v02say("
   }
 
   async function refresh() {
-    try { await load(); } catch (e) { done = []; openToday = 0; }
+    try { await load(); }
+    catch (e) {
+      // v0.8.62: раньше ошибка гасила карточку целиком (done = [], openToday = 0 → total === 0
+      // → root.innerHTML = "") — владелец не видел ни данных, ни причины.
+      console.error("[v02] donetoday refresh", e);
+      done = []; openToday = 0;
+      if (root) { root.innerHTML = smErrorNote("Сегодня выполнено", e); smBindRetry(root, refresh); }
+      return;
+    }
     render();
   }
 
@@ -2686,6 +2811,8 @@ window.__v02stage = "after-sixmin-donetoday"; if (window.__v02say) window.__v02s
         .then((r) => (r.error ? { data: [] } : r)),
     ]);
 
+    smMust(heat, "активность по дням"); smMust(habits, "привычки");
+    smMust(logs, "отметки привычек"); smMust(tasks, "задачи");
     return {
       heat: Object.fromEntries((heat.data || []).map((r) => [r.day, r.level])),
       habits: habits.data || [],
@@ -2817,9 +2944,18 @@ window.__v02stage = "after-sixmin-donetoday"; if (window.__v02say) window.__v02s
   async function render() {
     if (!root) return;
     root.innerHTML = `<div class="sm-analytics" style="opacity:.5">Загружаем статистику…</div>`;
-    let D;
-    try { D = await loadAll(); }
-    catch (e) { root.innerHTML = `<div class="sm-analytics">Ошибка загрузки: ${SixMin.esc(e.message || e)}</div>`; return; }
+    // v0.8.62: защищён ВЕСЬ render, а не только loadAll — иначе падение в computeStreaks/
+    // buildInsights/heatmapHTML оставляет вечный скелет (тот же класс, что noteHTML в v0.8.60).
+    try { await renderBody(); }
+    catch (e) {
+      console.error("[v02] analytics render", e);
+      root.innerHTML = smErrorCard("Прогресс", e);
+      smBindRetry(root, render);
+    }
+  }
+
+  async function renderBody() {
+    const D = await loadAll();
 
     const streaks = computeStreaks(D.habits, D.logs, D.entriesDays);
     const insights = buildInsights(D);
@@ -3368,13 +3504,13 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     CIRC = [];
     if (!uid) { P = null; J = []; V = []; return; }
     const sb = SixMin.sb();
-    const { data: pr } = await sb.from("shift_profiles").select("*").eq("user_id", uid).maybeSingle();
-    P = pr || null;
-    const { data: jb } = await sb.from("shift_jobs").select("*").eq("user_id", uid)
-      .order("sort", { ascending: true }).order("updated_at", { ascending: true });
-    J = jb || [];
-    const { data: vc } = await sb.from("shift_vacations").select("*").eq("user_id", uid).order("start_date");
-    V = vc || [];
+    const rpr = smMust(await sb.from("shift_profiles").select("*").eq("user_id", uid).maybeSingle(), "профиль смен");
+    P = rpr.data || null;
+    const rjb = smMust(await sb.from("shift_jobs").select("*").eq("user_id", uid)
+      .order("sort", { ascending: true }).order("updated_at", { ascending: true }), "места работы");
+    J = rjb.data || [];
+    const rvc = smMust(await sb.from("shift_vacations").select("*").eq("user_id", uid).order("start_date"), "отпуска");
+    V = rvc.data || [];
     VM = null; // v0.8.29: сброс кэша день->отпуск
     // v0.8.52: облачные шаблоны циклов; без таблицы (SQL не применён) деградируем в пресеты
     const { data: tp } = await sb.from("shift_templates").select("id,name,cycle,created_at").eq("user_id", uid).order("created_at");
@@ -3659,7 +3795,16 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       "</div>";
   }
 
-  async function refresh() { await load().catch((e) => console.error("shifts load:", e)); render(); renderBday(); }
+  // v0.8.62: ошибка загрузки смен видна владельцу, а не только в консоли
+  async function refresh() {
+    try { await load(); render(); renderBday(); }
+    catch (e) {
+      console.error("[v02] shifts refresh", e);
+      if (!root) return;
+      root.innerHTML = smErrorCard("Мои смены", e);
+      smBindRetry(root, refresh);
+    }
+  }
 
   function render() {
     if (!root) return;
@@ -4258,7 +4403,12 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
       if (i < 0 || t < 0 || t >= arr.length) return;
       [arr[i], arr[t]] = [arr[t], arr[i]];
       const sb = SixMin.sb();
-      for (let k2 = 0; k2 < arr.length; k2++) await sb.from("shift_jobs").update({ sort: k2 }).eq("id", arr[k2].id);
+      let bad = 0; // v0.8.62: порядок сохраняется только там, где сервер принял запись
+      for (let k2 = 0; k2 < arr.length; k2++) {
+        const r = await sb.from("shift_jobs").update({ sort: k2 }).eq("id", arr[k2].id);
+        if (r && r.error) { bad++; console.error("[v02] запись не принята: порядок графиков", r.error); }
+      }
+      if (bad) SixMin.toast("Порядок сохранился не полностью: " + bad + ". Нажмите ↻.");
       await load().catch(() => {}); render();
     };
     root.querySelectorAll("[data-jup]").forEach((b) => b.addEventListener("click", () => moveJob(b.dataset.jup, -1)));
@@ -4609,7 +4759,7 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
     if (!nowTimer) nowTimer = setInterval(updateNow, 30000);
     refresh();
   }
-  window.SixMinShifts = { mount, icsData };
+  window.SixMinShifts = { mount, refresh, icsData }; // v0.8.64: refresh наружу — для обновления вкладки
 })();
 window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say("v02 stage: after-sixmin-shifts");
 
@@ -4706,12 +4856,12 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
     try { uid = await SixMin.uid(); } catch (e) { uid = null; }
     loggedIn = !!uid;
     if (!uid) { circles = []; sel = null; return; }
-    const { data: ms } = await SixMin.sb().from("circle_members")
-      .select("circle_id").eq("user_id", uid);
-    const ids = (ms || []).map((m) => m.circle_id);
+    const rms = smMust(await SixMin.sb().from("circle_members")
+      .select("circle_id").eq("user_id", uid), "мои круги");
+    const ids = (rms.data || []).map((m) => m.circle_id);
     if (!ids.length) { circles = []; sel = null; return; }
-    const { data: cs } = await SixMin.sb().from("circles").select("*").in("id", ids);
-    circles = cs || [];
+    const rcs = smMust(await SixMin.sb().from("circles").select("*").in("id", ids), "круги");
+    circles = rcs.data || [];
     if (!circles.find((c) => c.id === sel)) {
       // v0.8.31: возвращаем пользователя в тот круг, в котором он был до
       // перезагрузки (если всё ещё участник); память — как у вкладки sixmin-tab
@@ -4721,8 +4871,12 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
     }
     if (sel) { try { localStorage.setItem("sixmin-circle", sel); } catch (e) {} }
     // v0.8.25: личное состояние онбординга: всего шагов и невыполненных
-    const { data: onb } = await SixMin.sb().from("tasks").select("id,completed")
-      .eq("user_id", uid).like("title", "Онбординг ·%").limit(10);
+    // v0.8.62: счётчики шагов новичка необязательны — их ошибка не гасит экран кругов
+    let onb = [];
+    try {
+      onb = smMust(await SixMin.sb().from("tasks").select("id,completed")
+        .eq("user_id", uid).like("title", "Онбординг ·%").limit(10), "шаги новичка").data || [];
+    } catch (e) { console.warn("[v02] circles onb counters", e); }
     onbTotal = (onb || []).length;
     onbOpen = (onb || []).filter((x) => !x.completed).length;
   }
@@ -4750,6 +4904,8 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
       sb.from("tasks").select("*").eq("circle_id", sel).not("bounty_points", "is", null)
         .order("created_at", { ascending: false }).limit(100),
     ]);
+    smMust(g, "цели круга"); smMust(h, "привычки круга"); smMust(t, "задачи круга");
+    smMust(rw, "награды"); smMust(lg, "история начислений"); smMust(bn, "призовые задания");
     D = {
       uid, today,
       goals: g.data || [], habits: h.data || [],
@@ -4793,7 +4949,11 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
     try {
       const u = await sb.auth.getUser();
       const em = (u && u.data && u.data.user && u.data.user.email) || null;
-      if (em) await sb.from("profiles").upsert({ id: uid, email: em }, { onConflict: "id", ignoreDuplicates: true });
+      // v0.8.62: запись служебная — экран из-за неё не гаснет, но причина больше не молчит
+      if (em) {
+        const rp = await sb.from("profiles").upsert({ id: uid, email: em }, { onConflict: "id", ignoreDuplicates: true });
+        if (rp && rp.error) console.warn("[v02] profiles upsert", rp.error.message);
+      }
       const pending = localStorage.getItem("sm_pending_name");
       if (pending) {
         const r = await sb.rpc("set_my_display_name", { p_name: pending });
@@ -4835,7 +4995,14 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
     const { data, error } = await SixMin.sb().from("circles")
       .insert({ name: name.trim(), invite_code: code6(), owner_id: uid }).select().maybeSingle();
     if (error) { SixMin.toast("Ошибка: " + error.message); return; }
-    await SixMin.sb().from("circle_members").insert({ circle_id: data.id, user_id: uid, role: "owner" });
+    // v0.8.63: без записи в circle_members круг не попадёт в список (список строится по ней) —
+    // раньше в этом случае тост «Круг создан!» был, а круг пропадал.
+    const rm = await SixMin.sb().from("circle_members").insert({ circle_id: data.id, user_id: uid, role: "owner" });
+    if (!smWrote(rm, "вход в созданный круг")) {
+      SixMin.toast("Круг создан, но запись «вы — участник» не прошла: в списке его может не быть. Нажмите ↻; если круга нет — пришлите этот текст агенту.");
+      await refresh();
+      return;
+    }
     SixMin.toast("Круг создан! Пригласите близких кодом.");
     await refresh();
   }
@@ -4924,14 +5091,16 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
     const mk = goalKey();
     let g = D.goals.find((x) => x.goal_index === index);
     if (!g) {
-      const { data } = await SixMin.sb().from("circle_goals").insert({
+      const ri = await SixMin.sb().from("circle_goals").insert({
         circle_id: sel, period_type: "month", period_key: mk, goal_index: index, ...patch,
       }).select().maybeSingle();
-      if (data) D.goals.push(data);
+      if (!smWrote(ri, "цель круга")) { await refresh(); return; } // v0.8.62: цель не «сохраняем» локально
+      if (ri.data) D.goals.push(ri.data);
       goalSumSync(index, patch);
       return;
     }
-    await SixMin.sb().from("circle_goals").update(patch).eq("id", g.id);
+    const ru = await SixMin.sb().from("circle_goals").update(patch).eq("id", g.id);
+    if (!smWrote(ru, "правка цели круга")) { await refresh(); return; } // v0.8.62
     Object.assign(g, patch);
     goalSumSync(index, patch);
   }, 700);
@@ -4960,7 +5129,8 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
   // подзадачи общих целей: текст редактируется инпутом (как в Фокусе), сохранение с дебаунсом
   const saveSubs = SixMin.debounce(async (g, subs) => {
     if (!g?.id) return;
-    await SixMin.sb().from("circle_goals").update({ subtasks: subs }).eq("id", g.id);
+    const r = await SixMin.sb().from("circle_goals").update({ subtasks: subs }).eq("id", g.id);
+    smWrote(r, "подзадачи цели круга"); // v0.8.62: причина — в тосте и консоли
   }, 500);
 
   function focusLastSub(i) {
@@ -4974,7 +5144,9 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
     subs[si].done = !subs[si].done;
     g.subtasks = subs;
     render();
-    await SixMin.sb().from("circle_goals").update({ subtasks: subs }).eq("id", g.id);
+    const r = await SixMin.sb().from("circle_goals").update({ subtasks: subs }).eq("id", g.id);
+    // v0.8.62: отметку, которую сервер не принял, возвращаем назад
+    if (!smWrote(r, "отметка подзадачи")) { subs[si].done = !subs[si].done; render(); }
   }
 
   async function editSub(g, si, text) {
@@ -4992,7 +5164,11 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
     subs.splice(si, 1);
     g.subtasks = subs;
     render();
-    if (g.id) await SixMin.sb().from("circle_goals").update({ subtasks: subs }).eq("id", g.id);
+    if (g.id) {
+      const r = await SixMin.sb().from("circle_goals").update({ subtasks: subs }).eq("id", g.id);
+      // v0.8.62: не удалось удалить — возвращаем сохранённый список с сервера
+      if (!smWrote(r, "удаление подзадачи")) { await refresh(); return; }
+    }
   }
 
   async function addSub(g) {
@@ -5001,13 +5177,15 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
     g.subtasks = subs;
     if (!g.id) {
       const mk = goalKey();
-      const { data } = await SixMin.sb().from("circle_goals").insert({
+      const ri = await SixMin.sb().from("circle_goals").insert({
         circle_id: sel, period_type: "month", period_key: mk, goal_index: g.goal_index,
         title: g.title || "", subtasks: subs,
       }).select().maybeSingle();
-      if (data) { D.goals = D.goals.map((x) => x.goal_index === g.goal_index ? data : x); render(); focusLastSub(g.goal_index); return; }
+      if (!smWrote(ri, "подзадача цели круга")) { await refresh(); return; } // v0.8.62
+      if (ri.data) { D.goals = D.goals.map((x) => x.goal_index === g.goal_index ? ri.data : x); render(); focusLastSub(g.goal_index); return; }
     } else {
-      await SixMin.sb().from("circle_goals").update({ subtasks: subs }).eq("id", g.id);
+      const r = await SixMin.sb().from("circle_goals").update({ subtasks: subs }).eq("id", g.id);
+      if (!smWrote(r, "подзадачи цели круга")) { await refresh(); return; } // v0.8.62
     }
     render();
     focusLastSub(g.goal_index);
@@ -5018,9 +5196,11 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
     const now = !D.myLogs[key];
     D.myLogs[key] = now;
     render();
-    await SixMin.sb().from("circle_habit_logs").upsert({
+    const r = await SixMin.sb().from("circle_habit_logs").upsert({
       circle_habit_id: h.id, user_id: D.uid, day: D.today, completed: now,
     });
+    // v0.8.63: отметка не принята — возвращаем клетку и называем причину
+    if (!smWrote(r, "отметка в круге")) { D.myLogs[key] = !now; render(); }
   }
 
   async function addHabit(name) {
@@ -5595,7 +5775,11 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
         const i = Number(b.dataset.gdone);
         const g = D.goals.find((x) => x.goal_index === i);
         const done = !(g?.done);
-        if (g) { g.done = done; render(); await SixMin.sb().from("circle_goals").update({ done }).eq("id", g.id); }
+        if (g) { // v0.8.63: откат, если сервер не принял отметку цели круга
+          g.done = done; render();
+          const r = await SixMin.sb().from("circle_goals").update({ done }).eq("id", g.id);
+          if (!smWrote(r, "отметка цели круга")) { g.done = !done; render(); }
+        }
         else { saveGoal(i, { done }); await refresh(); }
       }));
     root.querySelectorAll("[data-gsub]").forEach((b) =>
@@ -5738,12 +5922,17 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
       e.stopPropagation();
       const act = b.dataset.bact, id = b.dataset.id;
       if (act === "enable") {
-        await SixMin.sb().from("circles").update({ bonuses_enabled: true }).eq("id", sel);
-        SixMin.toast("Бонусы включены! Создайте первое задание с наградой 🎁");
+        const rb = await SixMin.sb().from("circles").update({ bonuses_enabled: true }).eq("id", sel);
+        // v0.8.62: «Бонусы включены» говорим только если сервер принял
+        if (smWrote(rb, "включение бонусов")) SixMin.toast("Бонусы включены! Создайте первое задание с наградой 🎁");
         await refresh(); return;
       }
       if (act === "spend") { const r = (D.rewards || []).find((x) => x.id === id); if (r) await spendReward(r); return; }
-      if (act === "delreward") { await SixMin.sb().from("circle_rewards").update({ active: false }).eq("id", id); await refresh(); return; }
+      if (act === "delreward") { // v0.8.62: награда исчезает только если сервер принял
+        const rd = await SixMin.sb().from("circle_rewards").update({ active: false }).eq("id", id);
+        if (!smWrote(rd, "удаление награды")) { await refresh(); return; }
+        await refresh(); return;
+      }
       await bountyAct(act, id);
     }));
     root.querySelector('form[data-role="bounty"]')?.addEventListener("submit", async (e) => {
@@ -5763,7 +5952,9 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
       const f = e.target, title = f.t.value.trim(), cost = parseInt(f.p.value, 10) || 10;
       if (!title) return;
       f.t.value = ""; f.p.value = "20"; // rev.10: очищаем ДО перерисовки, чтобы снапшот не вернул текст
-      await SixMin.sb().from("circle_rewards").insert({ circle_id: sel, title, cost_points: cost });
+      const rn = await SixMin.sb().from("circle_rewards").insert({ circle_id: sel, title, cost_points: cost });
+      // v0.8.62: не создалось — возвращаем введённое название (поле очищается ДО записи)
+      if (!smWrote(rn, "новая награда")) { f.t.value = title; await refresh(); return; }
       await refresh();
     });
     CM.wire(root);
@@ -5794,15 +5985,10 @@ window.__v02stage = "after-sixmin-shifts"; if (window.__v02say) window.__v02say(
   }
   function renderCirclesError(e) {
     if (!root) return;
-    const msg = (e && e.message) ? e.message : String(e || "неизвестная ошибка");
-    root.innerHTML =
-      '<div class="sm-circles"><div class="sm-cr-head">🤝 Круги</div>' +
-      '<p class="sm-cr-note">Не удалось загрузить круги: ' + SixMin.esc(msg) + '.</p>' +
-      '<p class="sm-cr-note">Обычно помогает кнопка ↻ в шапке этой вкладки или выход и вход в аккаунт («Настройки»).</p>' +
-      '<button class="btn auth-compact" data-crc-retry>Повторить</button>' +
-      '<p class="sm-cr-note"><small>Если повторяется — сфотографируйте этот текст и пришлите агенту.</small></p></div>';
-    const b = root.querySelector("[data-crc-retry]");
-    if (b) b.addEventListener("click", () => refresh());
+    // v0.8.62: единый вид карточки ошибки на всех вкладках (решение владельца 22.10.2026).
+    // Содержимое прежнее: причина, подсказка про ↻ и выход/вход, «Повторить», просьба прислать текст.
+    root.innerHTML = smErrorCard("🤝 Круги", e);
+    smBindRetry(root, refresh);
   }
 
   function mount(container) {
@@ -6195,10 +6381,31 @@ window.__v02stage = "after-sixmin-swipe"; if (window.__v02say) window.__v02say("
       }
     }, 1500);
   }
+  // v0.8.64: какая вкладка какие модули показывает (хосты сверены с index.html).
+  var TAB_MODS = {
+    today: ["SixMinDoneToday", "SixMinVoiceList"],
+    tracker: ["SixMinHabits", "SixMinFocus", "SixMinTasks"],
+    work: ["SixMinShifts", "SixMinTasks"],
+    circles: ["SixMinCircles"],
+    stats: ["SixMinAnalytics"]
+  };
+  function refreshOne(name) {
+    var m = window[name];
+    if (!m || !m.refresh) return;
+    // try/catch ловит только синхронный throw; reject промиса забираем через .catch —
+    // иначе ошибка обновления снова уйдёт «в никуда» (класс А аудита).
+    try {
+      var p = m.refresh();
+      if (p && p.catch) p.catch(function (e) { console.error("[v02] refresh " + name, e); });
+    } catch (e) { console.error("[v02] refresh " + name, e); }
+  }
+  function refreshTab(tab) {
+    if (!window.__v02mounted) return;
+    (TAB_MODS[tab] || []).forEach(refreshOne);
+  }
   function refreshAll() {
     if (!window.__v02mounted) return;
-    [window.SixMinHabits, window.SixMinFocus, window.SixMinTasks, window.SixMinAnalytics]
-      .forEach(function (m) { try { m && m.refresh && m.refresh(); } catch (e) { console.error("[v02] refresh", e); } });
+    Object.keys(TAB_MODS).forEach(refreshTab);
   }
   /* ── тема: авто / день / ночь ── */
   var TKEY = "sixmin-theme", tSaved = "auto";
@@ -6271,7 +6478,12 @@ window.__v02stage = "after-sixmin-swipe"; if (window.__v02say) window.__v02say("
   document.addEventListener("DOMContentLoaded", function () { setTimeout(tryMount, 500); setTimeout(themeUI, 600); setInterval(themeUI, 3000); setTimeout(prodInfoButtons, 700); setInterval(prodInfoButtons, 4000); });
   setInterval(tryMount, 3000);
   document.addEventListener("click", function (e) {
-    var b = e.target && e.target.closest && e.target.closest('[data-tab="tracker"]');
-    if (b) setTimeout(refreshAll, 150);
+    var b = e.target && e.target.closest && e.target.closest("[data-tab]");
+    // v0.8.64: обновляем модули той вкладки, которую открыли (раньше — только «Трекер»,
+    // и только четыре модуля из девяти).
+    if (b && b.dataset && b.dataset.tab) {
+      var tab = b.dataset.tab;
+      setTimeout(function () { refreshTab(tab); }, 150);
+    }
   });
 })();
