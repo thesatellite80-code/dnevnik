@@ -1304,6 +1304,10 @@ window.__v02stage = "after-sixmin-voice"; if (window.__v02say) window.__v02say("
   function mount(container) {
     root = typeof container === "string" ? document.querySelector(container) : container;
     injectStyles();
+    // v0.8.63: скелет сразу — пустой блок при висящем запросе принимается за поломку
+    try {
+      root.innerHTML = '<p style="font-size:13px;opacity:.65;padding:4px 2px">Загружаем записи…</p>';
+    } catch (e) {}
     // кнопка [i] в заголовок карточки «🎧 Голосовые записи»
     const card = root.closest("article") || root.parentElement;
     const h = card && card.querySelector("h3");
@@ -4625,6 +4629,11 @@ window.__v02stage = "after-sixmin-theory"; if (window.__v02say) window.__v02say(
   function mount(container) {
     root = typeof container === "string" ? document.querySelector(container) : container;
     injectStyles();
+    // v0.8.63: скелет сразу — при висящем запросе (iPhone без сети) блок не выглядит дырой
+    try {
+      root.innerHTML = '<div class="sm-sh"><div class="sm-sh-head">🔥 Мои смены</div>' +
+        '<p class="sm-sh-note">Загружаем смены…</p></div>';
+    } catch (e) {}
     // делегированные события редактора цепочки (переживают перерисовки карточки)
     root.addEventListener("click", async (e) => {
       const dr = e.target.closest("[data-dayk]");

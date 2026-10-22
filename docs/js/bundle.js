@@ -24,7 +24,7 @@ window.SIXMIN_CONFIG = {
 
   // ── 3. ПРОЧЕЕ ──────────────────────────────────────────────────────
   defaultTimezone: "Europe/Moscow",
-  version: "0.8.62"
+  version: "0.8.63"
 };
 
 /* ── Контент: вопросы (свои формулировки, пул вариантов для ротации) ── */
@@ -1866,6 +1866,26 @@ const App = (() => {
   }
 
   /* ═══════════ инициализация ═══════════ */
+  // v0.8.63: сетевые ожидания запуска не имеют права блокировать экран (кейс 22.10.2026 —
+  // iPhone без сети: оболочка нарисована, кнопки не привязаны, само не отходило).
+  const BOOT_NET_TIMEOUT = 4000; // мс — сколько ждём облако при запуске
+  function withTimeout(promise, ms, what) {
+    let timer = null;
+    const timeout = new Promise((resolve) => {
+      timer = setTimeout(() => {
+        console.warn("[boot] " + what + ": сеть не ответила за " + ms + " мс — продолжаем без облака");
+        resolve(null);
+      }, ms);
+    });
+    return Promise.race([
+      Promise.resolve().then(() => promise).catch((e) => {
+        console.warn("[boot] " + what + ":", (e && e.message) || e);
+        return null;
+      }),
+      timeout,
+    ]).then((v) => { if (timer) clearTimeout(timer); return v; });
+  }
+
   async function init() {
     await Store.open();
     // часовой пояс устройства — по умолчанию
@@ -1874,7 +1894,14 @@ const App = (() => {
     if (!s0.tz || s0.tz === window.DEFAULT_SETTINGS.tz) await Store.saveSettings({ tz });
     state.settings = await Store.getSettings();
 
-    await Cloud.init();
+    // v0.8.63: СНАЧАЛА экран и привязка кнопок, потом облако. Раньше bind()/show() стояли
+    // после await Cloud.init() и await Cloud.pullSettings(): висящий сетевой запрос оставлял
+    // приложение «мёртвым» (оболочка есть, кнопки не привязаны) — кейс владельца 22.10.2026.
+    // Локальные данные (IndexedDB) к этому моменту уже открыты, так что экран рисуется настоящий.
+    bind();
+    show(lastMainTab());
+
+    // Подписку ставим ДО init(), чтобы не пропустить первое событие облака.
     Cloud.onChange(() => {
       renderAuth(); renderSyncState(); refreshTelegramStatus();
       const st = Cloud.state();
@@ -1885,15 +1912,15 @@ const App = (() => {
           .catch(() => {});
       }
     });
+    // Облако — с таймаутом: если сеть не отвечает, приложение работает офлайн на локальных данных,
+    // а когда запрос всё-таки завершится, Cloud.onChange дорисует статус и подтянет настройки.
+    await withTimeout(Cloud.init(), BOOT_NET_TIMEOUT, "Cloud.init");
     if (Cloud.user) {
       state.settingsPulled = true;
-      const remote = await Cloud.pullSettings().catch(() => null);
+      const remote = await withTimeout(Cloud.pullSettings(), BOOT_NET_TIMEOUT, "pullSettings");
       if (remote) { state.settings = await Store.saveSettings(remote); }
       Cloud.sync().catch(() => {});
     }
-
-    bind();
-    show(lastMainTab());
 
     // v0.8.8: самолечение устаревшего кэша: version.json ходит только по сети (sw пропускает
     // его мимо кэша). Если сервер новее этого бандла — один раз перезагружаем страницу.
