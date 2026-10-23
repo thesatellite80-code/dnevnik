@@ -1,0 +1,1364 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Мой план роста</title>
+<style>
+:root{--bg:#f6f6f7;--card:#fff;--ink:#15161a;--mut:#6b7078;--line:#e2e4e8;--acc:#0f6b4f;--warn:#b25b00;--bad:#b3261e;--ok:#0f6b4f}
+@media (prefers-color-scheme: dark){:root{--bg:#14161a;--card:#1c1f25;--ink:#eef0f3;--mut:#9aa1ab;--line:#2b3038;--acc:#5bd3a4;--warn:#e8a33d;--bad:#ff8f86;--ok:#5bd3a4}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{position:sticky;top:0;z-index:5;background:var(--card);border-bottom:1px solid var(--line);padding:10px 14px}
+h1{font-size:17px;margin:0 0 4px}
+h2{font-size:14px;margin:0 0 8px;text-transform:uppercase;letter-spacing:.04em;color:var(--mut)}
+main{max-width:1000px;margin:0 auto;padding:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:12px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.mut{color:var(--mut);font-size:13px}
+.bar{height:8px;background:var(--line);border-radius:99px;overflow:hidden;flex:1;min-width:120px}
+.bar>i{display:block;height:100%;background:var(--ok);width:0}
+button{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;padding:7px 11px;cursor:pointer}
+button:hover{border-color:var(--acc)}
+button.pri{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:600}
+button.sm{padding:4px 8px;font-size:13px;border-radius:8px}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px 10px;width:100%}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--acc);outline-offset:1px}
+ul.tasks{list-style:none;margin:0;padding:0}
+li.task{display:flex;gap:8px;align-items:flex-start;padding:8px 6px;border-bottom:1px dashed var(--line)}
+li.task:last-child{border-bottom:0}
+li.task.done{opacity:.55}
+li.task.done .t{text-decoration:line-through}
+.chk{flex:0 0 auto;width:26px;height:26px;border-radius:8px;border:2px solid var(--line);background:var(--card);cursor:pointer;font-size:15px;line-height:1;padding:0}
+.chk[aria-pressed=true]{background:var(--ok);border-color:var(--ok);color:#fff}
+.t{flex:1;min-width:0}
+.t b{display:block;font-weight:600}
+.badge{display:inline-block;font-size:11.5px;padding:1px 6px;border-radius:99px;border:1px solid var(--line);color:var(--mut);margin-right:4px;white-space:nowrap}
+.badge.bad{color:var(--bad);border-color:var(--bad)}
+.badge.warn{color:var(--warn);border-color:var(--warn)}
+.badge.ok{color:var(--ok);border-color:var(--ok)}
+.badge.acc{color:var(--acc);border-color:var(--acc)}
+.step{border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:10px;background:var(--card)}
+.step>summary{cursor:pointer;font-weight:600;list-style:none}
+.step>summary::-webkit-details-marker{display:none}
+#banner{display:none;position:fixed;left:0;right:0;bottom:0;z-index:9;background:#fff8e6;color:#3a2c00;border-top:2px solid var(--warn);padding:10px 14px;font-size:14px}
+@media (prefers-color-scheme: dark){#banner{background:#2a2313;color:#ffe6b0}}
+#banner.on{display:block}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;font-size:13.5px}
+.kv b{color:var(--mut);font-weight:500}
+pre{white-space:pre-wrap;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px;font:12.5px/1.45 ui-monospace,Consolas,monospace;margin:8px 0}
+.hint{font-size:12.5px;color:var(--mut);margin-top:6px}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+td,th{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertical-align:top}
+.over{color:var(--bad);font-weight:600}
+@media print{header,#banner,.noprint{display:none!important}.card,.step{break-inside:avoid;border-color:#bbb}}
+</style>
+</head>
+<body>
+<header>
+  <div class="row">
+    <h1 id="hTitle">Мой план роста</h1>
+    <a id="backLink" href="index.html" class="mut" style="text-decoration:none;display:none">← Дневник</a>
+    <span class="mut" id="hDate"></span>
+    <span style="flex:1"></span>
+    <span class="mut" id="hSave">—</span>
+  </div>
+  <div class="row" style="margin-top:6px">
+    <span class="mut" id="hProgTxt">0/0</span>
+    <div class="bar"><i id="hProgBar"></i></div>
+    <span class="mut" id="hLoad"></span>
+  </div>
+</header>
+
+<main>
+  <section class="card" id="cNow">
+    <h2>Сейчас</h2>
+    <div id="nowBody"></div>
+    <div class="row noprint" style="margin-top:10px">
+      <button class="pri" id="bAdd">+ Задача</button>
+      <button id="bReview">Итог недели</button>
+      <button id="bRem">Проверить напоминания</button>
+      <button id="bValidate">Проверить данные</button>
+      <button id="bExport">Скачать JSON</button>
+      <button id="bBind">Подключить plan.json</button>
+      <button id="bIntake">Вставить из опросника</button>
+      <button id="bNotify">Разрешить уведомления</button>
+      <button id="bSound">Тест звука</button>
+    </div>
+    <div class="hint" id="hStorage"></div>
+  </section>
+
+  <section class="card">
+    <h2>Быстрый ввод (одна строка → задача)</h2>
+    <input id="qAdd" placeholder="Например: написать 5 писем !+2d ~0.5h #3 @люди @онлайн" autocomplete="off">
+    <div class="hint">
+      <b>!</b> срок: <code>!2026-11-05</code>, <code>!+3d</code>, <code>!вс</code> &nbsp;·&nbsp;
+      <b>~</b> часы: <code>~1.5h</code>, <code>~90m</code> &nbsp;·&nbsp;
+      <b>#</b> шаг: <code>#3</code> &nbsp;·&nbsp;
+      <b>@</b> тэг: <code>@0₽ @сидя</code> &nbsp;·&nbsp;
+      <b>*</b> уже реализовано &nbsp;·&nbsp;
+      <b>r:</b> повтор: <code>r:нед</code> &nbsp;·&nbsp;
+      без срока — дедлайн текущего шага. Enter = добавить.
+    </div>
+  </section>
+
+  <section class="card noprint" id="cIntake" style="display:none">
+    <h2>Ввод из опросника / сырых ответов</h2>
+    <textarea id="taIntake" rows="8" placeholder="строка = задача; формат: задача | зачем | ~часы | !срок&#10;Пример:&#10;позвонить Ивану | узнать, нужен ли ему план смен | ~0.5h | !+2d&#10;добавить экспорт в PDF"></textarea>
+    <div class="row" style="margin-top:8px">
+      <button class="pri" id="bIntakeOk">Разобрать и добавить</button>
+      <button id="bIntakeClose">Закрыть</button>
+    </div>
+    <div class="hint" id="intakeHint">Пустые строки игнорируются. Всё кроме названия необязательно: срок по умолчанию — дедлайн текущего шага, часы — 0.5, тэг «входящие» добавится сам.</div>
+  </section>
+
+  <section id="stepsBox"></section>
+
+  <section class="card">
+    <h2>Напоминания</h2>
+    <div id="remBody" class="kv"></div>
+    <div class="hint">Работает при открытой странице. Чтобы напоминание пришло при закрытом браузере —
+      поставьте задачу в Планировщике Windows (команда в файле <code>ЗАПУСК-Windows.md</code>).</div>
+  </section>
+
+  <section class="card">
+    <h2>Метрики и критерии решения</h2>
+    <div id="metBody"></div>
+  </section>
+
+  <section class="card noprint">
+    <h2>Журнал (пишется сам)</h2>
+    <details><summary class="mut">показать последние 30 записей</summary><pre id="logBody"></pre></details>
+  </section>
+</main>
+
+<div id="banner"><span id="bannerTxt"></span>
+  <button class="sm" onclick="document.getElementById('banner').classList.remove('on')" style="margin-left:8px">Закрыть</button>
+</div>
+
+<script id="seedData" type="application/json">{
+  "$schema": "./plan.schema.json",
+  "meta": {
+    "title": "Мой план роста",
+    "principle": "6 шагов для новичка",
+    "version": "1.0.0",
+    "created": "2026-10-22",
+    "owner": {
+      "profile": "мастер-универсал (ЧПУ, графика)",
+      "programmer": false,
+      "division_of_labour": "код и тексты делает агент, владелец принимает решение и проверяет глазами"
+    },
+    "stage": "семейное бета-тестирование приложения",
+    "timezone": "Europe/Moscow",
+    "constraints": {
+      "budget_rub": 0,
+      "hours_per_week_total": 30,
+      "hours_per_week_plan_budget": 6,
+      "posture": "только сидя",
+      "health": "травма ноги: долго на ногах нельзя, тяжести нельзя, поездки исключены — все задачи за столом и онлайн",
+      "forbidden": [
+        "переделка чужой работы",
+        "экспертиза и приёмка чужих объектов",
+        "клиенты «дешевле и быстрее»",
+        "платные инструменты до первого дохода"
+      ]
+    },
+    "rules": {
+      "deadline_is_hard": true,
+      "on_miss": "перенос только с явной причиной в log; причина пишется одним предложением",
+      "max_open_tasks": 12,
+      "one_step_in_progress": true,
+      "review": "вс 18:00 — 15 минут: что сделано, что переносим"
+    }
+  },
+
+  "reminders": {
+    "daily": {
+      "time": "09:00",
+      "show": ["overdue", "today", "next_3_days"],
+      "sound": true,
+      "windows_task_name": "MoyPlan-0900",
+      "how": "Планировщик Windows открывает plan.html в режиме окна; страница показывает три списка и звучит сигнал"
+    },
+    "weekly": {
+      "day": "sun",
+      "time": "18:00",
+      "show": ["week_result", "next_week", "load_check"],
+      "sound": true,
+      "windows_task_name": "MoyPlan-Sun1800"
+    },
+    "per_task": {
+      "lead_days": [2, 0],
+      "escalate_overdue": "daily",
+      "repeat_tasks": "в день повторения, до отметки «реализовано»"
+    },
+    "quiet_hours": { "from": "22:00", "to": "08:00" },
+    "channels": [
+      "scheduled_open (Планировщик Windows — работает при закрытом браузере)",
+      "in_page_banner (при открытом plan.html)",
+      "browser_notification (если разрешение дано; на file:// обычно недоступно — не критично)",
+      "sound (WebAudio, без файлов)"
+    ]
+  },
+
+  "steps": [
+    {
+      "id": 1,
+      "title": "Где я сейчас: факт вместо мнения",
+      "outcome": "на одном листе: что уже работает, что семья реально использует, одна цифра активности",
+      "deadline": "2026-10-25",
+      "hours_budget": 1.5,
+      "depends_on": []
+    },
+    {
+      "id": 2,
+      "title": "Один список правок от семьи",
+      "outcome": "единый список входящих, 3 критичных в работе, выпуск накатан на оба хоста",
+      "deadline": "2026-10-29",
+      "hours_budget": 1.5,
+      "depends_on": [1]
+    },
+    {
+      "id": 3,
+      "title": "Кто ещё, кроме семьи: 5 имён",
+      "outcome": "5 конкретных людей из своих кругов (ЧПУ/графика, сидячая работа, семьи), каждому написано",
+      "deadline": "2026-11-01",
+      "hours_budget": 1.5,
+      "depends_on": [2]
+    },
+    {
+      "id": 4,
+      "title": "Публичный выпуск за 0 ₽",
+      "outcome": "страница «что это и для кого» открыта по ссылке, пост опубликован, есть способ оставить контакт",
+      "deadline": "2026-11-08",
+      "hours_budget": 2,
+      "depends_on": [3]
+    },
+    {
+      "id": 5,
+      "title": "5 внешних отзывов",
+      "outcome": "3–5 интервью по 20 минут онлайн, по каждому: боль / возражение / готовность платить",
+      "deadline": "2026-11-15",
+      "hours_budget": 2,
+      "depends_on": [4]
+    },
+    {
+      "id": 6,
+      "title": "Решение: что дальше",
+      "outcome": "критерии зафиксированы, факт посчитан, решение записано (в том числе про модуль «Дневник»)",
+      "deadline": "2026-11-22",
+      "hours_budget": 1,
+      "depends_on": [5]
+    }
+  ],
+
+  "tasks": [
+    {
+      "id": "T001",
+      "step_id": 1,
+      "title": "Выгрузить список уже реализованного в приложении",
+      "why": "точка отсчёта: нельзя планировать рост, не зная, что уже построено",
+      "hours": 0.3,
+      "deadline": "2026-10-23",
+      "implemented": true,
+      "implemented_at": "2026-10-22",
+      "status": "done",
+      "auto": "агент выгружает из dnevnik/СТАТУС-ВОССТАНОВЛЕНИЯ.md список версий v0.8.15…v0.8.63 и экранов",
+      "evidence": "dnevnik/СТАТУС-ВОССТАНОВЛЕНИЯ.md, разделы по версиям",
+      "lead_days": [2, 0],
+      "repeat": null,
+      "tags": ["факт"],
+      "intake": { "source": "agent_export", "field": "features_done" }
+    },
+    {
+      "id": "T002",
+      "step_id": 1,
+      "title": "Проверить, что приложение живёт без сети (офлайн-режим)",
+      "why": "семья пользуется телефоном в дороге и на даче — офлайн обязательное условие беты",
+      "hours": 0.2,
+      "deadline": "2026-10-23",
+      "implemented": true,
+      "implemented_at": "2026-10-22",
+      "status": "done",
+      "auto": "хотфикс v0.8.63: экран и кнопки до сети, кэш по файлам, страница «нет сети» вместо белого экрана",
+      "evidence": "v0.8.63 подтверждена на обоих хостах 22.10.2026",
+      "lead_days": [2, 0],
+      "repeat": null,
+      "tags": ["приложение"],
+      "intake": { "source": "release_note", "field": "offline_ok" }
+    },
+    {
+      "id": "T003",
+      "step_id": 1,
+      "title": "Спросить у 3 членов семьи по 3 ответа: что мешает / что лишнее / чего не хватает",
+      "why": "бета без обратной связи — это мнение владельца, а не факт",
+      "hours": 0.5,
+      "deadline": "2026-10-24",
+      "implemented": false,
+      "implemented_at": null,
+      "status": "todo",
+      "auto": "агент готовит 3 вопроса одной фразой каждый; ответы вставляются в plan.html одним блоком текста и сами становятся задачами",
+      "evidence": "тексты ответов в plan.json → tasks (intake.source = family_feedback)",
+      "lead_days": [2, 0],
+      "repeat": null,
+      "tags": ["семья", "сидя"],
+      "intake": { "source": "family_feedback", "field": "answers_raw", "questionnaire": ["что мешает записать утро/вечер?", "какой экран лишний?", "чего не хватает одним словом?"] }
+    },
+    {
+      "id": "T004",
+      "step_id": 1,
+      "title": "Записать одну цифру беты: сколько дней подряд семья заполняет дневник",
+      "why": "единственная метрика, которая показывает, прижилось ли приложение",
+      "hours": 0.2,
+      "deadline": "2026-10-25",
+      "implemented": false,
+      "implemented_at": null,
+      "status": "todo",
+      "auto": "вкладка «Прогресс» → 🔥 текущая серия; переписать число в поле «метрика» (в plan.html — одна кнопка)",
+      "evidence": "meta.metrics.streak_days",
+      "lead_days": [1, 0],
+      "repeat": "weekly",
+      "tags": ["метрика"],
+      "intake": { "source": "app_screen", "field": "streak_days" }
+    },
+    {
+      "id": "T005",
+      "step_id": 2,
+      "title": "Свести все ответы семьи в один список",
+      "why": "входящие из трёх голов теряются; один список = одна очередь работы",
+      "hours": 0.3,
+      "deadline": "2026-10-26",
+      "implemented": false,
+      "implemented_at": null,
+      "status": "todo",
+      "auto": "вставка сырого текста в plan.html («Из опросника») → разбор по строкам → задачи с черновиками дедлайнов",
+      "evidence": "tasks с tags=[входящие]",
+      "lead_days": [2, 0],
+      "repeat": null,
+      "tags": ["входящие"],
+      "intake": { "source": "paste_raw", "field": "lines" }
+    },
+    {
+      "id": "T006",
+      "step_id": 2,
+      "title": "Отметить 3 критичных: то, что мешает ежедневной записи",
+      "why": "30 часов в неделю на всё — нельзя делать всё; критерий один: мешает записать день",
+      "hours": 0.3,
+      "deadline": "2026-10-27",
+      "implemented": false,
+      "implemented_at": null,
+      "status": "todo",
+      "auto": "в plan.html — флаг «критично» (тэг #crit), он же поднимает задачу в начало списка",
+      "evidence": "tasks с tags=[crit] — ровно 3",
+      "lead_days": [2, 0],
+      "repeat": null,
+      "tags": ["решение"],
+      "intake": { "source": "manual_flag", "field": "critical_ids" }
+    },
+    {
+      "id": "T007",
+      "step_id": 2,
+      "title": "Передать 3 критичных агенту и накатить выпуск",
+      "why": "семья должна увидеть, что её ответы что-то меняют — иначе бета умрёт",
+      "hours": 0.7,
+      "deadline": "2026-10-29",
+      "implemented": true,
+      "implemented_at": "2026-10-22",
+      "status": "done",
+      "auto": "механизм отлажен: патч-скрипт → 20 наборов тестов → чек-лист версии → DEPLOY-зип → 2 шага загрузки → проверка хостов скриптом",
+      "evidence": ".patch/p0835…p0863c, DEPLOY-v0863.zip, ПРОВЕРКА-ХОСТОВ.py exit 0",
+      "lead_days": [2, 0],
+      "repeat": null,
+      "tags": ["приложение"],
+      "intake": { "source": "release", "field": "release_id" }
+    },
+    {
+      "id": "T008",
+      "step_id": 3,
+      "title": "Выписать 5 имён: кому ещё это может быть нужно",
+      "why": "семья — не рынок; нужны люди с той же задачей из своих кругов (ЧПУ, графика, сидячая работа, семьи)",
+      "hours": 0.5,
+      "deadline": "2026-10-29",
+      "implemented": false,
+      "implemented_at": null,
+      "status": "todo",
+      "auto": "план пишет 5 строк в plan.html: имя / круг / почему ему / как связаться — дальше список сам напоминает по каждому",
+      "evidence": "meta.audience — 5 записей",
+      "lead_days": [3, 1, 0],
+      "repeat": null,
+      "tags": ["люди", "онлайн"],
+      "intake": { "source": "questionnaire", "field": "audience_list" }
+    },
+    {
+      "id": "T009",
+      "step_id": 3,
+      "title": "Написать каждому 3 предложения: что это / зачем ему / просьба 20 минут онлайн",
+      "why": "длинное письмо не читают; 20 минут онлайн — без поездки, сидя",
+      "hours": 0.7,
+      "deadline": "2026-11-01",
+      "implemented": false,
+      "implemented_at": null,
+      "status": "todo",
+      "auto": "агент пишет шаблон под каждый круг, владелец подставляет имя и отправляет",
+      "evidence": "тексты в meta.outreach_template + отметки «отправлено» по каждому имени",
+      "lead_days": [2, 0],
+      "repeat": null,
+      "tags": ["люди", "текст"],
+      "intake": { "source": "agent_draft", "field": "message_template" }
+    },
+    {
+      "id": "T010",
+      "step_id": 3,
+      "title": "Выбрать одну бесплатную площадку для публичной страницы",
+      "why": "0 ₽: GitHub Pages и Cloudflare уже оплачены бесплатными тарифами, VK/Telegram бесплатны",
+      "hours": 0.3,
+      "deadline": "2026-10-28",
+      "implemented": true,
+      "implemented_at": "2026-10-21",
+      "status": "done",
+      "auto": "решено ранее: зеркала studiomwm.ru + github.io/dnevnik/, контент v4 (посты, ЧАВО, инструкция) написан 21.10",
+      "evidence": "dnevnik/docs-project/vk-chavo-v4-2026-10-21.md, posts-series-v3",
+      "lead_days": [2, 0],
+      "repeat": null,
+      "tags": ["0₽"],
+      "intake": { "source": "decision", "field": "channel" }
+    },
+    {
+      "id": "T011",
+      "step_id": 4,
+      "title": "Собрать страницу-вход: «что это, для кого, 3 экрана, одна кнопка»",
+      "why": "без неё ссылка в посте ведёт в приложение, которое чужому человеку не объяснить",
+      "hours": 1,
+      "deadline": "2026-11-05",
+      "implemented": false,
+      "implemented_at": null,
+      "status": "todo",
+      "auto": "агент собирает страницу из готового контента v4; владелец проверяет глазами и говорит «накатил»",
+      "evidence": "pwa/ + страница доступна по ссылке; проверка хэшей скриптом",
+      "lead_days": [3, 1, 0],
+      "repeat": null,
+      "tags": ["приложение", "0₽"],
+      "intake": { "source": "agent_build", "field": "landing_url" }
+    },
+    {
+      "id": "T012",
+      "step_id": 4,
+      "title": "Опубликовать пост-анонс в выбранной площадке",
+      "why": "публичный выпуск = точка невозврата; до него план остаётся намерением",
+      "hours": 0.5,
+      "deadline": "2026-11-08",
+      "implemented": false,
+      "implemented_at": null,
+      "status": "todo",
+      "auto": "текст готов (posts-series-v3, post-release-2026-10-21); владелец публикует, в plan.html жмёт «реализовано»",
+      "evidence": "ссылка на пост в meta.publications",
+      "lead_days": [3, 1, 0],
+      "repeat": null,
+      "tags": ["публично"],
+      "intake": { "source": "manual", "field": "post_url" }
+    },
+    {
+      "id": "T013",
+      "step_id": 4,
+      "title": "Поставить один способ оставить контакт (Telegram-бот или форма)",
+      "why": "нужен счётчик интереса: без него шаг 6 решается на глаз",
+      "hours": 0.5,
+      "deadline": "2026-11-07",
+      "implemented": false,
+      "implemented_at": null,
+      "status": "todo",
+      "auto": "Telegram-бот уже жив (tg-webhook в Supabase) — агент добавляет команду /start со сбором контакта",
+      "evidence": "meta.metrics.contacts_total",
+      "lead_days": [2, 0],
+      "repeat": null,
+      "tags": ["0₽", "метрика"],
+      "intake": { "source": "agent_build", "field": "contacts_channel" }
+    },
+    {
+      "id": "T014",
+      "step_id": 5,
+      "title": "Провести 3 интервью по 20 минут онлайн",
+      "why": "сидя, без поездок; 20 минут — предел, после которого человек врёт из вежливости",
+      "hours": 1,
+      "deadline": "2026-11-12",
+      "implemented": false,
+      "implemented_at": null,
+      "status": "todo",
+      "auto": "агент готовит 5 вопросов; после каждого разговора владелец вставляет 3 строки — они становятся задачами",
+      "evidence": "meta.interviews — 3 записи",
+      "lead_days": [3, 1, 0],
+      "repeat": null,
+      "tags": ["люди", "онлайн", "сидя"],
+      "intake": { "source": "paste_raw", "field": "interview_notes" }
+    },
+    {
+      "id": "T015",
+      "step_id": 5,
+      "title": "По каждому разговору записать: боль / возражение / готовность платить",
+      "why": "три поля вместо пересказа — иначе выводы тонут в тексте",
+      "hours": 0.5,
+      "deadline": "2026-11-14",
+      "implemented": false,
+      "implemented_at": null,
+      "status": "todo",
+      "auto": "форма на 3 поля в plan.html; заполнение сразу после разговора, пока не забылось",
+      "evidence": "meta.interviews[].pain/objection/willingness",
+      "lead_days": [2, 0],
+      "repeat": null,
+      "tags": ["факт"],
+      "intake": { "source": "questionnaire", "field": "interview_triplet" }
+    },
+    {
+      "id": "T016",
+      "step_id": 5,
+      "title": "Свести в две колонки: «повторяется у 2+ человек» и «один раз»",
+      "why": "решение принимается только по повторяющемуся — доктрина: консенсус ≠ истина, но повторяющийся факт > единичного мнения",
+      "hours": 0.5,
+      "deadline": "2026-11-15",
+      "implemented": false,
+      "implemented_at": null,
+      "status": "todo",
+      "auto": "агент группирует по ключевым словам из трёх полей, владелец утверждает grouping глазами",
+      "evidence": "meta.findings.repeated / meta.findings.single",
+      "lead_days": [2, 0],
+      "repeat": null,
+      "tags": ["решение"],
+      "intake": { "source": "agent_analysis", "field": "findings" }
+    },
+    {
+      "id": "T017",
+      "step_id": 6,
+      "title": "Зафиксировать критерии «дальше / не дальше» ДО подсчёта",
+      "why": "критерии, придуманные после результата, — это самообман",
+      "hours": 0.3,
+      "deadline": "2026-11-18",
+      "implemented": false,
+      "implemented_at": null,
+      "status": "todo",
+      "auto": "в plan.json уже лежат значения по умолчанию (meta.decision_criteria) — владелец только правит числа",
+      "evidence": "meta.decision_criteria",
+      "lead_days": [3, 1, 0],
+      "repeat": null,
+      "tags": ["решение"],
+      "intake": { "source": "manual", "field": "criteria" }
+    },
+    {
+      "id": "T018",
+      "step_id": 6,
+      "title": "Посчитать факт по трём метрикам: серия дней, внешние пользователи, часы на поддержку",
+      "why": "решение по числам, а не по настроению",
+      "hours": 0.3,
+      "deadline": "2026-11-21",
+      "implemented": false,
+      "implemented_at": null,
+      "status": "todo",
+      "auto": "метрики собираются в meta.metrics (серия — из вкладки «Прогресс», контакты — из бота, часы — из log этого плана)",
+      "evidence": "meta.metrics",
+      "lead_days": [2, 0],
+      "repeat": null,
+      "tags": ["метрика"],
+      "intake": { "source": "app_screen", "field": "metrics_snapshot" }
+    },
+    {
+      "id": "T019",
+      "step_id": 6,
+      "title": "Записать решение и следующий этап (включая вопрос про модуль «Дневник»)",
+      "why": "незаписанное решение не существует: через неделю память подменит его настроением",
+      "hours": 0.4,
+      "deadline": "2026-11-22",
+      "implemented": false,
+      "implemented_at": null,
+      "status": "todo",
+      "auto": "plan.html генерирует текст решения по фактам (критерии + метрики), владелец добавляет одну фразу от себя",
+      "evidence": "meta.decision + log",
+      "lead_days": [3, 1, 0],
+      "repeat": null,
+      "tags": ["решение"],
+      "intake": { "source": "generated", "field": "decision_text" }
+    },
+    {
+      "id": "R001",
+      "step_id": 0,
+      "title": "Воскресный итог: 15 минут — что сделано, что переносим",
+      "why": "единственная регулярная точка сверки; без неё дедлайны разъезжаются незаметно",
+      "hours": 0.25,
+      "deadline": "2026-10-25",
+      "implemented": false,
+      "implemented_at": null,
+      "status": "todo",
+      "auto": "plan.html сам собирает текст итога (кнопка «Итог недели» → в буфер обмена); следующее воскресенье ставится автоматически",
+      "evidence": "log: запись review каждую неделю",
+      "lead_days": [1, 0],
+      "repeat": "weekly",
+      "tags": ["регулярно"],
+      "intake": { "source": "generated", "field": "weekly_review" }
+    },
+    {
+      "id": "R002",
+      "step_id": 0,
+      "title": "Проверка нагрузки: план ≤ 6 ч из 30 ч недели",
+      "why": "30 часов в неделю на всё; если план съедает больше — он убьёт семью и здоровье",
+      "hours": 0.1,
+      "deadline": "2026-10-25",
+      "implemented": false,
+      "implemented_at": null,
+      "status": "todo",
+      "auto": "plan.html считает часы недели сам и краснеет при превышении бюджета; действие владельца — перенести, а не добавить",
+      "evidence": "week_load в отчёте",
+      "lead_days": [1, 0],
+      "repeat": "weekly",
+      "tags": ["регулярно", "здоровье"],
+      "intake": { "source": "generated", "field": "week_load" }
+    }
+  ],
+
+  "decision_criteria": {
+    "min_streak_days": 21,
+    "min_external_users": 3,
+    "max_support_hours_per_week": 2,
+    "min_contacts": 5,
+    "note": "числа правятся ДО подсчёта факта (задача T017)"
+  },
+
+  "metrics": {
+    "streak_days": null,
+    "external_users": 0,
+    "contacts_total": 0,
+    "support_hours_last_week": null,
+    "updated_at": null
+  },
+
+  "audience": [],
+  "interviews": [],
+  "findings": { "repeated": [], "single": [] },
+  "publications": [],
+  "decision": null,
+
+  "log": [
+    { "ts": "2026-10-22T21:50:00+03:00", "kind": "plan_created", "note": "план создан из фактов проекта: v0.8.63 на двух хостах, 20 наборов тестов, контент v4, семейная бета" }
+  ]
+}</script>
+<script>
+var SEED = null;
+try { SEED = JSON.parse(document.getElementById("seedData").textContent); }
+catch (e) { SEED = null; }
+if (!SEED || !SEED.tasks) {
+  SEED = { meta: { title: "Мой план роста", stage: "пустой план", constraints: { budget_rub: 0, hours_per_week_total: 30, hours_per_week_plan_budget: 6 }, rules: { max_open_tasks: 12 } },
+           reminders: { daily: { time: "09:00", show: ["overdue","today","next_3_days"] }, weekly: { day: "sun", time: "18:00", show: ["week_result"] },
+                        per_task: { lead_days: [2,0], escalate_overdue: "daily" }, quiet_hours: { from: "22:00", to: "08:00" }, channels: [] },
+           steps: [], tasks: [], metrics: {}, decision_criteria: {}, log: [] };
+}
+</script>
+<script>
+/* ==== CORE (чистые функции; проверяются node-тестом plan/test-core.js — DOM тут не нужен) ==== */
+var RU_DAYS = ["вс","пн","вт","ср","чт","пт","сб"];
+var RU_DAYS_FULL = {"пн":1,"вт":2,"ср":3,"чт":4,"пт":5,"сб":6,"вс":0};
+
+function pad2(n){ return (n < 10 ? "0" : "") + n; }
+function keyOf(d){ return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()); }
+function todayKey(now){ return keyOf(now || new Date()); }
+function parseKey(k){ var p = String(k || "").split("-"); return new Date(+p[0], (+p[1] || 1) - 1, +p[2] || 1); }
+function addDays(k, n){ var d = parseKey(k); d.setDate(d.getDate() + n); return keyOf(d); }
+function daysBetween(a, b){ return Math.round((parseKey(b) - parseKey(a)) / 86400000); }
+function weekStartKey(k){ var d = parseKey(k); var w = (d.getDay() + 6) % 7; d.setDate(d.getDate() - w); return keyOf(d); }
+function weekdayRu(k){ return RU_DAYS[parseKey(k).getDay()]; }
+function fmtDate(k){ var p = String(k).split("-"); return p[2] + "." + p[1]; }
+
+function fmtDeadline(k, now){
+  var t = todayKey(now), d = daysBetween(t, k);
+  if (d === 0) return "сегодня";
+  if (d === 1) return "завтра";
+  if (d === -1) return "просрочено на 1 день";
+  if (d < 0) return "просрочено на " + (-d) + " дн";
+  return weekdayRu(k) + " " + fmtDate(k) + " (через " + d + " дн)";
+}
+
+function isOpen(t){ return t.status === "todo" || t.status === "blocked"; }
+function openTasks(state){ return (state.tasks || []).filter(isOpen); }
+function stepById(state, id){ return (state.steps || []).filter(function(s){ return s.id === id; })[0] || null; }
+
+/* какой шаг сейчас в работе: первый с незакрытым дедлайном и открытыми задачами */
+function activeStep(state, now){
+  var t = todayKey(now), i;
+  for (i = 0; i < (state.steps || []).length; i++){
+    var s = state.steps[i];
+    var open = openTasks(state).filter(function(x){ return x.step_id === s.id; });
+    if (open.length && daysBetween(t, s.deadline) >= 0) return s;
+  }
+  for (i = 0; i < (state.steps || []).length; i++){
+    if (openTasks(state).some(function(x){ return x.step_id === state.steps[i].id; })) return state.steps[i];
+  }
+  return (state.steps || [])[0] || null;
+}
+
+function dueBuckets(state, now){
+  var t = todayKey(now), out = { overdue: [], today: [], next3: [], week: [], later: [] };
+  openTasks(state).forEach(function(x){
+    var d = daysBetween(t, x.deadline);
+    if (d < 0) out.overdue.push(x);
+    else if (d === 0) out.today.push(x);
+    else if (d <= 3) out.next3.push(x);
+    else if (d <= 7) out.week.push(x);
+    else out.later.push(x);
+  });
+  var byDl = function(a, b){ return a.deadline < b.deadline ? -1 : (a.deadline > b.deadline ? 1 : 0); };
+  ["overdue","today","next3","week","later"].forEach(function(k){
+    out[k].sort(function(a, b){
+      var ca = (a.tags || []).indexOf("crit") > -1 ? 0 : 1, cb = (b.tags || []).indexOf("crit") > -1 ? 0 : 1;
+      return ca - cb || byDl(a, b);
+    });
+  });
+  return out;
+}
+
+function progress(state){
+  var all = state.tasks || [], done = all.filter(function(t){ return t.implemented; });
+  var byStep = (state.steps || []).map(function(s){
+    var ts = all.filter(function(t){ return t.step_id === s.id; });
+    var dn = ts.filter(function(t){ return t.implemented; });
+    var spent = dn.reduce(function(a, t){ return a + (+t.hours || 0); }, 0);
+    var left = ts.reduce(function(a, t){ return a + (t.implemented ? 0 : (+t.hours || 0)); }, 0);
+    return { id: s.id, title: s.title, deadline: s.deadline, total: ts.length, implemented: dn.length,
+             pct: ts.length ? Math.round(dn.length / ts.length * 100) : 0,
+             hours_left: Math.round(left * 100) / 100, hours_budget: s.hours_budget,
+             hours_over_budget: Math.round((left - s.hours_budget) * 100) / 100 };
+  });
+  return { total: all.length, implemented: done.length,
+           pct: all.length ? Math.round(done.length / all.length * 100) : 0,
+           hours_left: Math.round(all.reduce(function(a, t){ return a + (t.implemented ? 0 : (+t.hours || 0)); }, 0) * 100) / 100,
+           by_step: byStep };
+}
+
+function weekLoad(state, now){
+  var ws = weekStartKey(todayKey(now)), we = addDays(ws, 6);
+  var items = (state.tasks || []).filter(function(t){
+    if (t.implemented) return false;
+    return t.deadline >= ws && t.deadline <= we;
+  });
+  var hours = Math.round(items.reduce(function(a, t){ return a + (+t.hours || 0); }, 0) * 100) / 100;
+  var c = (state.meta && state.meta.constraints) || {};
+  var budget = +c.hours_per_week_plan_budget || 6, total = +c.hours_per_week_total || 30;
+  return { week_start: ws, week_end: we, hours: hours, budget: budget, total_budget: total,
+           over: hours > budget, share_of_total_pct: Math.round(hours / total * 100), items: items };
+}
+
+function inQuietHours(d, q){
+  if (!q || !q.from || !q.to) return false;
+  var hm = pad2(d.getHours()) + ":" + pad2(d.getMinutes());
+  if (q.from <= q.to) return hm >= q.from && hm < q.to;
+  return hm >= q.from || hm < q.to;   // ночной диапазон через полночь
+}
+function atTime(dateKey, hhmm){
+  var p = String(hhmm || "09:00").split(":"), d = parseKey(dateKey);
+  d.setHours(+p[0] || 9, +p[1] || 0, 0, 0); return d;
+}
+function nextWeekday(fromKey, dayName, includeToday){
+  var want = RU_DAYS_FULL[String(dayName || "sun").toLowerCase().slice(0, 2)];
+  if (want === undefined) want = 0;
+  var d = parseKey(fromKey);
+  for (var i = 0; i < 8; i++){
+    if (d.getDay() === want && (includeToday || i > 0)) break;
+    d.setDate(d.getDate() + 1);
+  }
+  return keyOf(d);
+}
+
+/* план напоминаний: что и когда показать */
+function reminderPlan(state, now){
+  now = now || new Date();
+  var R = state.reminders || {}, daily = R.daily || { time: "09:00", show: ["overdue","today","next_3_days"] };
+  var per = R.per_task || { lead_days: [2, 0], escalate_overdue: "daily" };
+  var t = todayKey(now), out = [];
+
+  openTasks(state).forEach(function(x){
+    var leads = (x.lead_days && x.lead_days.length) ? x.lead_days : (per.lead_days || [2, 0]);
+    leads.forEach(function(L){
+      var day = addDays(x.deadline, -L);
+      if (day < t) return;
+      out.push({ task_id: x.id, kind: L === 0 ? "deadline" : "lead", days_before: L,
+                 at: atTime(day, daily.time), label: (L === 0 ? "ДЕДЛАЙН" : "за " + L + " дн") + ": " + x.title });
+    });
+    var od = daysBetween(x.deadline, t);
+    if (od > 0 && per.escalate_overdue === "daily"){
+      out.push({ task_id: x.id, kind: "overdue", days_before: -od,
+                 at: atTime(t, daily.time), label: "ПРОСРОЧЕНО на " + od + " дн: " + x.title });
+    }
+    if (x.repeat === "weekly"){
+      var nx = x.deadline;
+      while (nx < t) nx = addDays(nx, 7);
+      out.push({ task_id: x.id, kind: "repeat", days_before: daysBetween(t, nx),
+                 at: atTime(nx, daily.time), label: "повтор (неделя): " + x.title });
+    }
+  });
+
+  var w = R.weekly;
+  if (w && w.day && w.time){
+    var wd = nextWeekday(t, w.day, true);
+    out.push({ task_id: null, kind: "weekly", days_before: daysBetween(t, wd), at: atTime(wd, w.time),
+               label: "итог недели: 15 минут — что сделано, что переносим" });
+  }
+  out.sort(function(a, b){ return a.at - b.at; });
+  return out;
+}
+
+function nextReminder(state, now){
+  now = now || new Date();
+  var q = (state.reminders || {}).quiet_hours, plan = reminderPlan(state, now);
+  for (var i = 0; i < plan.length; i++){
+    if (plan[i].at > now && !inQuietHours(plan[i].at, q)) return { at: plan[i].at, item: plan[i], plan: plan };
+  }
+  return { at: null, item: null, plan: plan };
+}
+
+/* мини-язык быстрого ввода: «текст !срок ~часы #шаг @тэг * r:нед» */
+function parseQuickAdd(text, state, now){
+  now = now || new Date();
+  var s = " " + String(text || "") + " ", out = { title: "", deadline: null, hours: null, step_id: null,
+                                     implemented: false, tags: [], repeat: null, status: "todo" };
+  out.implemented = /\s\*\s/.test(s);
+  s = s.replace(/\s\*\s/g, " ");
+
+  s = s.replace(/!(\d{4}-\d{2}-\d{2})/g, function(m, d){ out.deadline = d; return " "; });
+  s = s.replace(/!\+(\d+)\s*d?/gi, function(m, n){ out.deadline = addDays(todayKey(now), +n); return " "; });
+  s = s.replace(/!(пн|вт|ср|чт|пт|сб|вс)/gi, function(m, d){
+    var k = nextWeekday(todayKey(now), d.toLowerCase());
+    if (k === todayKey(now)) k = addDays(k, 7);
+    out.deadline = k; return " ";
+  });
+  s = s.replace(/~(\d+(?:[.,]\d+)?)\s*h/gi, function(m, n){ out.hours = parseFloat(n.replace(",", ".")); return " "; });
+  s = s.replace(/~(\d+)\s*m/gi, function(m, n){ out.hours = Math.round(+n / 6 * 10) / 100; return " "; });
+  s = s.replace(/~(\d+(?:[.,]\d+)?)(?=\s|$)/g, function(m, n){ out.hours = parseFloat(n.replace(",", ".")); return " "; });
+  s = s.replace(/#(\d)/g, function(m, n){ out.step_id = +n; return " "; });
+  s = s.replace(/@([\wа-яёА-ЯЁ0-9₽+-]+)/g, function(m, tag){ out.tags.push(tag.toLowerCase()); return " "; });
+  s = s.replace(/r:(нед|weekly|неделя)/gi, function(){ out.repeat = "weekly"; return " "; });
+  s = s.replace(/r:(день|daily|ежедн)/gi, function(){ out.repeat = "daily"; return " "; });
+  s = s.replace(/r:(мес|monthly)/gi, function(){ out.repeat = "monthly"; return " "; });
+
+  out.title = s.replace(/\s+/g, " ").trim();
+  var st = activeStep(state, now);
+  if (out.step_id === null) out.step_id = st ? st.id : 1;
+  if (!out.deadline) out.deadline = (st && st.deadline) ? st.deadline : addDays(todayKey(now), 3);
+  if (out.hours === null) out.hours = 0.5;
+  if (out.implemented){ out.status = "done"; }
+  return out;
+}
+
+/* разбор сырого текста (ответы опросника / заметки) — одна строка = одна задача.
+   Формат: «задача | зачем | ~часы | !срок»; всё кроме задачи необязательно. */
+function parseIntake(text, state, now){
+  var lines = String(text || "").split(/\r?\n/), res = [];
+  lines.forEach(function(line){
+    var raw = line.trim();
+    if (!raw || /^[#\-*\s]*$/.test(raw)) return;      // пустые строки и маркеры списка
+    if (/^#\D/.test(raw)) return;                       // строка-заголовок в вставленном тексте («# заметка»), но НЕ «#3 задача»
+    var parts = raw.split("|");
+    var t = parseQuickAdd(parts[0], state, now);
+    if (!t.title) return;
+    if (parts[1] && parts[1].trim()) t.why = parts[1].trim();
+    if (parts[2] && parts[2].trim()){ var h = parseQuickAdd("x " + parts[2].trim(), state, now); if (h.hours) t.hours = h.hours; }
+    if (parts[3] && parts[3].trim()){ var d = parseQuickAdd("x " + parts[3].trim(), state, now); if (d.deadline) t.deadline = d.deadline; }
+    t.tags = (t.tags || []).concat(["входящие"]);
+    res.push(t);
+  });
+  return res;
+}
+
+function nextId(state, prefix){
+  var mx = 0;
+  (state.tasks || []).forEach(function(t){
+    if (String(t.id).indexOf(prefix) === 0){ var n = parseInt(String(t.id).slice(1), 10); if (n > mx) mx = n; }
+  });
+  return prefix + ("00" + (mx + 1)).slice(-3);
+}
+
+function weeklySummary(state, now){
+  now = now || new Date();
+  var t = todayKey(now), ws = weekStartKey(t), p = progress(state), w = weekLoad(state, now);
+  var L = [];
+  L.push("ИТОГ НЕДЕЛИ " + fmtDate(ws) + "–" + fmtDate(w.week_end) + " (создано " + t + ")");
+  L.push("");
+  L.push("Реализовано: " + p.implemented + " из " + p.total + " (" + p.pct + "%). Осталось часов: " + p.hours_left + ".");
+  L.push("Нагрузка этой недели: " + w.hours + " ч из бюджета " + w.budget + " ч" +
+         (w.over ? " — ПРЕВЫШЕНИЕ, перенести, а не добавить" : " — в бюджете") +
+         " (" + w.share_of_total_pct + "% от " + w.total_budget + " ч/нед всего).");
+  L.push("");
+  var b = dueBuckets(state, now);
+  L.push("ПРОСРОЧЕНО (" + b.overdue.length + "):");
+  b.overdue.forEach(function(x){ L.push("  - [" + x.id + "] " + x.title + " — дедлайн был " + x.deadline); });
+  L.push("СДЕЛАНО НА ЭТОЙ НЕДЕЛЕ:");
+  (state.tasks || []).filter(function(x){
+    return x.implemented && x.implemented_at && x.implemented_at >= ws && x.implemented_at <= t;
+  }).forEach(function(x){ L.push("  + [" + x.id + "] " + x.title + " (" + x.implemented_at + ")"); });
+  L.push("");
+  L.push("ШАГИ:");
+  p.by_step.forEach(function(s){
+    var dl = daysBetween(t, s.deadline);
+    L.push("  шаг " + s.id + ": " + s.implemented + "/" + s.total + " (" + s.pct + "%), дедлайн " + s.deadline +
+           (dl < 0 ? " (просрочен на " + (-dl) + " дн)" : " (через " + dl + " дн)") +
+           ", часов осталось " + s.hours_left + " из бюджета " + s.hours_budget +
+           (s.hours_over_budget > 0 ? " — перегруз" : ""));
+  });
+  L.push("");
+  L.push("ПЕРЕНОСИМ НА СЛЕДУЮЩУЮ НЕДЕЛЮ (ближайшие 7 дней):");
+  b.today.concat(b.next3, b.week).slice(0, 12).forEach(function(x){
+    L.push("  - [" + x.id + "] " + x.title + " — " + fmtDeadline(x.deadline, now) + ", ~" + x.hours + " ч");
+  });
+  L.push("");
+  L.push("МЕТРИКИ: серия " + ((state.metrics && state.metrics.streak_days != null) ? state.metrics.streak_days : "—") +
+         " дн; внешние пользователи " + ((state.metrics && state.metrics.external_users) || 0) +
+         "; контакты " + ((state.metrics && state.metrics.contacts_total) || 0) + ".");
+  var c = state.decision_criteria || {};
+  L.push("КРИТЕРИИ РЕШЕНИЯ: серия ≥ " + (c.min_streak_days || "—") + ", внешние ≥ " + (c.min_external_users || "—") +
+         ", контакты ≥ " + (c.min_contacts || "—") + ", поддержка ≤ " + (c.max_support_hours_per_week || "—") + " ч/нед.");
+  L.push("");
+  L.push("ОДНО РЕШЕНИЕ НЕДЕЛИ: ____________________________________________");
+  return L.join("\n");
+}
+
+function validate(state){
+  var e = [], t = todayKey(), i;
+  if (!state || !state.tasks) return ["нет данных"];
+  var ids = {};
+  for (i = 0; i < state.tasks.length; i++){
+    var x = state.tasks[i];
+    if (!x.id) e.push("задача без id");
+    if (ids[x.id]) e.push("повтор id: " + x.id);
+    ids[x.id] = 1;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(x.deadline))) e.push(x.id + ": дедлайн не ГГГГ-ММ-ДД");
+    if (!(+x.hours > 0)) e.push(x.id + ": часы должны быть > 0");
+    if ((x.status === "done") !== !!x.implemented) e.push(x.id + ": status=done и implemented рассогласованы");
+    if (x.step_id && !stepById(state, x.step_id)) e.push(x.id + ": нет шага " + x.step_id);
+    if (x.status === "todo" && x.deadline < t) e.push(x.id + ": просрочен (" + x.deadline + ")");
+  }
+  var st = (state.steps || []).map(function(s){ return s.id; });
+  if (st.length !== 6) e.push("шагов должно быть 6, найдено " + st.length);
+  // лимит открытых задач считаем по смыслу правила one_step_in_progress:
+  // если в работе один шаг — ограничиваем задачи активного шага + регулярные,
+  // иначе весь план на месяц вперёд всегда «превышал» бы лимит.
+  var rules = ((state.meta || {}).rules || {}), mx = rules.max_open_tasks;
+  if (mx){
+    var nowD = new Date();
+    var op = rules.one_step_in_progress
+      ? (function(){ var a = activeStep(state, nowD); var id = a ? a.id : 0;
+                     return openTasks(state).filter(function(x){ return x.step_id === id || !x.step_id; }).length; })()
+      : openTasks(state).length;
+    if (op > mx) e.push("открытых задач в работе " + op + " при лимите " + mx +
+      (rules.one_step_in_progress ? " (считаются активный шаг и регулярные)" : ""));
+  }
+  var w = weekLoad(state, new Date());
+  if (w.over) e.push("неделя " + w.week_start + ": " + w.hours + " ч > бюджета " + w.budget + " ч");
+  return e;
+}
+/* ==== /CORE ==== */
+
+/* ==== APP (DOM, хранение, напоминания в реальном времени) ==== */
+var SEED_URL_HINT = "plan.json";
+var LS_KEY = "moy-plan-rosta-v1";
+var IDB_NAME = "moy-plan-handle", IDB_STORE = "handles";
+var state = null, fileHandle = null, saveTimer = null, fired = {};
+
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s == null ? "" : s).replace(/[&<>"]/g, function(c){
+  return ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" })[c]; }); }
+
+function logEvent(kind, task_id, note){
+  state.log = state.log || [];
+  state.log.push({ ts: new Date().toISOString(), kind: kind, task_id: task_id || undefined, note: note || undefined });
+  if (state.log.length > 500) state.log = state.log.slice(-500);
+}
+
+/* --- хранение: файл (если подключён) → localStorage → встроенный SEED --- */
+function idb(){
+  return new Promise(function(res, rej){
+    var r = indexedDB.open(IDB_NAME, 1);
+    r.onupgradeneeded = function(){ r.result.createObjectStore(IDB_STORE); };
+    r.onsuccess = function(){ res(r.result); };
+    r.onerror = function(){ rej(r.error); };
+  });
+}
+async function saveHandle(h){
+  try { var db = await idb(); var tx = db.transaction(IDB_STORE, "readwrite");
+        tx.objectStore(IDB_STORE).put(h, "plan"); } catch (e) {}
+}
+async function loadHandle(){
+  try { var db = await idb(); return await new Promise(function(res){
+    var g = db.transaction(IDB_STORE, "readonly").objectStore(IDB_STORE).get("plan");
+    g.onsuccess = function(){ res(g.result || null); }; g.onerror = function(){ res(null); };
+  }); } catch (e) { return null; }
+}
+async function readFileHandle(h){
+  var f = await h.getFile(), txt = await f.text();
+  return JSON.parse(txt);
+}
+function setSaveLabel(where, ok){
+  var d = new Date();
+  $("hSave").textContent = (ok === false ? "НЕ сохранено " : "сохранено ") +
+    pad2(d.getHours()) + ":" + pad2(d.getMinutes()) + ":" + pad2(d.getSeconds()) + " · " + where;
+  $("hSave").style.color = ok === false ? "var(--bad)" : "";
+}
+function save(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async function(){
+    var txt = JSON.stringify(state, null, 2);
+    try { localStorage.setItem(LS_KEY, txt); } catch (e) {}
+    if (fileHandle && fileHandle.createWritable){
+      try { var w = await fileHandle.createWritable(); await w.write(txt); await w.close();
+            setSaveLabel("plan.json (файл)", true); return; }
+      catch (e) { setSaveLabel("браузер (файл недоступен: " + e.message + ")", false); return; }
+    }
+    setSaveLabel("браузер (localStorage)", true);
+    var hostMode = location.protocol !== "file:";
+    $("hStorage").innerHTML = "Данные сохраняются автоматически в этом браузере." +
+      (hostMode ? " На другом устройстве будет своя копия: перенос — «Скачать JSON» здесь и вставить там."
+                : " Раз в неделю нажимайте <b>Скачать JSON</b> и кладите копию рядом с plan.html — это резерв.") +
+      " Синхронизации между устройствами пока нет — она придёт с модулем «Дневник».";
+  }, 350);
+}
+async function boot(){
+  var h = await loadHandle();
+  if (h && h.getFile){
+    try { state = await readFileHandle(h); fileHandle = h; setSaveLabel("plan.json (файл)", true); return; }
+    catch (e) { console.warn("файл не читается:", e); }
+  }
+  try { var ls = localStorage.getItem(LS_KEY); if (ls) { state = JSON.parse(ls); setSaveLabel("браузер (localStorage)", true); return; } } catch (e) {}
+  state = JSON.parse(JSON.stringify(SEED));
+  setSaveLabel("встроенные данные (первый запуск)", true);
+}
+
+/* --- действия --- */
+function setImplemented(id, val, silent){
+  var t = find(id); if (!t) return;
+  t.implemented = !!val;
+  t.implemented_at = val ? todayKey() : null;
+  t.status = val ? "done" : "todo";
+  if (!silent) logEvent(val ? "implemented" : "reopened", id, t.title);
+  if (val && t.repeat){
+    var n = JSON.parse(JSON.stringify(t));
+    n.id = nextId(state, t.id.charAt(0));
+    n.implemented = false; n.implemented_at = null; n.status = "todo";
+    n.deadline = t.repeat === "weekly" ? addDays(t.deadline, 7) : (t.repeat === "daily" ? addDays(t.deadline, 1) : addDays(t.deadline, 30));
+    state.tasks.push(n);
+    logEvent("added", n.id, "следующий повтор: " + n.deadline);
+  }
+  save(); render();
+}
+function moveDeadline(id, days){
+  var t = find(id); if (!t) return;
+  var from = t.deadline;
+  t.deadline = addDays(from, days);
+  logEvent("moved", id, from + " → " + t.deadline + (days > 0 ? " (перенос)" : ""));
+  save(); render();
+}
+function removeTask(id){
+  var i = state.tasks.findIndex(function(t){ return t.id === id; });
+  if (i < 0) return;
+  var t = state.tasks[i];
+  if (!confirm("Удалить задачу " + t.id + " «" + t.title + "»?")) return;
+  state.tasks.splice(i, 1);
+  logEvent("removed", id, t.title);
+  save(); render();
+}
+function find(id){ return state.tasks.filter(function(t){ return t.id === id; })[0] || null; }
+function addTask(obj){
+  var t = {
+    id: obj.id || nextId(state, "T"), step_id: obj.step_id || (activeStep(state) || {}).id || 1,
+    title: obj.title, why: obj.why || "", hours: +obj.hours || 0.5, deadline: obj.deadline,
+    implemented: !!obj.implemented, implemented_at: obj.implemented ? todayKey() : null,
+    status: obj.implemented ? "done" : (obj.status || "todo"),
+    auto: obj.auto || "", evidence: obj.evidence || "",
+    lead_days: obj.lead_days || null, repeat: obj.repeat || null,
+    tags: obj.tags || [], intake: obj.intake || { source: "manual", field: "" }
+  };
+  state.tasks.push(t);
+  logEvent("added", t.id, t.title + " · дедлайн " + t.deadline + " · ~" + t.hours + " ч");
+  save(); render(); return t;
+}
+function editTask(id){
+  var t = find(id); if (!t) return;
+  var title = prompt("Задача (текст):", t.title); if (title === null) return;
+  var why = prompt("Зачем (одно предложение):", t.why || ""); if (why === null) return;
+  var hours = prompt("Часы (число, можно 0.5):", t.hours); if (hours === null) return;
+  var dl = prompt("Дедлайн ГГГГ-ММ-ДД:", t.deadline); if (dl === null) return;
+  var step = prompt("Шаг (1–6, 0 = регулярная):", t.step_id); if (step === null) return;
+  var tags = prompt("Тэги через запятую (crit = критично):", (t.tags || []).join(",")); if (tags === null) return;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dl.trim())){ alert("Дедлайн должен быть в виде 2026-11-05"); return; }
+  t.title = title.trim() || t.title; t.why = why.trim();
+  t.hours = Math.max(0.1, parseFloat(String(hours).replace(",", ".")) || t.hours);
+  t.deadline = dl.trim(); t.step_id = parseInt(step, 10) || 0;
+  t.tags = tags.split(",").map(function(s){ return s.trim().toLowerCase(); }).filter(Boolean);
+  logEvent("note", t.id, "правка: " + t.title + " · " + t.deadline);
+  save(); render();
+}
+function setMetric(field){
+  var cur = (state.metrics && state.metrics[field] != null) ? state.metrics[field] : "";
+  var v = prompt("Метрика " + field + " (число):", cur);
+  if (v === null) return;
+  state.metrics = state.metrics || {};
+  state.metrics[field] = v.trim() === "" ? null : (isNaN(+v) ? v.trim() : +v);
+  state.metrics.updated_at = new Date().toISOString();
+  logEvent("metric", null, field + " = " + state.metrics[field]);
+  save(); render();
+}
+
+/* --- напоминания в реальном времени --- */
+var audioCtx = null;
+function beep(){
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    var o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = "sine"; o.frequency.value = 880; g.gain.value = 0.0001;
+    o.connect(g); g.connect(audioCtx.destination); o.start();
+    g.gain.exponentialRampToValueAtTime(0.25, audioCtx.currentTime + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.5);
+    o.stop(audioCtx.currentTime + 0.55);
+  } catch (e) {}
+}
+function banner(text, sound){
+  $("bannerTxt").innerHTML = text;
+  $("banner").classList.add("on");
+  if (sound !== false) beep();
+  if ("Notification" in window && Notification.permission === "granted"){
+    try { new Notification("Мой план роста", { body: String(text).replace(/<[^>]+>/g, "") }); } catch (e) {}
+  }
+}
+function tickReminders(){
+  var now = new Date(), nr = nextReminder(state, now);
+  var q = (state.reminders || {}).quiet_hours;
+  if (!nr.item) return;
+  if (inQuietHours(now, q)) return;
+  var key = nr.item.kind + ":" + (nr.item.task_id || "") + ":" + keyOf(nr.item.at);
+  if (now >= nr.item.at && !fired[key]){
+    fired[key] = 1;
+    var list = nr.plan.filter(function(i){ return keyOf(i.at) === keyOf(now) && i.at <= now; });
+    banner("<b>Напоминание " + pad2(now.getHours()) + ":" + pad2(now.getMinutes()) + "</b><br>" +
+      (list.length ? list.slice(0, 6).map(function(i){ return "• " + esc(i.label); }).join("<br>") : "• " + esc(nr.item.label)),
+      true);
+    logEvent("note", nr.item.task_id, "напоминание показано: " + nr.item.kind);
+    save();
+  }
+}
+
+/* --- отрисовка --- */
+function taskHTML(t, now){
+  var dl = daysBetween(todayKey(now), t.deadline);
+  var cls = t.implemented ? "bad ok" : (dl < 0 ? "bad" : (dl === 0 ? "warn" : ""));
+  var tags = (t.tags || []).map(function(x){
+    return '<span class="badge' + (x === "crit" ? " bad" : "") + '">' + esc(x) + "</span>"; }).join("");
+  return '<li class="task' + (t.implemented ? " done" : "") + '" data-id="' + esc(t.id) + '">' +
+    '<button class="chk" data-act="impl" aria-pressed="' + (t.implemented ? "true" : "false") + '" ' +
+      'title="уже реализовано">' + (t.implemented ? "✓" : "") + "</button>" +
+    '<div class="t"><b>' + esc(t.title) + "</b>" +
+      '<div class="mut">' + tags +
+      '<span class="badge ' + cls + '">' + esc(fmtDeadline(t.deadline, now)) + "</span>" +
+      '<span class="badge">~' + esc(t.hours) + " ч</span>" +
+      (t.step_id ? '<span class="badge">шаг ' + esc(t.step_id) + "</span>" : "") +
+      (t.repeat ? '<span class="badge acc">' + esc(t.repeat) + "</span>" : "") +
+      "</div>" +
+      (t.why ? '<div class="mut">зачем: ' + esc(t.why) + "</div>" : "") +
+      (t.auto ? '<div class="mut">авто: ' + esc(t.auto) + "</div>" : "") +
+    "</div>" +
+    '<div class="row noprint" style="flex:0 0 auto">' +
+      '<button class="sm" data-act="d1" title="перенести на день">+1д</button>' +
+      '<button class="sm" data-act="d7" title="перенести на неделю">+7д</button>' +
+      '<button class="sm" data-act="edit" title="правка">✎</button>' +
+      '<button class="sm" data-act="del" title="удалить">✕</button>' +
+    "</div></li>";
+}
+function render(){
+  var now = new Date(), t = todayKey(now), p = progress(state), w = weekLoad(state, now), b = dueBuckets(state, now);
+  $("hTitle").textContent = (state.meta && state.meta.title) || "Мой план роста";
+  $("hDate").textContent = weekdayRu(t) + " " + fmtDate(t) + "." + t.slice(0, 4) + " · " + (state.meta && state.meta.stage || "");
+  $("hProgTxt").textContent = "реализовано " + p.implemented + " из " + p.total + " (" + p.pct + "%)";
+  $("hProgBar").style.width = p.pct + "%";
+  $("hLoad").innerHTML = "неделя: <b class='" + (w.over ? "over" : "") + "'>" + w.hours + " ч</b> из " + w.budget +
+    " ч бюджета (" + w.share_of_total_pct + "% от " + w.total_budget + " ч/нед всего)";
+
+  var nw = [];
+  nw.push('<div class="row"><span class="badge ' + (b.overdue.length ? "bad" : "ok") + '">просрочено ' + b.overdue.length + "</span>" +
+    '<span class="badge ' + (b.today.length ? "warn" : "ok") + '">сегодня ' + b.today.length + "</span>" +
+    '<span class="badge">3 дня ' + b.next3.length + '</span><span class="badge">неделя ' + b.week.length + "</span>" +
+    '<span class="badge">открыто всего ' + openTasks(state).length + "</span></div>");
+  if (b.overdue.length){
+    nw.push('<h2 style="margin-top:10px;color:var(--bad)">Просрочено — решить сегодня: сделать или перенести с причиной</h2><ul class="tasks">' +
+      b.overdue.map(function(x){ return taskHTML(x, now); }).join("") + "</ul>");
+  }
+  if (b.today.length){
+    nw.push('<h2 style="margin-top:10px">Сегодня</h2><ul class="tasks">' + b.today.map(function(x){ return taskHTML(x, now); }).join("") + "</ul>");
+  }
+  if (b.next3.length){
+    nw.push('<h2 style="margin-top:10px">Ближайшие 3 дня</h2><ul class="tasks">' + b.next3.map(function(x){ return taskHTML(x, now); }).join("") + "</ul>");
+  }
+  if (!b.overdue.length && !b.today.length && !b.next3.length){
+    nw.push('<p class="mut" style="margin:10px 0 0">На три дня вперёд дедлайнов нет. Ближайший: ' +
+      (b.week[0] ? esc(b.week[0].deadline) + " — " + esc(b.week[0].title) : "не назначен") + ".</p>");
+  }
+  $("nowBody").innerHTML = nw.join("");
+
+  var sb = [];
+  p.by_step.forEach(function(s){
+    var step = stepById(state, s.id);
+    var ts = state.tasks.filter(function(x){ return x.step_id === s.id; })
+      .sort(function(a, c){ return a.deadline < c.deadline ? -1 : (a.deadline > c.deadline ? 1 : 0); });
+    var dl = daysBetween(t, s.deadline);
+    sb.push('<details class="step"' + (s.id === (activeStep(state, now) || {}).id ? " open" : "") + ">" +
+      "<summary>Шаг " + s.id + ". " + esc(s.title) +
+      ' <span class="badge ' + (dl < 0 ? "bad" : (dl <= 2 ? "warn" : "")) + '">' + esc(fmtDeadline(s.deadline, now)) + "</span>" +
+      ' <span class="badge ' + (s.implemented === s.total ? "ok" : "") + '">' + s.implemented + "/" + s.total + "</span>" +
+      ' <span class="badge' + (s.hours_over_budget > 0 ? " warn" : "") + '">осталось ~' + s.hours_left + " ч из " + s.hours_budget + "</span>" +
+      "</summary>" +
+      '<p class="mut" style="margin:8px 0">результат: ' + esc(step && step.outcome || "") + "</p>" +
+      '<ul class="tasks">' + (ts.length ? ts.map(function(x){ return taskHTML(x, now); }).join("")
+        : '<li class="mut" style="padding:6px">задач нет</li>') + "</ul></details>");
+  });
+  var reg = state.tasks.filter(function(x){ return !x.step_id; });
+  if (reg.length){
+    sb.push('<details class="step"><summary>Регулярно (вне шагов) <span class="badge">' + reg.length + "</span></summary>" +
+      '<ul class="tasks">' + reg.map(function(x){ return taskHTML(x, now); }).join("") + "</ul></details>");
+  }
+  $("stepsBox").innerHTML = sb.join("");
+
+  var nr = nextReminder(state, now), R = state.reminders || {};
+  $("remBody").innerHTML =
+    "<b>Ежедневно</b><span>" + esc((R.daily || {}).time || "—") + " — " + esc(((R.daily || {}).show || []).join(", ")) + "</span>" +
+    "<b>Еженедельно</b><span>" + esc((R.weekly || {}).day || "") + " " + esc((R.weekly || {}).time || "") + "</span>" +
+    "<b>За сколько дней до дедлайна</b><span>" + esc(((R.per_task || {}).lead_days || []).join(" и ")) + "</span>" +
+    "<b>Просрочка</b><span>напоминать " + esc((R.per_task || {}).escalate_overdue || "—") + "</span>" +
+    "<b>Тихие часы</b><span>" + esc(((R.quiet_hours || {}).from) || "") + "–" + esc(((R.quiet_hours || {}).to) || "") + "</span>" +
+    "<b>Ближайшее</b><span>" + (nr.at ? esc(nr.at.toLocaleString("ru-RU")) + " — " + esc(nr.item.label) : "нет") + "</span>" +
+    "<b>Уведомления браузера</b><span>" + ("Notification" in window ? Notification.permission : "не поддерживаются") + "</span>";
+
+  var c = state.decision_criteria || {}, m = state.metrics || {};
+  $("metBody").innerHTML = '<table><tr><th>метрика</th><th>факт</th><th>критерий</th><th></th></tr>' +
+    row("Серия дней заполнения", m.streak_days, "≥ " + (c.min_streak_days || "—"), "streak_days") +
+    row("Внешние пользователи", m.external_users, "≥ " + (c.min_external_users || "—"), "external_users") +
+    row("Оставили контакт", m.contacts_total, "≥ " + (c.min_contacts || "—"), "contacts_total") +
+    row("Часов на поддержку в неделю", m.support_hours_last_week, "≤ " + (c.max_support_hours_per_week || "—"), "support_hours_last_week") +
+    "</table><p class='hint'>Критерии правятся ДО подсчёта факта (задача T017). Клик по «изменить» — одно поле.</p>" +
+    (state.decision ? "<p><b>Решение:</b> " + esc(typeof state.decision === "string" ? state.decision : JSON.stringify(state.decision)) + "</p>" : "");
+  function row(name, fact, crit, field){
+    return "<tr><td>" + esc(name) + "</td><td>" + (fact == null ? "—" : esc(fact)) + "</td><td>" + esc(crit) +
+      "</td><td><button class='sm noprint' data-met='" + field + "'>изменить</button></td></tr>";
+  }
+
+  $("logBody").textContent = (state.log || []).slice(-30).reverse().map(function(e){
+    return e.ts.slice(0, 16).replace("T", " ") + " · " + e.kind + (e.task_id ? " [" + e.task_id + "]" : "") +
+      (e.note ? " — " + e.note : "");
+  }).join("\n") || "пусто";
+}
+
+/* --- события --- */
+document.addEventListener("click", function(e){
+  var btn = (e.target && e.target.closest) ? e.target.closest("[data-act]") : null;
+  if (btn){
+    var li = btn.closest("[data-id]"), id = li && li.dataset.id, act = btn.dataset.act;
+    if (!id) return;
+    if (act === "impl") setImplemented(id, !find(id).implemented);
+    if (act === "d1") moveDeadline(id, 1);
+    if (act === "d7") moveDeadline(id, 7);
+    if (act === "edit") editTask(id);
+    if (act === "del") removeTask(id);
+    return;
+  }
+  var met = (e.target && e.target.closest) ? e.target.closest("[data-met]") : null;
+  if (met) setMetric(met.dataset.met);
+});
+$("qAdd").addEventListener("keydown", function(e){
+  if (e.key !== "Enter") return;
+  var v = $("qAdd").value.trim(); if (!v) return;
+  var t = parseQuickAdd(v, state, new Date());
+  if (!t.title){ alert("Пустой текст задачи"); return; }
+  addTask(t); $("qAdd").value = "";
+});
+$("bAdd").onclick = function(){
+  var v = prompt("Задача одной строкой (можно с токенами !срок ~часы #шаг @тэг * r:нед):");
+  if (!v || !v.trim()) return;
+  addTask(parseQuickAdd(v, state, new Date()));
+};
+$("bReview").onclick = async function(){
+  var txt = weeklySummary(state, new Date());
+  logEvent("review", null, "итог недели сформирован"); save();
+  try { await navigator.clipboard.writeText(txt); banner("Итог недели скопирован в буфер обмена — вставьте в чат агенту или в заметки.", false); }
+  catch (e) { banner("Скопировать не удалось (браузер не дал доступ к буферу). Текст ниже — выделите вручную.", false); }
+  var w = window.open("", "_blank");
+  if (w){ w.document.write("<title>Итог недели</title><pre style='font:14px/1.5 Consolas,monospace;white-space:pre-wrap'>" +
+    esc(txt) + "</pre>"); }
+};
+$("bRem").onclick = function(){
+  var nr = nextReminder(state, new Date()), plan = nr.plan;
+  banner("Ближайшее: " + (nr.at ? nr.at.toLocaleString("ru-RU") + " — " + esc(nr.item.label) : "нет") +
+    "<br>Всего в плане напоминаний: " + plan.length + ". Следующие 5:<br>" +
+    plan.slice(0, 5).map(function(i){ return "• " + esc(i.at.toLocaleString("ru-RU")) + " " + esc(i.label); }).join("<br>"), false);
+};
+$("bValidate").onclick = function(){
+  var e = validate(state);
+  banner(e.length ? "<b>Найдено проблем: " + e.length + "</b><br>" + e.slice(0, 8).map(esc).join("<br>")
+    : "<b>Данные в порядке.</b> Дедлайны, статусы, лимиты и бюджет недели согласованы.", false);
+};
+$("bExport").onclick = function(){
+  var blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+  var a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "plan-" + todayKey() + ".json";
+  document.body.appendChild(a); a.click(); a.remove();
+  logEvent("note", null, "экспорт JSON"); save();
+};
+$("bBind").onclick = async function(){
+  if (!window.showOpenFilePicker){
+    banner("Этот браузер не умеет писать в файл сам. Работаем через автосохранение в браузере + кнопку «Скачать JSON».", false);
+    return;
+  }
+  try {
+    var h = (await window.showOpenFilePicker({ types: [{ description: "JSON", accept: { "application/json": [".json"] } }] }))[0];
+    var data = await readFileHandle(h);
+    if (!data || !data.tasks) throw new Error("в файле нет поля tasks");
+    state = data; fileHandle = h; await saveHandle(h);
+    logEvent("import", null, "подключён файл " + (h.name || "plan.json"));
+    save(); render(); banner("Файл подключён: теперь каждая правка пишется прямо в " + esc(h.name || "plan.json") + ".", false);
+  } catch (e) { banner("Не подключилось: " + esc(e.message || e), false); }
+};
+$("bIntake").onclick = function(){
+  var b = $("cIntake");
+  b.style.display = (b.style.display === "none" || !b.style.display) ? "block" : "none";
+  if (b.style.display === "block") $("taIntake").focus();
+};
+$("bIntakeClose").onclick = function(){ $("cIntake").style.display = "none"; };
+$("bIntakeOk").onclick = function(){
+  var list = parseIntake($("taIntake").value, state, new Date());
+  if (!list.length){ $("intakeHint").textContent = "Ни одной строки не распознано. Строка = задача, например: позвонить Ивану | спросить про ЧПУ | ~0.5h | !+2d"; return; }
+  list.forEach(function(t){ addTask(t); });
+  logEvent("import", null, "из опросника добавлено задач: " + list.length);
+  $("taIntake").value = "";
+  $("intakeHint").textContent = "Добавлено: " + list.length + ". Дедлайны проставлены от текущего шага — проверьте и поправьте там, где нужно.";
+  save(); render();
+  banner("Добавлено из опросника: " + list.length + ".", false);
+};
+$("bNotify").onclick = async function(){
+  if (!("Notification" in window)){ banner("Браузер не поддерживает уведомления — работают баннер и звук.", false); return; }
+  try { var p = await Notification.requestPermission(); banner("Разрешение уведомлений: " + p, false); render(); }
+  catch (e) { banner("Не удалось запросить разрешение: " + esc(e.message || e), false); }
+};
+$("bSound").onclick = function(){ beep(); banner("Звук работает. Напоминания: баннер внизу + звук + уведомление браузера (если разрешено).", false); };
+window.addEventListener("keydown", function(e){
+  if (e.key === "n" && (e.ctrlKey || e.metaKey)){ e.preventDefault(); $("qAdd").focus(); }
+});
+
+/* --- старт --- */
+(async function(){
+  var mode = new URLSearchParams(location.search).get("mode");
+  await boot();
+  if (location.protocol !== "file:") { var bl = $("backLink"); if (bl) bl.style.display = "inline"; }
+  render();
+  if (mode === "week"){ $("bReview").click(); }
+  if (mode === "daily"){ var nr = nextReminder(state, new Date()); beep();
+    banner("<b>Ежедневное напоминание</b><br>" + (dueBuckets(state, new Date()).overdue.length + dueBuckets(state, new Date()).today.length) +
+      " задач требуют внимания сегодня.", true); }
+  setInterval(tickReminders, 30000);
+  setInterval(render, 300000);
+  tickReminders();
+  var errs = validate(state);
+  if (errs.length) console.warn("проверка данных:", errs);
+})();
+/* ==== /APP ==== */
+</script>
+</body>
+</html>
