@@ -24,7 +24,7 @@ window.SIXMIN_CONFIG = {
 
   // ── 3. ПРОЧЕЕ ──────────────────────────────────────────────────────
   defaultTimezone: "Europe/Moscow",
-  version: "9.0.2"
+  version: "9.0.3"
 };
 
 /* ── Контент: вопросы (свои формулировки, пул вариантов для ротации) ── */
@@ -1147,7 +1147,7 @@ const App = (() => {
     try {
       const all = await Store.allEntries();
       const n = all.filter(e => e.dirty).length;
-      el.textContent = n ? "ждут отправки: " + n : "всё отправлено";
+      el.textContent = n ? "в очереди: " + n : "всё отправлено";
       el.style.color = n ? "var(--danger)" : "var(--ok)";
     } catch (e) { el.textContent = ""; }
   }

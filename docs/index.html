@@ -60,7 +60,7 @@ html[data-theme="dark"]{--bg:#0B0B0B;--card:#161616;--ink:#F5F5F5;--muted:#9C9C9
 }
 
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;padding:0;height:100%}
+html,body{margin:0;padding:0;height:100%;overflow-x:hidden}
 body{
   font-family:var(--font);
   background:var(--bg);
@@ -88,7 +88,7 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
 /* ── экраны ───────────────────────────────── */
 .screen{display:none;min-height:100vh;min-height:100dvh;flex-direction:column}
 .screen.active{display:flex}
-.content{flex:1;overflow-y:auto;padding:14px 16px calc(var(--tab-h) + env(safe-area-inset-bottom) + 24px);
+.content{flex:1;overflow-y:auto;overflow-x:hidden;padding:14px 16px calc(var(--tab-h) + env(safe-area-inset-bottom) + 24px);
   -webkit-overflow-scrolling:touch}
 #screen-form .content,#screen-quick .content,#screen-done .content{padding-bottom:110px}
 
@@ -244,8 +244,13 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
 .seg button.on{background:var(--accent);border-color:var(--accent);color:#fff}
 .code-row{display:flex;gap:10px;align-items:center;margin-top:8px}
 .big-code{font-size:26px;letter-spacing:.18em;font-weight:700;padding:10px 16px;flex:1;text-align:center}
-.sync-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px}
-.sync-state{font-size:13.5px;color:var(--muted)}
+/* v9.0.3: строка синхронизации переносится и не может распереть экран вбок (кейс 23.10.2026:
+   три flex-элемента без wrap — почта, счётчик, кнопка — не умещались в 390 px, контейнер получал
+   горизонтальную прокрутку и весь экран «Сегодня» уезжал вбок). Кнопка — отдельной строкой,
+   во всю ширину: крупная цель для пальца. */
+.sync-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;flex-wrap:wrap}
+.sync-state{font-size:13.5px;color:var(--muted);min-width:0;overflow-wrap:anywhere}
+.sync-row .link-btn{flex:1 1 100%;text-align:center;padding:10px 12px;border:1px solid var(--line);border-radius:12px}
 .version{color:var(--muted);font-size:12.5px;text-align:center;margin:18px 0 0}
 
 /* ── экран успеха ─────────────────────────── */
@@ -642,7 +647,7 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
       </div>
     </div>
 
-    <p class="version"><span id="build-info">v9.0.2</span> · данные на устройстве + Supabase</p>
+    <p class="version"><span id="build-info">v9.0.3</span> · данные на устройстве + Supabase</p>
   </main>
 </section>
 
@@ -714,7 +719,7 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
   <button data-tab="settings"><span>⚙️</span>Настройки</button>
 </nav>
 
-<script defer src="js/bundle.js?v=093"></script>
-<script defer src="js/v02.js?v=125"></script>
+<script defer src="js/bundle.js?v=094"></script>
+<script defer src="js/v02.js?v=126"></script>
 </body>
 </html>
