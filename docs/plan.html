@@ -161,7 +161,28 @@ td,th{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertic
         "экспертиза и приёмка чужих объектов",
         "клиенты «дешевле и быстрее»",
         "платные инструменты до первого дохода"
-      ]
+      ],
+      "buckets": {
+        "effective_from": "2026-10-26",
+        "basis": "слово владельца 23.10.2026: график «офис» уходит, с 01.09 работа была только офисной; экспорт sixmin-2026-10-23.json содержит записи лишь с 05.10 и без данных смен, поэтому история до 05.10 для корзин не используется",
+        "rost": {
+          "hours": 6,
+          "match": "шаги 1..6 и регулярные без тэгов работа/быт/повседневное"
+        },
+        "rabota": {
+          "hours": 12,
+          "match": "тэг работа (своё производство ЧПУ/графика, VK-продажи, сидя и онлайн)"
+        },
+        "byt": {
+          "hours": 5,
+          "match": "тэги быт или повседневное"
+        },
+        "rezerv": {
+          "hours": 7,
+          "match": "семья, отдых, здоровье — часы задач сюда не падают, это защита от перегруза"
+        },
+        "sum_equals": 30
+      }
     },
     "rules": {
       "deadline_is_hard": true,
@@ -171,11 +192,14 @@ td,th{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertic
       "review": "вс 18:00 — 15 минут: что сделано, что переносим"
     }
   },
-
   "reminders": {
     "daily": {
       "time": "09:00",
-      "show": ["overdue", "today", "next_3_days"],
+      "show": [
+        "overdue",
+        "today",
+        "next_3_days"
+      ],
       "sound": true,
       "windows_task_name": "MoyPlan-0900",
       "how": "Планировщик Windows открывает plan.html в режиме окна; страница показывает три списка и звучит сигнал"
@@ -183,16 +207,26 @@ td,th{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertic
     "weekly": {
       "day": "sun",
       "time": "18:00",
-      "show": ["week_result", "next_week", "load_check"],
+      "show": [
+        "week_result",
+        "next_week",
+        "load_check"
+      ],
       "sound": true,
       "windows_task_name": "MoyPlan-Sun1800"
     },
     "per_task": {
-      "lead_days": [2, 0],
+      "lead_days": [
+        2,
+        0
+      ],
       "escalate_overdue": "daily",
       "repeat_tasks": "в день повторения, до отметки «реализовано»"
     },
-    "quiet_hours": { "from": "22:00", "to": "08:00" },
+    "quiet_hours": {
+      "from": "22:00",
+      "to": "08:00"
+    },
     "channels": [
       "scheduled_open (Планировщик Windows — работает при закрытом браузере)",
       "in_page_banner (при открытом plan.html)",
@@ -200,7 +234,6 @@ td,th{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertic
       "sound (WebAudio, без файлов)"
     ]
   },
-
   "steps": [
     {
       "id": 1,
@@ -216,7 +249,9 @@ td,th{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertic
       "outcome": "единый список входящих, 3 критичных в работе, выпуск накатан на оба хоста",
       "deadline": "2026-10-29",
       "hours_budget": 1.5,
-      "depends_on": [1]
+      "depends_on": [
+        1
+      ]
     },
     {
       "id": 3,
@@ -224,7 +259,9 @@ td,th{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertic
       "outcome": "5 конкретных людей из своих кругов (ЧПУ/графика, сидячая работа, семьи), каждому написано",
       "deadline": "2026-11-01",
       "hours_budget": 1.5,
-      "depends_on": [2]
+      "depends_on": [
+        2
+      ]
     },
     {
       "id": 4,
@@ -232,7 +269,9 @@ td,th{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertic
       "outcome": "страница «что это и для кого» открыта по ссылке, пост опубликован, есть способ оставить контакт",
       "deadline": "2026-11-08",
       "hours_budget": 2,
-      "depends_on": [3]
+      "depends_on": [
+        3
+      ]
     },
     {
       "id": 5,
@@ -240,7 +279,9 @@ td,th{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertic
       "outcome": "3–5 интервью по 20 минут онлайн, по каждому: боль / возражение / готовность платить",
       "deadline": "2026-11-15",
       "hours_budget": 2,
-      "depends_on": [4]
+      "depends_on": [
+        4
+      ]
     },
     {
       "id": 6,
@@ -248,10 +289,11 @@ td,th{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertic
       "outcome": "критерии зафиксированы, факт посчитан, решение записано (в том числе про модуль «Дневник»)",
       "deadline": "2026-11-22",
       "hours_budget": 1,
-      "depends_on": [5]
+      "depends_on": [
+        5
+      ]
     }
   ],
-
   "tasks": [
     {
       "id": "T001",
@@ -265,10 +307,18 @@ td,th{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertic
       "status": "done",
       "auto": "агент выгружает из dnevnik/СТАТУС-ВОССТАНОВЛЕНИЯ.md список версий v0.8.15…v0.8.63 и экранов",
       "evidence": "dnevnik/СТАТУС-ВОССТАНОВЛЕНИЯ.md, разделы по версиям",
-      "lead_days": [2, 0],
+      "lead_days": [
+        2,
+        0
+      ],
       "repeat": null,
-      "tags": ["факт"],
-      "intake": { "source": "agent_export", "field": "features_done" }
+      "tags": [
+        "факт"
+      ],
+      "intake": {
+        "source": "agent_export",
+        "field": "features_done"
+      }
     },
     {
       "id": "T002",
@@ -282,10 +332,18 @@ td,th{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertic
       "status": "done",
       "auto": "хотфикс v0.8.63: экран и кнопки до сети, кэш по файлам, страница «нет сети» вместо белого экрана",
       "evidence": "v0.8.63 подтверждена на обоих хостах 22.10.2026",
-      "lead_days": [2, 0],
+      "lead_days": [
+        2,
+        0
+      ],
       "repeat": null,
-      "tags": ["приложение"],
-      "intake": { "source": "release_note", "field": "offline_ok" }
+      "tags": [
+        "приложение"
+      ],
+      "intake": {
+        "source": "release_note",
+        "field": "offline_ok"
+      }
     },
     {
       "id": "T003",
@@ -299,10 +357,24 @@ td,th{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertic
       "status": "todo",
       "auto": "агент готовит 3 вопроса одной фразой каждый; ответы вставляются в plan.html одним блоком текста и сами становятся задачами",
       "evidence": "тексты ответов в plan.json → tasks (intake.source = family_feedback)",
-      "lead_days": [2, 0],
+      "lead_days": [
+        2,
+        0
+      ],
       "repeat": null,
-      "tags": ["семья", "сидя"],
-      "intake": { "source": "family_feedback", "field": "answers_raw", "questionnaire": ["что мешает записать утро/вечер?", "какой экран лишний?", "чего не хватает одним словом?"] }
+      "tags": [
+        "семья",
+        "сидя"
+      ],
+      "intake": {
+        "source": "family_feedback",
+        "field": "answers_raw",
+        "questionnaire": [
+          "что мешает записать утро/вечер?",
+          "какой экран лишний?",
+          "чего не хватает одним словом?"
+        ]
+      }
     },
     {
       "id": "T004",
@@ -316,10 +388,18 @@ td,th{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertic
       "status": "todo",
       "auto": "вкладка «Прогресс» → 🔥 текущая серия; переписать число в поле «метрика» (в plan.html — одна кнопка)",
       "evidence": "meta.metrics.streak_days",
-      "lead_days": [1, 0],
+      "lead_days": [
+        1,
+        0
+      ],
       "repeat": "weekly",
-      "tags": ["метрика"],
-      "intake": { "source": "app_screen", "field": "streak_days" }
+      "tags": [
+        "метрика"
+      ],
+      "intake": {
+        "source": "app_screen",
+        "field": "streak_days"
+      }
     },
     {
       "id": "T005",
@@ -333,10 +413,18 @@ td,th{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertic
       "status": "todo",
       "auto": "вставка сырого текста в plan.html («Из опросника») → разбор по строкам → задачи с черновиками дедлайнов",
       "evidence": "tasks с tags=[входящие]",
-      "lead_days": [2, 0],
+      "lead_days": [
+        2,
+        0
+      ],
       "repeat": null,
-      "tags": ["входящие"],
-      "intake": { "source": "paste_raw", "field": "lines" }
+      "tags": [
+        "входящие"
+      ],
+      "intake": {
+        "source": "paste_raw",
+        "field": "lines"
+      }
     },
     {
       "id": "T006",
@@ -350,10 +438,18 @@ td,th{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertic
       "status": "todo",
       "auto": "в plan.html — флаг «критично» (тэг #crit), он же поднимает задачу в начало списка",
       "evidence": "tasks с tags=[crit] — ровно 3",
-      "lead_days": [2, 0],
+      "lead_days": [
+        2,
+        0
+      ],
       "repeat": null,
-      "tags": ["решение"],
-      "intake": { "source": "manual_flag", "field": "critical_ids" }
+      "tags": [
+        "решение"
+      ],
+      "intake": {
+        "source": "manual_flag",
+        "field": "critical_ids"
+      }
     },
     {
       "id": "T007",
@@ -367,10 +463,18 @@ td,th{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertic
       "status": "done",
       "auto": "механизм отлажен: патч-скрипт → 20 наборов тестов → чек-лист версии → DEPLOY-зип → 2 шага загрузки → проверка хостов скриптом",
       "evidence": ".patch/p0835…p0863c, DEPLOY-v0863.zip, ПРОВЕРКА-ХОСТОВ.py exit 0",
-      "lead_days": [2, 0],
+      "lead_days": [
+        2,
+        0
+      ],
       "repeat": null,
-      "tags": ["приложение"],
-      "intake": { "source": "release", "field": "release_id" }
+      "tags": [
+        "приложение"
+      ],
+      "intake": {
+        "source": "release",
+        "field": "release_id"
+      }
     },
     {
       "id": "T008",
@@ -384,10 +488,20 @@ td,th{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertic
       "status": "todo",
       "auto": "план пишет 5 строк в plan.html: имя / круг / почему ему / как связаться — дальше список сам напоминает по каждому",
       "evidence": "meta.audience — 5 записей",
-      "lead_days": [3, 1, 0],
+      "lead_days": [
+        3,
+        1,
+        0
+      ],
       "repeat": null,
-      "tags": ["люди", "онлайн"],
-      "intake": { "source": "questionnaire", "field": "audience_list" }
+      "tags": [
+        "люди",
+        "онлайн"
+      ],
+      "intake": {
+        "source": "questionnaire",
+        "field": "audience_list"
+      }
     },
     {
       "id": "T009",
@@ -401,10 +515,19 @@ td,th{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertic
       "status": "todo",
       "auto": "агент пишет шаблон под каждый круг, владелец подставляет имя и отправляет",
       "evidence": "тексты в meta.outreach_template + отметки «отправлено» по каждому имени",
-      "lead_days": [2, 0],
+      "lead_days": [
+        2,
+        0
+      ],
       "repeat": null,
-      "tags": ["люди", "текст"],
-      "intake": { "source": "agent_draft", "field": "message_template" }
+      "tags": [
+        "люди",
+        "текст"
+      ],
+      "intake": {
+        "source": "agent_draft",
+        "field": "message_template"
+      }
     },
     {
       "id": "T010",
@@ -418,10 +541,18 @@ td,th{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertic
       "status": "done",
       "auto": "решено ранее: зеркала studiomwm.ru + github.io/dnevnik/, контент v4 (посты, ЧАВО, инструкция) написан 21.10",
       "evidence": "dnevnik/docs-project/vk-chavo-v4-2026-10-21.md, posts-series-v3",
-      "lead_days": [2, 0],
+      "lead_days": [
+        2,
+        0
+      ],
       "repeat": null,
-      "tags": ["0₽"],
-      "intake": { "source": "decision", "field": "channel" }
+      "tags": [
+        "0₽"
+      ],
+      "intake": {
+        "source": "decision",
+        "field": "channel"
+      }
     },
     {
       "id": "T011",
@@ -435,10 +566,20 @@ td,th{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertic
       "status": "todo",
       "auto": "агент собирает страницу из готового контента v4; владелец проверяет глазами и говорит «накатил»",
       "evidence": "pwa/ + страница доступна по ссылке; проверка хэшей скриптом",
-      "lead_days": [3, 1, 0],
+      "lead_days": [
+        3,
+        1,
+        0
+      ],
       "repeat": null,
-      "tags": ["приложение", "0₽"],
-      "intake": { "source": "agent_build", "field": "landing_url" }
+      "tags": [
+        "приложение",
+        "0₽"
+      ],
+      "intake": {
+        "source": "agent_build",
+        "field": "landing_url"
+      }
     },
     {
       "id": "T012",
@@ -452,10 +593,19 @@ td,th{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertic
       "status": "todo",
       "auto": "текст готов (posts-series-v3, post-release-2026-10-21); владелец публикует, в plan.html жмёт «реализовано»",
       "evidence": "ссылка на пост в meta.publications",
-      "lead_days": [3, 1, 0],
+      "lead_days": [
+        3,
+        1,
+        0
+      ],
       "repeat": null,
-      "tags": ["публично"],
-      "intake": { "source": "manual", "field": "post_url" }
+      "tags": [
+        "публично"
+      ],
+      "intake": {
+        "source": "manual",
+        "field": "post_url"
+      }
     },
     {
       "id": "T013",
@@ -469,10 +619,19 @@ td,th{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertic
       "status": "todo",
       "auto": "Telegram-бот уже жив (tg-webhook в Supabase) — агент добавляет команду /start со сбором контакта",
       "evidence": "meta.metrics.contacts_total",
-      "lead_days": [2, 0],
+      "lead_days": [
+        2,
+        0
+      ],
       "repeat": null,
-      "tags": ["0₽", "метрика"],
-      "intake": { "source": "agent_build", "field": "contacts_channel" }
+      "tags": [
+        "0₽",
+        "метрика"
+      ],
+      "intake": {
+        "source": "agent_build",
+        "field": "contacts_channel"
+      }
     },
     {
       "id": "T014",
@@ -486,10 +645,21 @@ td,th{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertic
       "status": "todo",
       "auto": "агент готовит 5 вопросов; после каждого разговора владелец вставляет 3 строки — они становятся задачами",
       "evidence": "meta.interviews — 3 записи",
-      "lead_days": [3, 1, 0],
+      "lead_days": [
+        3,
+        1,
+        0
+      ],
       "repeat": null,
-      "tags": ["люди", "онлайн", "сидя"],
-      "intake": { "source": "paste_raw", "field": "interview_notes" }
+      "tags": [
+        "люди",
+        "онлайн",
+        "сидя"
+      ],
+      "intake": {
+        "source": "paste_raw",
+        "field": "interview_notes"
+      }
     },
     {
       "id": "T015",
@@ -503,10 +673,18 @@ td,th{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertic
       "status": "todo",
       "auto": "форма на 3 поля в plan.html; заполнение сразу после разговора, пока не забылось",
       "evidence": "meta.interviews[].pain/objection/willingness",
-      "lead_days": [2, 0],
+      "lead_days": [
+        2,
+        0
+      ],
       "repeat": null,
-      "tags": ["факт"],
-      "intake": { "source": "questionnaire", "field": "interview_triplet" }
+      "tags": [
+        "факт"
+      ],
+      "intake": {
+        "source": "questionnaire",
+        "field": "interview_triplet"
+      }
     },
     {
       "id": "T016",
@@ -520,10 +698,18 @@ td,th{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertic
       "status": "todo",
       "auto": "агент группирует по ключевым словам из трёх полей, владелец утверждает grouping глазами",
       "evidence": "meta.findings.repeated / meta.findings.single",
-      "lead_days": [2, 0],
+      "lead_days": [
+        2,
+        0
+      ],
       "repeat": null,
-      "tags": ["решение"],
-      "intake": { "source": "agent_analysis", "field": "findings" }
+      "tags": [
+        "решение"
+      ],
+      "intake": {
+        "source": "agent_analysis",
+        "field": "findings"
+      }
     },
     {
       "id": "T017",
@@ -537,10 +723,19 @@ td,th{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertic
       "status": "todo",
       "auto": "в plan.json уже лежат значения по умолчанию (meta.decision_criteria) — владелец только правит числа",
       "evidence": "meta.decision_criteria",
-      "lead_days": [3, 1, 0],
+      "lead_days": [
+        3,
+        1,
+        0
+      ],
       "repeat": null,
-      "tags": ["решение"],
-      "intake": { "source": "manual", "field": "criteria" }
+      "tags": [
+        "решение"
+      ],
+      "intake": {
+        "source": "manual",
+        "field": "criteria"
+      }
     },
     {
       "id": "T018",
@@ -554,10 +749,18 @@ td,th{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertic
       "status": "todo",
       "auto": "метрики собираются в meta.metrics (серия — из вкладки «Прогресс», контакты — из бота, часы — из log этого плана)",
       "evidence": "meta.metrics",
-      "lead_days": [2, 0],
+      "lead_days": [
+        2,
+        0
+      ],
       "repeat": null,
-      "tags": ["метрика"],
-      "intake": { "source": "app_screen", "field": "metrics_snapshot" }
+      "tags": [
+        "метрика"
+      ],
+      "intake": {
+        "source": "app_screen",
+        "field": "metrics_snapshot"
+      }
     },
     {
       "id": "T019",
@@ -571,10 +774,19 @@ td,th{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertic
       "status": "todo",
       "auto": "plan.html генерирует текст решения по фактам (критерии + метрики), владелец добавляет одну фразу от себя",
       "evidence": "meta.decision + log",
-      "lead_days": [3, 1, 0],
+      "lead_days": [
+        3,
+        1,
+        0
+      ],
       "repeat": null,
-      "tags": ["решение"],
-      "intake": { "source": "generated", "field": "decision_text" }
+      "tags": [
+        "решение"
+      ],
+      "intake": {
+        "source": "generated",
+        "field": "decision_text"
+      }
     },
     {
       "id": "R001",
@@ -588,30 +800,228 @@ td,th{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertic
       "status": "todo",
       "auto": "plan.html сам собирает текст итога (кнопка «Итог недели» → в буфер обмена); следующее воскресенье ставится автоматически",
       "evidence": "log: запись review каждую неделю",
-      "lead_days": [1, 0],
+      "lead_days": [
+        1,
+        0
+      ],
       "repeat": "weekly",
-      "tags": ["регулярно"],
-      "intake": { "source": "generated", "field": "weekly_review" }
+      "tags": [
+        "регулярно"
+      ],
+      "intake": {
+        "source": "generated",
+        "field": "weekly_review"
+      }
     },
     {
       "id": "R002",
       "step_id": 0,
-      "title": "Проверка нагрузки: план ≤ 6 ч из 30 ч недели",
-      "why": "30 часов в неделю на всё; если план съедает больше — он убьёт семью и здоровье",
+      "title": "Проверка нагрузки: корзины недели (рост 6 / работа 12 / быт 5 из 30 ч)",
+      "why": "30 часов в неделю на всё; корзины держат работу/быт/рост в своих границах после ухода офиса",
       "hours": 0.1,
       "deadline": "2026-10-25",
       "implemented": false,
       "implemented_at": null,
       "status": "todo",
-      "auto": "plan.html считает часы недели сам и краснеет при превышении бюджета; действие владельца — перенести, а не добавить",
+      "auto": "plan.html считает часы по корзинам сам и краснеет при превышении любой; действие владельца — перенести, а не добавить",
       "evidence": "week_load в отчёте",
-      "lead_days": [1, 0],
+      "lead_days": [
+        1,
+        0
+      ],
       "repeat": "weekly",
-      "tags": ["регулярно", "здоровье"],
-      "intake": { "source": "generated", "field": "week_load" }
+      "tags": [
+        "регулярно",
+        "здоровье"
+      ],
+      "intake": {
+        "source": "generated",
+        "field": "week_load"
+      }
+    },
+    {
+      "id": "T020",
+      "step_id": 0,
+      "title": "Очистить ленту VK от постов про плитку и стройку",
+      "why": "Смешанный контент размывает позиционирование «художник, работа сидя» и путает алгоритмы VK",
+      "hours": 0.5,
+      "deadline": "2026-10-26",
+      "implemented": false,
+      "implemented_at": null,
+      "status": "todo",
+      "auto": "напоминание за 1 день и в день дедлайна; флаг «реализовано» ставит владелец",
+      "evidence": "скрин/ссылка на изменённый раздел VK",
+      "lead_days": [
+        1,
+        0
+      ],
+      "repeat": null,
+      "tags": [
+        "работа",
+        "онлайн",
+        "0₽",
+        "сидя"
+      ],
+      "intake": {
+        "source": "agent_analysis",
+        "field": "vk_audit_cleanup",
+        "questionnaire": [
+          "аудит группы VK от 23.10.2026 (вторая модель): действие, причина, оценка часов"
+        ]
+      }
+    },
+    {
+      "id": "T021",
+      "step_id": 0,
+      "title": "Удалить упоминания Instagram из описания группы VK",
+      "why": "Ссылка на запрещённую в РФ организацию несёт юридические риски и снижает охваты VK",
+      "hours": 0.2,
+      "deadline": "2026-10-26",
+      "implemented": false,
+      "implemented_at": null,
+      "status": "todo",
+      "auto": "напоминание за 1 день и в день дедлайна; флаг «реализовано» ставит владелец",
+      "evidence": "скрин/ссылка на изменённый раздел VK",
+      "lead_days": [
+        1,
+        0
+      ],
+      "repeat": null,
+      "tags": [
+        "работа",
+        "онлайн",
+        "0₽",
+        "сидя"
+      ],
+      "intake": {
+        "source": "agent_analysis",
+        "field": "vk_audit_legal",
+        "questionnaire": [
+          "аудит группы VK от 23.10.2026 (вторая модель): действие, причина, оценка часов"
+        ]
+      }
+    },
+    {
+      "id": "T022",
+      "step_id": 0,
+      "title": "Создать и закрепить пост-визитку в VK с ценами и призывом",
+      "why": "Новый посетитель должен сразу понять, что вы продаёте и как заказать, без изучения всей ленты",
+      "hours": 0.3,
+      "deadline": "2026-10-27",
+      "implemented": false,
+      "implemented_at": null,
+      "status": "todo",
+      "auto": "напоминание за 1 день и в день дедлайна; флаг «реализовано» ставит владелец",
+      "evidence": "скрин/ссылка на изменённый раздел VK",
+      "lead_days": [
+        1,
+        0
+      ],
+      "repeat": null,
+      "tags": [
+        "работа",
+        "онлайн",
+        "0₽",
+        "сидя"
+      ],
+      "intake": {
+        "source": "agent_analysis",
+        "field": "vk_audit_pinned_post",
+        "questionnaire": [
+          "аудит группы VK от 23.10.2026 (вторая модель): действие, причина, оценка часов"
+        ]
+      }
+    },
+    {
+      "id": "T023",
+      "step_id": 0,
+      "title": "Добавить 2 новых товара в раздел «Товары» VK (нарды, табличка)",
+      "why": "Увеличение витрины повышает шанс продажи без дополнительных затрат времени на создание нового контента",
+      "hours": 0.5,
+      "deadline": "2026-10-28",
+      "implemented": false,
+      "implemented_at": null,
+      "status": "todo",
+      "auto": "напоминание за 1 день и в день дедлайна; флаг «реализовано» ставит владелец",
+      "evidence": "скрин/ссылка на изменённый раздел VK",
+      "lead_days": [
+        1,
+        0
+      ],
+      "repeat": null,
+      "tags": [
+        "работа",
+        "онлайн",
+        "0₽",
+        "сидя"
+      ],
+      "intake": {
+        "source": "agent_analysis",
+        "field": "vk_audit_products",
+        "questionnaire": [
+          "аудит группы VK от 23.10.2026 (вторая модель): действие, причина, оценка часов"
+        ]
+      }
+    },
+    {
+      "id": "T024",
+      "step_id": 0,
+      "title": "Включить раздел «Обсуждения» в VK и создать тему «Отзывы»",
+      "why": "Социальное доказательство критично для продаж ручных изделий, а раздел отзывов должен быть доступен",
+      "hours": 0.2,
+      "deadline": "2026-10-28",
+      "implemented": false,
+      "implemented_at": null,
+      "status": "todo",
+      "auto": "напоминание за 1 день и в день дедлайна; флаг «реализовано» ставит владелец",
+      "evidence": "скрин/ссылка на изменённый раздел VK",
+      "lead_days": [
+        1,
+        0
+      ],
+      "repeat": null,
+      "tags": [
+        "работа",
+        "онлайн",
+        "0₽",
+        "сидя"
+      ],
+      "intake": {
+        "source": "agent_analysis",
+        "field": "vk_audit_discussions",
+        "questionnaire": [
+          "аудит группы VK от 23.10.2026 (вторая модель): действие, причина, оценка часов"
+        ]
+      }
+    },
+    {
+      "id": "T025",
+      "step_id": 0,
+      "title": "Удалить график «офис» из вкладки «Работа» (работа в офисе закончилась 21.10)",
+      "why": "пока график жив, «Найти свободные дни» и строки смен считают несуществующую занятость",
+      "hours": 0.1,
+      "deadline": "2026-10-26",
+      "implemented": false,
+      "implemented_at": null,
+      "status": "todo",
+      "auto": "владелец удаляет в приложении: Работа → график «офис» → удалить; агент не трогает облако без отдельного слова",
+      "evidence": "в «Работе» нет графика «офис», свободные дни считаются по остальным графикам",
+      "lead_days": [
+        1,
+        0
+      ],
+      "repeat": null,
+      "tags": [
+        "работа",
+        "приложение",
+        "сидя"
+      ],
+      "intake": {
+        "source": "decision",
+        "field": "shift_graph_office_removed"
+      }
     }
   ],
-
   "decision_criteria": {
     "min_streak_days": 21,
     "min_external_users": 3,
@@ -619,7 +1029,6 @@ td,th{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertic
     "min_contacts": 5,
     "note": "числа правятся ДО подсчёта факта (задача T017)"
   },
-
   "metrics": {
     "streak_days": null,
     "external_users": 0,
@@ -627,15 +1036,37 @@ td,th{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertic
     "support_hours_last_week": null,
     "updated_at": null
   },
-
   "audience": [],
   "interviews": [],
-  "findings": { "repeated": [], "single": [] },
+  "findings": {
+    "repeated": [],
+    "single": []
+  },
   "publications": [],
   "decision": null,
-
   "log": [
-    { "ts": "2026-10-22T21:50:00+03:00", "kind": "plan_created", "note": "план создан из фактов проекта: v0.8.63 на двух хостах, 20 наборов тестов, контент v4, семейная бета" }
+    {
+      "ts": "2026-10-22T21:50:00+03:00",
+      "kind": "plan_created",
+      "note": "план создан из фактов проекта: v0.8.63 на двух хостах, 20 наборов тестов, контент v4, семейная бета"
+    },
+    {
+      "ts": "2026-10-23T07:40:00+03:00",
+      "kind": "added",
+      "task_id": "T020..T024",
+      "note": "VK-аудит второй модели: 5 задач продаж (0 ₽, сидя, онлайн), корзина «работа», 1.7 ч"
+    },
+    {
+      "ts": "2026-10-23T07:40:00+03:00",
+      "kind": "added",
+      "task_id": "T025",
+      "note": "график «офис» помечен к удалению словом владельца 23.10.2026"
+    },
+    {
+      "ts": "2026-10-23T07:41:00+03:00",
+      "kind": "note",
+      "note": "корзины часов с 26.10: рост 6 / работа 12 / быт 5 / резерв 7 = 30 (разбивку скорректировал агент по слову владельца)"
+    }
   ]
 }</script>
 <script>
@@ -729,17 +1160,36 @@ function progress(state){
            by_step: byStep };
 }
 
+function bucketOf(t){
+  var tags = t.tags || [];
+  if (tags.indexOf("работа") > -1) return "rabota";
+  if (tags.indexOf("быт") > -1 || tags.indexOf("повседневное") > -1) return "byt";
+  return "rost";
+}
 function weekLoad(state, now){
   var ws = weekStartKey(todayKey(now)), we = addDays(ws, 6);
   var items = (state.tasks || []).filter(function(t){
     if (t.implemented) return false;
     return t.deadline >= ws && t.deadline <= we;
   });
-  var hours = Math.round(items.reduce(function(a, t){ return a + (+t.hours || 0); }, 0) * 100) / 100;
   var c = (state.meta && state.meta.constraints) || {};
-  var budget = +c.hours_per_week_plan_budget || 6, total = +c.hours_per_week_total || 30;
-  return { week_start: ws, week_end: we, hours: hours, budget: budget, total_budget: total,
-           over: hours > budget, share_of_total_pct: Math.round(hours / total * 100), items: items };
+  var B = c.buckets || null;   // корзины с 2026-10-26 (слово владельца 23.10: офис ушёл)
+  var budgets = { rost: +c.hours_per_week_plan_budget || 6,
+                  rabota: B ? +B.rabota.hours : 12,
+                  byt: B ? +B.byt.hours : 5 };
+  var per = {};
+  ["rost", "rabota", "byt"].forEach(function(k){
+    var its = items.filter(function(t){ return bucketOf(t) === k; });
+    var h = Math.round(its.reduce(function(a, t){ return a + (+t.hours || 0); }, 0) * 100) / 100;
+    per[k] = { hours: h, budget: budgets[k], over: h > budgets[k], items: its };
+  });
+  var all = Math.round(items.reduce(function(a, t){ return a + (+t.hours || 0); }, 0) * 100) / 100;
+  var total = +c.hours_per_week_total || 30;
+  return { week_start: ws, week_end: we,
+           hours: per.rost.hours, budget: budgets.rost,   // совместимость: часы корзины «рост»
+           by_bucket: per, all_hours: all, total_budget: total,
+           over: per.rost.over || per.rabota.over || per.byt.over,
+           share_of_total_pct: Math.round(all / total * 100), items: items };
 }
 
 function inQuietHours(d, q){
@@ -878,9 +1328,11 @@ function weeklySummary(state, now){
   L.push("ИТОГ НЕДЕЛИ " + fmtDate(ws) + "–" + fmtDate(w.week_end) + " (создано " + t + ")");
   L.push("");
   L.push("Реализовано: " + p.implemented + " из " + p.total + " (" + p.pct + "%). Осталось часов: " + p.hours_left + ".");
-  L.push("Нагрузка этой недели: " + w.hours + " ч из бюджета " + w.budget + " ч" +
-         (w.over ? " — ПРЕВЫШЕНИЕ, перенести, а не добавить" : " — в бюджете") +
-         " (" + w.share_of_total_pct + "% от " + w.total_budget + " ч/нед всего).");
+  L.push("Нагрузка недели по корзинам: " +
+         ["rost", "rabota", "byt"].map(function(k){ var b = w.by_bucket[k];
+           return k + " " + b.hours + "/" + b.budget + (b.over ? " ПРЕВЫШЕНИЕ" : ""); }).join(" · ") +
+         "; всего " + w.all_hours + " ч (" + w.share_of_total_pct + "% от " + w.total_budget +
+         " ч/нед). Превышение любой корзины = перенести, а не добавить.");
   L.push("");
   var b = dueBuckets(state, now);
   L.push("ПРОСРОЧЕНО (" + b.overdue.length + "):");
@@ -946,7 +1398,10 @@ function validate(state){
       (rules.one_step_in_progress ? " (считаются активный шаг и регулярные)" : ""));
   }
   var w = weekLoad(state, new Date());
-  if (w.over) e.push("неделя " + w.week_start + ": " + w.hours + " ч > бюджета " + w.budget + " ч");
+  ["rost", "rabota", "byt"].forEach(function(k){
+    var b = w.by_bucket[k];
+    if (b.over) e.push("неделя " + w.week_start + ", корзина " + k + ": " + b.hours + " ч > бюджета " + b.budget + " ч");
+  });
   return e;
 }
 /* ==== /CORE ==== */
@@ -1170,8 +1625,10 @@ function render(){
   $("hDate").textContent = weekdayRu(t) + " " + fmtDate(t) + "." + t.slice(0, 4) + " · " + (state.meta && state.meta.stage || "");
   $("hProgTxt").textContent = "реализовано " + p.implemented + " из " + p.total + " (" + p.pct + "%)";
   $("hProgBar").style.width = p.pct + "%";
-  $("hLoad").innerHTML = "неделя: <b class='" + (w.over ? "over" : "") + "'>" + w.hours + " ч</b> из " + w.budget +
-    " ч бюджета (" + w.share_of_total_pct + "% от " + w.total_budget + " ч/нед всего)";
+  $("hLoad").innerHTML = "неделя: " + ["rost", "rabota", "byt"].map(function(k){
+    var b = w.by_bucket[k];
+    return k + " <b class='" + (b.over ? "over" : "") + "'>" + b.hours + "/" + b.budget + "</b>";
+  }).join(" · ") + " ч (" + w.share_of_total_pct + "% от " + w.total_budget + " ч/нед)";
 
   var nw = [];
   nw.push('<div class="row"><span class="badge ' + (b.overdue.length ? "bad" : "ok") + '">просрочено ' + b.overdue.length + "</span>" +
