@@ -24,7 +24,7 @@ window.SIXMIN_CONFIG = {
 
   // ── 3. ПРОЧЕЕ ──────────────────────────────────────────────────────
   defaultTimezone: "Europe/Moscow",
-  version: "9.0.1"
+  version: "9.0.2"
 };
 
 /* ── Контент: вопросы (свои формулировки, пул вариантов для ротации) ── */
@@ -623,18 +623,23 @@ const Cloud = (() => {
   }
 
   async function push() {
-    if (!user) return { pushed: 0 };
+    if (!user) return { pushed: 0, failed: 0 };
     const all = await Store.allEntries();
     const dirty = all.filter(e => e.dirty);
-    if (!dirty.length) return { pushed: 0 };
-    let pushed = 0;
+    if (!dirty.length) return { pushed: 0, failed: 0 };
+    let pushed = 0, failed = 0, lastErr = "";
     for (let i = 0; i < dirty.length; i += 50) {
       const batch = dirty.slice(i, i + 50).map(rowOf);
       // v0.8.52: id НЕ отправляем: после локальной смены date/slot upsert со старым id
       // бил по PK (409 Conflict, запись v0.8.21). Конфликт решаем по (user_id,date,slot).
       const rows = batch.map((r) => { const c = Object.assign({}, r); delete c.id; return c; });
       const { error } = await client.from("entries").upsert(rows, { onConflict: "user_id,date,slot" });
-      if (error) { console.warn("push", error.message, error.code || "", error.details || ""); continue; }
+      if (error) {
+        // v9.0.2: ошибка пачки больше не тонет в консоли — счётчик и плашка показывают число и причину
+        console.warn("push", error.message, error.code || "", error.details || "");
+        failed += batch.length; lastErr = (error.code || "") + " " + error.message;
+        continue;
+      }
       // сверка id: сервер мог слить строку в свой id; осиротевший локальный id убираем
       const dates = batch.map((r) => r.date);
       const sel = await client.from("entries").select("id,date,slot").eq("user_id", user.id).in("date", dates);
@@ -651,7 +656,7 @@ const Cloud = (() => {
       }
       pushed += batch.length;
     }
-    return { pushed };
+    return { pushed, failed, lastErr };
   }
 
   async function pull() {
@@ -675,10 +680,19 @@ const Cloud = (() => {
     return { pulled };
   }
 
+  function withTimeoutC(promise, ms) {
+    return Promise.race([
+      promise,
+      new Promise((_res, rej) => setTimeout(() => rej(new Error("облако не отвечает " + Math.round(ms / 1000) + " с")), ms)),
+    ]);
+  }
+
   async function sync() {
     if (!configured) return { ok: false, reason: "облако не настроено" };
     try {
-      await ensureClient();
+      // v9.0.2: getSession/refresh токена мог висеть без ответа — кнопка выглядела мёртвой;
+      // теперь ждём не дольше 10 с и говорим причину вслух.
+      await withTimeoutC(ensureClient(), 10000);
     } catch (e) {
       return { ok: false, reason: e.message };
     }
@@ -688,7 +702,7 @@ const Cloud = (() => {
       const q = await pull();
       await Store.setMeta("last_sync", new Date().toISOString());
       emit();
-      return { ok: true, pushed: p.pushed, pulled: q.pulled };
+      return { ok: true, pushed: p.pushed, pulled: q.pulled, failed: p.failed || 0, lastErr: p.lastErr || "" };
     } catch (e) {
       console.error("sync", e);
       return { ok: false, reason: e.message };
@@ -1122,6 +1136,20 @@ const App = (() => {
     $("btn-sync").hidden = false;
     if (!s.user) n.textContent = "Облако настроено, вход не выполнен";
     else n.textContent = "Облако: " + s.user.email;
+    updateDirtyCount(); // v9.0.2: видно без нажатий, сколько записей ещё не ушли в облако
+  }
+
+  // v9.0.2: счётчик «ждут отправки» — ответ на кейс 23.10: владелец не видел, что синхронизация
+  // молча прошла (плашка была вне viewport), и не знал, какое устройство держит долг.
+  async function updateDirtyCount() {
+    const el = $("sync-dirty");
+    if (!el) return;
+    try {
+      const all = await Store.allEntries();
+      const n = all.filter(e => e.dirty).length;
+      el.textContent = n ? "ждут отправки: " + n : "всё отправлено";
+      el.style.color = n ? "var(--danger)" : "var(--ok)";
+    } catch (e) { el.textContent = ""; }
   }
 
   /* ═══════════ ФОРМА ═══════════ */
@@ -1764,9 +1792,18 @@ const App = (() => {
     $("info-close").onclick = closeInfo;
     $("info-back").onclick = closeInfo;
     $("btn-sync").onclick = async () => {
+      const b = $("btn-sync");
+      b.disabled = true; b.textContent = "Синхронизирую…";   // v9.0.2: кнопка показывает, что нажата
       const r = await Cloud.sync();
-      if (r.ok) { await renderToday(); flash("Синхронизация: отправлено " + (r.pushed || 0) + ", получено " + (r.pulled || 0), "ok"); }
-      else flash("Синхронизация не удалась: " + (r.reason || "нет входа"), "err");
+      b.disabled = false; b.textContent = "Синхронизировать";
+      if (r.ok) {
+        await renderToday();
+        const tail = r.failed ? ", НЕ отправлено: " + r.failed + " (" + (r.lastErr || "ошибка сервера") + ")" : "";
+        flash("Синхронизация: отправлено " + (r.pushed || 0) + ", получено " + (r.pulled || 0) + tail, r.failed ? "err" : "ok");
+      } else {
+        flash("Синхронизация не удалась: " + (r.reason || "нет входа"), "err");
+      }
+      updateDirtyCount();
     };
 
     $("m-prev").onclick = () => { state.month.setMonth(state.month.getMonth() - 1); renderMonth(); };

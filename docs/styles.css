@@ -243,8 +243,13 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
 .card.quote{font-style:italic;max-width:360px;margin-top:8px}
 
 /* ── всплывающее сообщение ────────────────── */
+/* v9.0.2: плашка ответа кнопок — ПОВЕРХ экрана (fixed над нижней панелью), а не в потоке сверху:
+   прежде она появлясь вне viewport, когда владелец прокручен к кнопке, — реакция выглядела
+   как «кнопка не работает» (кейс 23.10.2026: синхронизация без плашки на айфоне). */
 .flash{
-  margin:0 16px 8px;padding:12px 14px;border-radius:14px;font-size:15px;
+  position:fixed;left:12px;right:12px;bottom:calc(var(--tab-h) + env(safe-area-inset-bottom) + 10px);
+  z-index:60;margin:0 auto;max-width:616px;padding:12px 14px;border-radius:14px;font-size:15px;
+  box-shadow:0 8px 22px rgba(0,0,0,.22);
   background:var(--accent-soft);color:var(--accent);border:1px solid transparent;
 }
 .flash.err{background:#F7DEDA;color:var(--danger)}

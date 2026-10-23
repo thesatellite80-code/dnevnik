@@ -256,8 +256,13 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
 .card.quote{font-style:italic;max-width:360px;margin-top:8px}
 
 /* ── всплывающее сообщение ────────────────── */
+/* v9.0.2: плашка ответа кнопок — ПОВЕРХ экрана (fixed над нижней панелью), а не в потоке сверху:
+   прежде она появлясь вне viewport, когда владелец прокручен к кнопке, — реакция выглядела
+   как «кнопка не работает» (кейс 23.10.2026: синхронизация без плашки на айфоне). */
 .flash{
-  margin:0 16px 8px;padding:12px 14px;border-radius:14px;font-size:15px;
+  position:fixed;left:12px;right:12px;bottom:calc(var(--tab-h) + env(safe-area-inset-bottom) + 10px);
+  z-index:60;margin:0 auto;max-width:616px;padding:12px 14px;border-radius:14px;font-size:15px;
+  box-shadow:0 8px 22px rgba(0,0,0,.22);
   background:var(--accent-soft);color:var(--accent);border:1px solid transparent;
 }
 .flash.err{background:#F7DEDA;color:var(--danger)}
@@ -399,6 +404,7 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
       <p>Ответьте боту в Telegram одной фразой или голосовым — запись появится здесь после синхронизации.</p>
       <div class="sync-row">
         <span id="sync-state" class="sync-state">Облако не подключено</span>
+        <span id="sync-dirty" class="sync-state" title="Сколько записей ещё не ушли в облако"></span>
         <button class="link-btn" id="btn-sync">Синхронизировать</button>
       </div>
     </article>
@@ -636,7 +642,7 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
       </div>
     </div>
 
-    <p class="version"><span id="build-info">v9.0.1</span> · данные на устройстве + Supabase</p>
+    <p class="version"><span id="build-info">v9.0.2</span> · данные на устройстве + Supabase</p>
   </main>
 </section>
 
@@ -708,7 +714,7 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
   <button data-tab="settings"><span>⚙️</span>Настройки</button>
 </nav>
 
-<script defer src="js/bundle.js?v=092"></script>
-<script defer src="js/v02.js?v=124"></script>
+<script defer src="js/bundle.js?v=093"></script>
+<script defer src="js/v02.js?v=125"></script>
 </body>
 </html>
