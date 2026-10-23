@@ -93,11 +93,15 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
 #screen-form .content,#screen-quick .content,#screen-done .content{padding-bottom:110px}
 
 /* ── шапка ───────────────────────────────── */
+/* v9.0.4: шапка «Сегодня» переносится (кейс 23.10: 5 элементов в ряд ≈460 px не умещались
+   в 390 px айфона; до v9.0.3 экран уезжал вбок, после — обрезался). Кнопки шапки собраны
+   в группу .head-actions с переносом и прижаты вправо. */
 .head{
-  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;row-gap:6px;
   padding:14px 16px 10px;position:sticky;top:0;z-index:5;
   background:linear-gradient(var(--bg) 72%,transparent);
 }
+.head-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-left:auto}
 .date{font-size:15px;color:var(--muted);letter-spacing:.02em}
 .streak{font-size:22px;font-weight:650;margin-top:2px}
 .page-title{font-size:22px;font-weight:700}
@@ -360,10 +364,12 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
       <div class="date" id="today-date">—</div>
       <div class="streak" id="today-streak">🔥 0</div>
     </div>
-    <button class="ghost-btn" id="btn-quick" title="Быстрая запись">⚡ Быстро</button>
-    <button class="ghost-btn" id="btn-freeze" title="Заморозить сегодня: день отдыха без вины">🧊 Заморозить</button>
-    <button class="ghost-btn" id="btn-wisdom" title="Мудрость «6 минут»">📖</button>
-    <button class="ghost-btn" data-reload title="Обновить страницу" aria-label="Обновить страницу">↻</button>
+    <div class="head-actions">
+      <button class="ghost-btn" id="btn-quick" title="Быстрая запись">⚡ Быстро</button>
+      <button class="ghost-btn" id="btn-freeze" title="Заморозить сегодня: день отдыха без вины">🧊 Заморозить</button>
+      <button class="ghost-btn" id="btn-wisdom" title="Мудрость «6 минут»">📖</button>
+      <button class="ghost-btn" data-reload title="Обновить страницу" aria-label="Обновить страницу">↻</button>
+    </div>
   </header>
 
   <div id="flash" class="flash" hidden></div>
@@ -647,7 +653,7 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
       </div>
     </div>
 
-    <p class="version"><span id="build-info">v9.0.3</span> · данные на устройстве + Supabase</p>
+    <p class="version"><span id="build-info">v9.0.4</span> · данные на устройстве + Supabase</p>
   </main>
 </section>
 
@@ -719,7 +725,7 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
   <button data-tab="settings"><span>⚙️</span>Настройки</button>
 </nav>
 
-<script defer src="js/bundle.js?v=094"></script>
-<script defer src="js/v02.js?v=126"></script>
+<script defer src="js/bundle.js?v=095"></script>
+<script defer src="js/v02.js?v=127"></script>
 </body>
 </html>

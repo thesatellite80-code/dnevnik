@@ -80,11 +80,15 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
 #screen-form .content,#screen-quick .content,#screen-done .content{padding-bottom:110px}
 
 /* ── шапка ───────────────────────────────── */
+/* v9.0.4: шапка «Сегодня» переносится (кейс 23.10: 5 элементов в ряд ≈460 px не умещались
+   в 390 px айфона; до v9.0.3 экран уезжал вбок, после — обрезался). Кнопки шапки собраны
+   в группу .head-actions с переносом и прижаты вправо. */
 .head{
-  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;row-gap:6px;
   padding:14px 16px 10px;position:sticky;top:0;z-index:5;
   background:linear-gradient(var(--bg) 72%,transparent);
 }
+.head-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-left:auto}
 .date{font-size:15px;color:var(--muted);letter-spacing:.02em}
 .streak{font-size:22px;font-weight:650;margin-top:2px}
 .page-title{font-size:22px;font-weight:700}
