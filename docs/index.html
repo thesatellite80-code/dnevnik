@@ -255,6 +255,13 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
 .sync-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;flex-wrap:wrap}
 .sync-state{font-size:13.5px;color:var(--muted);min-width:0;overflow-wrap:anywhere}
 .sync-row .link-btn{flex:1 1 100%;text-align:center;padding:10px 12px;border:1px solid var(--line);border-radius:12px}
+/* v9.0.6: вторичные карточки «Сегодня» в раскрывающемся блоке «Ещё» (макет утверждён 26.10):
+   ничего не удаляем (принцип 9 канона) — только переезд с запомненным состоянием. */
+details.more{border:1px dashed var(--line);border-radius:14px;padding:4px 12px 12px;margin:0 0 12px;background:transparent}
+details.more summary{cursor:pointer;font-weight:600;padding:10px 0;color:var(--muted);list-style:none;font-size:14.5px}
+details.more summary::-webkit-details-marker{display:none}
+details.more summary .cnt{display:inline-block;border:1px solid var(--line);border-radius:99px;padding:0 8px;font-size:12px;margin-left:6px;color:var(--muted)}
+details.more[open] summary{margin-bottom:8px}
 .version{color:var(--muted);font-size:12.5px;text-align:center;margin:18px 0 0}
 
 /* ── экран успеха ─────────────────────────── */
@@ -396,13 +403,17 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
       <div class="slot-action" id="pm-action">→</div>
     </article>
 
-    <!-- v0.7.1: «Сегодня выполнено» — спойлер с прогрессом по задачам (монтирует v02.js) -->
-    <div id="donetoday-host"></div>
-
     <article class="card memory" id="memory-card" hidden>
       <div class="memory-label" id="memory-label">В этот день</div>
       <p class="memory-text" id="memory-text"></p>
     </article>
+
+    <!-- v9.0.6 (макет утверждён владельцем 26.10): вторичные карточки уезжают в раскрывающийся
+         блок «Ещё»; ничего не удалено, состояние блока запоминается на устройстве -->
+    <details class="more" id="today-more">
+      <summary>Ещё на экране <span class="cnt">5</span> <span id="more-dirty" class="cnt"></span></summary>
+
+    <div id="donetoday-host"></div>
 
     <article class="card weekly" id="weekly-card">
       <h2>📊 Обзор недели <button class="info-btn" data-info="weekly" aria-label="Как пользоваться обзором недели">i</button></h2>
@@ -431,6 +442,7 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
       <h3 style="margin-bottom:8px">🎧 Голосовые записи</h3>
       <div id="voicelist-host"></div>
     </article>
+    </details>
   </main>
 </section>
 
@@ -654,7 +666,7 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
       </div>
     </div>
 
-    <p class="version"><span id="build-info">v9.0.5</span> · данные на устройстве + Supabase</p>
+    <p class="version"><span id="build-info">v9.0.6</span> · данные на устройстве + Supabase</p>
   </main>
 </section>
 
@@ -726,7 +738,7 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
   <button data-tab="settings"><span>⚙️</span>Настройки</button>
 </nav>
 
-<script defer src="js/bundle.js?v=096"></script>
-<script defer src="js/v02.js?v=128"></script>
+<script defer src="js/bundle.js?v=097"></script>
+<script defer src="js/v02.js?v=129"></script>
 </body>
 </html>

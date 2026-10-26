@@ -242,6 +242,13 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-
 .sync-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;flex-wrap:wrap}
 .sync-state{font-size:13.5px;color:var(--muted);min-width:0;overflow-wrap:anywhere}
 .sync-row .link-btn{flex:1 1 100%;text-align:center;padding:10px 12px;border:1px solid var(--line);border-radius:12px}
+/* v9.0.6: вторичные карточки «Сегодня» в раскрывающемся блоке «Ещё» (макет утверждён 26.10):
+   ничего не удаляем (принцип 9 канона) — только переезд с запомненным состоянием. */
+details.more{border:1px dashed var(--line);border-radius:14px;padding:4px 12px 12px;margin:0 0 12px;background:transparent}
+details.more summary{cursor:pointer;font-weight:600;padding:10px 0;color:var(--muted);list-style:none;font-size:14.5px}
+details.more summary::-webkit-details-marker{display:none}
+details.more summary .cnt{display:inline-block;border:1px solid var(--line);border-radius:99px;padding:0 8px;font-size:12px;margin-left:6px;color:var(--muted)}
+details.more[open] summary{margin-bottom:8px}
 .version{color:var(--muted);font-size:12.5px;text-align:center;margin:18px 0 0}
 
 /* ── экран успеха ─────────────────────────── */

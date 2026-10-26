@@ -24,7 +24,7 @@ window.SIXMIN_CONFIG = {
 
   // ── 3. ПРОЧЕЕ ──────────────────────────────────────────────────────
   defaultTimezone: "Europe/Moscow",
-  version: "9.0.5"
+  version: "9.0.6"
 };
 
 /* ── Контент: вопросы (свои формулировки, пул вариантов для ротации) ── */
@@ -1087,7 +1087,7 @@ const App = (() => {
     renderSyncState();
 
     const weekly = entries.find(x => x.date === today && x.slot === "weekly");
-    $("weekly-sub").textContent = weekly ? "Заполнен в этом tygodне ✓" : "5 вопросов · 5 минут, по воскресеньям";
+    $("weekly-sub").textContent = weekly ? "Заполнен на этой неделе ✓" : "5 вопросов · 5 минут, по воскресеньям";
     $("btn-weekly").textContent = weekly ? "Пересмотреть" : "Заполнить обзор";
     // v9.0.5 (канон §4 «выбор одного следующего шага»): замкнуть петлю — в новую неделю
     // показывать обещание из прошлого обзора (ответ w5), пока свой обзор не заполнен.
@@ -1168,6 +1168,9 @@ const App = (() => {
       const n = all.filter(e => e.dirty).length;
       el.textContent = n ? "в очереди: " + n : "всё отправлено";
       el.style.color = n ? "var(--danger)" : "var(--ok)";
+      // v9.0.6: долг виден и на свёрнутом блоке «Ещё» — красная пометка у заголовка
+      const md = $("more-dirty");
+      if (md) { md.textContent = n ? "· в очереди: " + n : ""; md.style.color = n ? "var(--danger)" : ""; }
     } catch (e) { el.textContent = ""; }
   }
 
@@ -1830,6 +1833,17 @@ const App = (() => {
     let st;
     $("search").oninput = e => { clearTimeout(st); st = setTimeout(() => doSearch(e.target.value), 250); };
 
+    // v9.0.6: блок «Ещё» на «Сегодня» — открытость запоминается на устройстве
+    const more = $("today-more");
+    if (more) {
+      try {
+        const st = localStorage.getItem("sixmin-today-more");
+        if (st === "1") more.open = true; else if (st === "0") more.open = false;
+        more.addEventListener("toggle", () => {
+          try { localStorage.setItem("sixmin-today-more", more.open ? "1" : "0"); } catch (e) {}
+        });
+      } catch (e) {}
+    }
     $("btn-save-settings").onclick = saveSettings;
     $("btn-login").onclick = login;
     $("btn-login-pass").onclick = loginPass;
