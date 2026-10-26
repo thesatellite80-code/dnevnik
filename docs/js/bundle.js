@@ -24,7 +24,7 @@ window.SIXMIN_CONFIG = {
 
   // ── 3. ПРОЧЕЕ ──────────────────────────────────────────────────────
   defaultTimezone: "Europe/Moscow",
-  version: "9.0.4"
+  version: "9.0.5"
 };
 
 /* ── Контент: вопросы (свои формулировки, пул вариантов для ротации) ── */
@@ -1089,6 +1089,25 @@ const App = (() => {
     const weekly = entries.find(x => x.date === today && x.slot === "weekly");
     $("weekly-sub").textContent = weekly ? "Заполнен в этом tygodне ✓" : "5 вопросов · 5 минут, по воскресеньям";
     $("btn-weekly").textContent = weekly ? "Пересмотреть" : "Заполнить обзор";
+    // v9.0.5 (канон §4 «выбор одного следующего шага»): замкнуть петлю — в новую неделю
+    // показывать обещание из прошлого обзора (ответ w5), пока свой обзор не заполнен.
+    const loopEl = $("weekly-loop");
+    if (loopEl) {
+      const dMon = new Date(); dMon.setDate(dMon.getDate() - ((dMon.getDay() + 6) % 7));
+      const monday = Store.localDate(dMon);
+      const thisWeekDone = entries.some(x => x.slot === "weekly" && hasAnswers(x) && x.date >= monday);
+      if (thisWeekDone) { loopEl.innerHTML = ""; }
+      else {
+        const prev = entries.filter(x => x.slot === "weekly" && hasAnswers(x) && x.date < monday)
+          .sort((a, b) => (a.date < b.date ? 1 : -1))[0];
+        const step = prev && prev.answers && String(prev.answers.w5 || "").trim();
+        loopEl.innerHTML = step
+          ? "Ваш шаг на эту неделю (из обзора от " +
+            Store.parseDate(prev.date).toLocaleDateString("ru-RU", { day: "numeric", month: "long" }) +
+            "): <b>" + SixMin.esc(step) + "</b>"
+          : "";
+      }
+    }
     const ax = $("am-extra"); // v0.8.43: подсказка о ДР круга под утренними вопросами
     if (ax && window.SixMinAmExtraHTML) ax.innerHTML = window.SixMinAmExtraHTML(today) || "";
   }

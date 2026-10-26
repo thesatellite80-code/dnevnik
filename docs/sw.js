@@ -7,20 +7,20 @@
    3) skipWaiting() только если критичные файлы реально лежат в кэше;
    4) старый кэш НЕ удаляется, пока новый не собрал критичные файлы (иначе офлайн нечего отдать);
    5) если кэш всё-таки пуст — отдаём читаемую страницу «нет сети» вместо белого экрана. */
-const CACHE = "sixmin-v9.0.4";
+const CACHE = "sixmin-v9.0.5";
 const ASSETS = [
   "./",
   "index.html",
   "plan.html",
   "manifest.webmanifest",
-  "js/bundle.js?v=095",
-  "js/v02.js?v=127",
+  "js/bundle.js?v=096",
+  "js/v02.js?v=128",
   "js/vendor/supabase.min.js?v=014",
   "icons/icon-192.png",
   "icons/icon-512.png"
 ];
 // Без этих файлов приложение офлайн не запустится; иконки — не критичны (1,9 МБ каждая).
-const CRITICAL = ["index.html", "js/bundle.js?v=095", "js/v02.js?v=127"];
+const CRITICAL = ["index.html", "js/bundle.js?v=096", "js/v02.js?v=128"];
 const NAV_TIMEOUT = 6000;  // мс: сколько ждём сеть при перезагрузке страницы
 const META_TIMEOUT = 4000; // мс: version.json (маяк самолечения устаревшего кэша)
 

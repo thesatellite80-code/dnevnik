@@ -2868,6 +2868,14 @@ window.__v02stage = "after-sixmin-donetoday"; if (window.__v02say) window.__v02s
   function buildInsights(D) {
     const out = [];
     const to = SixMin.parseKey(D.to), from = SixMin.parseKey(D.from);
+    // v9.0.5 (продуктовый канон §4): обзор начинается с ФАКТА о объёме данных и прямо говорит
+    // об ограничениях при их нехватке — раньше выводы начинались сразу с наблюдений.
+    const daysTotal = Math.round((to - from) / 86400000) + 1;
+    const daysWith = (D.entriesDays && D.entriesDays.size) || 0;
+    out.push("📊 Данных за период: записи в <b>" + daysWith + "</b> из " + daysTotal + " дней." +
+      (daysWith < 4
+        ? " Этого пока мало — темы и настроение по таким данным не определяются, выводы ниже опираются только на привычки и задачи."
+        : ""));
 
     // 1. Самая стабильная привычка
     if (D.habits.length) {
