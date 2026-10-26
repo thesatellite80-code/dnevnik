@@ -2782,6 +2782,193 @@ window.__v02stage = "after-sixmin-tasks"; if (window.__v02say) window.__v02say("
 })();
 window.__v02stage = "after-sixmin-donetoday"; if (window.__v02say) window.__v02say("v02 stage: after-sixmin-donetoday");
 
+// app/js/sixmin-plantoday.js — v9.0.7 (26.10.2026, макет утверждён владельцем:
+//  docs-project/maket-v907-dnevnik.html). Карточка «План: на сегодня» на экране «Сегодня»:
+//  задачи плана роста (облачная таблица plan_tasks, модуль «Дневник») со сроком, который
+//  наступил или прошёл. Место — после карточки памяти, выше блока «Ещё» (ежедневное действие).
+//  Правила те же, что в самом плане (dueBuckets plan.html): просрочено — deadline раньше
+//  сегодня, сегодня — deadline равен сегодня; сначала с тэгом «crit», затем по deadline.
+//  Выполненные (implemented) не показываются. Офлайн — последние полученные данные с пометкой
+//  «(кэш)» (честность о данных, канон §4); если кэша нет — плашка ошибки с «Повторить»
+//  (урок v0.8.62: ошибки не прячутся). Обновление: тап по вкладке + каждые 60 с, пока открыта.
+// API: SixMinPlanToday.mount(container)
+
+(function () {
+  const POLL_MS = 60000;
+  const CACHE_KEY = "sixmin-plan-today-v1";
+  const DOW = ["воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"];
+
+  let root = null, started = false;
+  let rows = [], mode = "loading", stamp = "", fromCache = false, lastErr = null;
+
+  const p2 = (n) => (n < 10 ? "0" : "") + n;
+  function hhmm(iso) {
+    try { const d = new Date(iso); return p2(d.getHours()) + ":" + p2(d.getMinutes()); }
+    catch (e) { return ""; }
+  }
+  function dayLabel() {
+    const d = new Date();
+    return DOW[d.getDay()] + " " + p2(d.getDate()) + "." + p2(d.getMonth() + 1);
+  }
+
+  async function load() {
+    let uid = null;
+    try { uid = await SixMin.uid(); }
+    catch (e) {
+      // вход не выполнен ИЛИ сеть недоступна — различаем по наличию токена сессии в localStorage:
+      // токена нет → честное «Облако не подключено»; токен есть → ошибка сети (кэш/плашка в refresh)
+      let hasToken = false;
+      try {
+        hasToken = Object.keys(localStorage).some(
+          (k) => k.indexOf("sb-") === 0 && k.indexOf("-auth-token") > -1);
+      } catch (e2) { /* приватный режим — считаем, что токена нет */ }
+      if (!hasToken) { mode = "nologin"; rows = []; stamp = ""; return; }
+      throw e;
+    }
+    const todayKey = await SixMin.todayKey();
+    const r = await SixMin.sb().from("plan_tasks")
+      .select("task_id,title,hours,deadline,tags,implemented,status,repeat")
+      .eq("user_id", uid).eq("deleted", false).limit(1000);
+    smMust(r, "план на сегодня");
+    const data = r.data || [];
+    if (!data.length) { mode = "nodata"; rows = []; stamp = ""; return; } // план в облако ещё не отправляли
+    const open = data.filter((t) => !t.implemented && t.status !== "done" && t.deadline);
+    const due = open.filter((t) => t.deadline <= todayKey);
+    due.sort((a, b) => {
+      const ca = (a.tags || []).indexOf("crit") > -1 ? 0 : 1;
+      const cb = (b.tags || []).indexOf("crit") > -1 ? 0 : 1;
+      return ca - cb || (a.deadline < b.deadline ? -1 : a.deadline > b.deadline ? 1 : 0);
+    });
+    rows = due.map((t) => ({
+      id: t.task_id, title: t.title, hours: t.hours, deadline: t.deadline,
+      tags: t.tags || [], repeat: t.repeat, late: t.deadline < todayKey
+    }));
+    mode = rows.length ? "ok" : "clean";
+    stamp = new Date().toISOString();
+    fromCache = false;
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: stamp, todayKey, rows })); } catch (e) {}
+  }
+
+  function badge(t) {
+    if (t.late) {
+      const p = String(t.deadline).split("-");
+      return '<span class="sm-pt-badge late">' + p[2] + "." + p[1] + "</span>";
+    }
+    return '<span class="sm-pt-badge today">сегодня</span>';
+  }
+
+  function render() {
+    if (!root) return;
+    if (mode === "error") {
+      root.innerHTML = smErrorNote("План: на сегодня", lastErr);
+      smBindRetry(root, refresh);
+      return;
+    }
+    let body = "";
+    if (mode === "loading") body = '<p class="sm-pt-line">Загружаем план…</p>';
+    else if (mode === "nologin") body = '<p class="sm-pt-line">Облако не подключено — войдите в дневник, чтобы видеть план</p>';
+    else if (mode === "nodata") body = '<p class="sm-pt-line">Данные плана недоступны — появятся после синхронизации</p>';
+    else if (mode === "clean") body = '<p class="sm-pt-line">На сегодня ничего не должно — план чист ✓</p>';
+    else {
+      const late = rows.filter((t) => t.late).length;
+      const hrs = rows.reduce((a, t) => a + (+t.hours || 0), 0);
+      const list = rows.map((t) =>
+        "<li>" + badge(t) +
+        '<div class="sm-pt-title">' + SixMin.esc(t.title && t.title.trim() ? t.title : "(без названия)") + "</div>" +
+        '<div class="sm-pt-meta">' +
+        SixMin.esc((t.tags || []).join(" · ")) + ((t.tags || []).length ? " · " : "") +
+        (+t.hours ? t.hours + " ч · " : "") + SixMin.esc(t.id) +
+        (t.repeat ? " · " + SixMin.esc(t.repeat) : "") +
+        "</div></li>").join("");
+      body = '<p class="sm-pt-count">Просрочено: ' + late + " · Сегодня: " + (rows.length - late) +
+        " · Всего: " + (Math.round(hrs * 100) / 100) + " ч</p>" +
+        '<ul class="sm-pt-list">' + list + "</ul>";
+    }
+    const stampLine = stamp
+      ? '<span class="sm-pt-stamp">по данным на ' + hhmm(stamp) + (fromCache ? " (кэш)" : "") + "</span>"
+      : "";
+    root.innerHTML =
+      '<article class="card sm-pt-card">' +
+      "<h2>📋 План: на сегодня <span class='sm-pt-day'>· " + dayLabel() + "</span></h2>" +
+      body +
+      '<div class="sm-pt-foot"><a class="sm-pt-link" href="plan.html">Открыть план →</a>' + stampLine + "</div>" +
+      "</article>";
+  }
+
+  async function refresh() {
+    try {
+      await load();
+      lastErr = null;
+    } catch (e) {
+      console.error("[v02] plantoday refresh", e);
+      lastErr = e;
+      let cache = null;
+      try { cache = JSON.parse(localStorage.getItem(CACHE_KEY) || "null"); } catch (e2) {}
+      if (cache && cache.rows && cache.rows.length) {
+        // кэш есть — показываем его; если день сменился, пересчитываем «просрочено/сегодня»
+        const nowKey = SixMin.fmtKey(new Date());
+        rows = cache.rows.map((t) => ({ ...t, late: String(t.deadline) < nowKey }));
+        mode = "ok"; stamp = cache.ts || ""; fromCache = true;
+      } else {
+        mode = "error";
+      }
+    }
+    render();
+  }
+
+  function injectStyles() {
+    if (document.getElementById("sixmin-plantoday-css")) return;
+    const css = document.createElement("style");
+    css.id = "sixmin-plantoday-css";
+    css.textContent = `
+      .sm-pt-card h2{margin:0 0 6px;font-size:16px}
+      .sm-pt-day{opacity:.55;font-size:12.5px;font-weight:400}
+      .sm-pt-line{font-size:13.5px;opacity:.75;margin:4px 0 8px}
+      .sm-pt-count{font-size:12.5px;opacity:.7;margin:0 0 8px}
+      .sm-pt-list{list-style:none;margin:0 0 10px;padding:0}
+      .sm-pt-list li{padding:7px 0;border-top:1px dashed rgba(128,128,128,.22)}
+      .sm-pt-list li:first-child{border-top:0}
+      .sm-pt-title{font-weight:600;font-size:14px}
+      .sm-pt-meta{font-size:12px;opacity:.6;margin-top:2px}
+      .sm-pt-badge{float:right;margin-left:8px;border-radius:99px;padding:1px 9px;font-size:12px;font-weight:700}
+      .sm-pt-badge.late{background:rgba(224,82,82,.14);color:#e05252}
+      .sm-pt-badge.today{border:1px solid var(--accent,#E30613);color:var(--accent,#E30613)}
+      .sm-pt-foot{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;border-top:1px solid rgba(128,128,128,.2);padding-top:8px;min-width:0}
+      .sm-pt-link{color:var(--accent,#E30613);font-weight:600;text-decoration:none;font-size:14px}
+      .sm-pt-stamp{font-size:12px;opacity:.55}`;
+    document.head.appendChild(css);
+  }
+
+  function startAutoRefresh() {
+    if (started) return;
+    started = true;
+    // тап по вкладке «Сегодня» — обновить (могли вернуться из плана с правками)
+    document.addEventListener("click", (e) => {
+      const b = e.target && e.target.closest && e.target.closest('[data-tab="today"]');
+      if (b) setTimeout(refresh, 300);
+    });
+    // мягкий опрос, пока вкладка открыта (план могли поправить на другом устройстве)
+    setInterval(() => {
+      try {
+        if (document.visibilityState !== "visible") return;
+        const s = document.getElementById("screen-today");
+        if (s && s.classList && s.classList.contains("active")) refresh();
+      } catch (e) { /* тихо */ }
+    }, POLL_MS);
+  }
+
+  function mount(container) {
+    root = typeof container === "string" ? document.querySelector(container) : container;
+    injectStyles();
+    startAutoRefresh();
+    refresh();
+  }
+
+  window.SixMinPlanToday = { mount, refresh };
+})();
+window.__v02stage = "after-sixmin-plantoday"; if (window.__v02say) window.__v02say("v02 stage: after-sixmin-plantoday");
+
+
 // app/js/sixmin-analytics.js — v0.2: Инфографика и сводки
 //  - Heatmap-календарь как на GitHub (последние ~17 недель)
 //  - Текущая и лучшая серия (streak) по привычкам
@@ -6378,6 +6565,7 @@ window.__v02stage = "after-sixmin-swipe"; if (window.__v02say) window.__v02say("
       [window.SixMinTasks, "mount", "#work-host", "work", { area: "work", stats: true }],
       [window.SixMinShifts, "mount", "#shifts-host", "shifts", undefined],
       [window.SixMinDoneToday, "mount", "#donetoday-host", "donetoday", undefined],
+      [window.SixMinPlanToday, "mount", "#plan-today-host", "plantoday", undefined],
       [window.SixMinAnalytics, "mount", "#stats-host", "analytics", undefined],
       [window.SixMinTheory, "mountCards", "#wisdom-host", "theory", undefined],
       [window.SixMinTheory, "mountDaily", "#wisdom-daily", "theory-daily", undefined],
@@ -6400,7 +6588,7 @@ window.__v02stage = "after-sixmin-swipe"; if (window.__v02say) window.__v02say("
   }
   // v0.8.64: какая вкладка какие модули показывает (хосты сверены с index.html).
   var TAB_MODS = {
-    today: ["SixMinDoneToday", "SixMinVoiceList"],
+    today: ["SixMinPlanToday", "SixMinDoneToday", "SixMinVoiceList"],
     tracker: ["SixMinHabits", "SixMinFocus", "SixMinTasks"],
     work: ["SixMinShifts", "SixMinTasks"],
     circles: ["SixMinCircles"],

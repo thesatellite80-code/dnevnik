@@ -68,6 +68,12 @@ td,th{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertic
     <div class="bar"><i id="hProgBar"></i></div>
     <span class="mut" id="hLoad"></span>
   </div>
+  <!-- v9.0.7: строка синхронизации (макет утверждён владельцем 26.10). Скрыта, пока облако не определено. -->
+  <div class="row" id="syncRow" style="margin-top:6px;display:none">
+    <span class="mut" id="syncTxt" style="min-width:0"></span>
+    <span style="flex:1"></span>
+    <button id="syncBtn" class="sm pri" style="display:none">Синхронизировать</button>
+  </div>
 </header>
 
 <main>
@@ -80,6 +86,8 @@ td,th{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertic
       <button id="bRem">Проверить напоминания</button>
       <button id="bValidate">Проверить данные</button>
       <button id="bExport">Скачать JSON</button>
+      <!-- v9.0.7: импорт-слияние — путь доставки новых задач (от агента/второй модели) в облако -->
+      <button id="bImport">Загрузить JSON (слияние)</button>
       <button id="bBind">Подключить plan.json</button>
       <button id="bIntake">Вставить из опросника</button>
       <button id="bNotify">Разрешить уведомления</button>
@@ -136,6 +144,9 @@ td,th{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertic
   <button class="sm" onclick="document.getElementById('banner').classList.remove('on')" style="margin-left:8px">Закрыть</button>
 </div>
 
+<!-- v9.0.7 (модуль «Дневник»): библиотека Supabase для облачной синхронизации плана.
+     В файловом режиме скрипт не загрузится — синхронизация честно отключится. -->
+<script src="js/vendor/supabase.min.js?v=014"></script>
 <script id="seedData" type="application/json">{
   "$schema": "./plan.schema.json",
   "meta": {
@@ -1456,6 +1467,7 @@ function save(){
   saveTimer = setTimeout(async function(){
     var txt = JSON.stringify(state, null, 2);
     try { localStorage.setItem(LS_KEY, txt); } catch (e) {}
+    cloudSchedule(); // v9.0.7: облако догоняет локальную запись (дебаунс 1.2 с)
     if (fileHandle && fileHandle.createWritable){
       try { var w = await fileHandle.createWritable(); await w.write(txt); await w.close();
             setSaveLabel("plan.json (файл)", true); return; }
@@ -1464,9 +1476,9 @@ function save(){
     setSaveLabel("браузер (localStorage)", true);
     var hostMode = location.protocol !== "file:";
     $("hStorage").innerHTML = "Данные сохраняются автоматически в этом браузере." +
-      (hostMode ? " На другом устройстве будет своя копия: перенос — «Скачать JSON» здесь и вставить там."
-                : " Раз в неделю нажимайте <b>Скачать JSON</b> и кладите копию рядом с plan.html — это резерв.") +
-      " Синхронизации между устройствами пока нет — она придёт с модулем «Дневник».";
+      (hostMode ? " Правки синхронизируются через облако (модуль «Дневник», v9.0.7): план на телефоне и на ноутбуке один; спор по задаче решает более свежая правка."
+                : " В файловом режиме облако недоступно: раз в неделю нажимайте <b>Скачать JSON</b> и кладите копию рядом с plan.html — это резерв.") +
+      " «Скачать JSON» — резервная копия в любой момент.";
   }, 350);
 }
 async function boot(){
@@ -1479,6 +1491,198 @@ async function boot(){
   state = JSON.parse(JSON.stringify(SEED));
   setSaveLabel("встроенные данные (первый запуск)", true);
 }
+
+/* ==== CLOUD (v9.0.7, модуль «Дневник»): синхронизация плана через Supabase ====
+   Решения владельца 26.10.2026: спор двух устройств решается ПО ЗАДАЧЕ — побеждает правка
+   с более свежим updated_at; удалённые задачи не воскресают (могильник deleted=true, строки
+   в облаке физически не удаляются); структура плана (шаги, корзины, напоминания, журнал) —
+   один документ plan_meta. Таблицы: plan_tasks (строка на задачу, ключ user_id+task_id),
+   plan_meta (doc jsonb, rev). Без window.supabase (файловый режим) строка синхронизации
+   не показывается — план работает локально, как раньше. Ошибки видны на экране (урок v0.8.62:
+   ответ с полем error — не данные; {error} проверяется явно). */
+var SUPA_URL = "https://asaecttdxnfiszzafufc.supabase.co";
+var SUPA_ANON = "sb_publishable_MLaTGdUWE2S9uFC6gpKNVQ_Y6lDdOjP";
+var CLOUD_KEY = "moy-plan-cloud-v1"; // { pushed:{id:snapshot}, metaSnap, lastPull, rev }
+var cl = null, clUser = null, clBusy = false, clTimer = null, clFreshLocal = false;
+var clData = { pushed: {}, metaSnap: "", lastPull: null, rev: 0 };
+
+function clLoad(){
+  try { var s = localStorage.getItem(CLOUD_KEY); if (s) { var d = JSON.parse(s);
+    if (d && typeof d === "object") { clData.pushed = d.pushed || {}; clData.metaSnap = d.metaSnap || "";
+      clData.lastPull = d.lastPull || null; clData.rev = d.rev || 0; } } } catch (e) {}
+}
+function clSave(){ try { localStorage.setItem(CLOUD_KEY, JSON.stringify(clData)); } catch (e) {} }
+function clNowIso(){ return new Date().toISOString(); }
+function snapTask(t){ var c = {}; for (var k in t) { if (k !== "updated_at") c[k] = t[k]; } return JSON.stringify(c); }
+function clMetaDoc(){ var doc = {}; for (var k in state) { if (k !== "tasks") doc[k] = state[k]; } return doc; }
+function clMetaDirty(){ return clData.metaSnap !== JSON.stringify(clMetaDoc()); }
+function clDirtyIds(){
+  var ids = [];
+  (state.tasks || []).forEach(function(t){ if (clData.pushed[t.id] !== snapTask(t)) ids.push(t.id); });
+  Object.keys(clData.pushed).forEach(function(id){ if (!find(id)) ids.push(id); }); // локально удалена — могильник
+  return ids;
+}
+function clDirtyCount(){ return clDirtyIds().length + (clMetaDirty() ? 1 : 0); }
+
+function clUi(kind, msg){
+  var row = $("syncRow"), txt = $("syncTxt"), btn = $("syncBtn");
+  if (!row || !txt || !btn) return;
+  if (kind === "off") { row.style.display = "none"; return; }
+  row.style.display = "flex";
+  btn.disabled = false; btn.textContent = "Синхронизировать"; btn.style.display = "none";
+  txt.style.color = "";
+  if (kind === "nologin") { txt.textContent = "Облако не подключено — план работает на устройстве, войдите в дневник для синхронизации"; return; }
+  if (kind === "busy") { txt.textContent = "☁️ Синхронизирую…"; btn.style.display = "inline-block"; btn.disabled = true; btn.textContent = "Синхронизирую…"; return; }
+  if (kind === "error") { txt.textContent = "⚠️ Не удалось отправить: " + (msg || "сеть"); txt.style.color = "var(--bad)"; btn.style.display = "inline-block"; btn.textContent = "Повторить"; return; }
+  var n = clDirtyCount();
+  if (n > 0) { txt.textContent = "☁️ Ждут отправки: " + n; btn.style.display = "inline-block"; return; }
+  var d = clData.lastPull ? new Date(clData.lastPull) : new Date();
+  txt.textContent = "☁️ Облако ✓ · обновлено " + pad2(d.getHours()) + ":" + pad2(d.getMinutes());
+}
+
+function clTaskToRow(t){
+  return { user_id: clUser.id, task_id: t.id,
+    step_id: (typeof t.step_id === "number" ? t.step_id : null),
+    title: t.title || "", why: t.why || null,
+    hours: (typeof t.hours === "number" ? t.hours : null),
+    deadline: t.deadline || null,
+    implemented: !!t.implemented, implemented_at: t.implemented_at || null,
+    status: t.status || "todo", auto: t.auto || null, evidence: t.evidence || null,
+    lead_days: t.lead_days || null, repeat: t.repeat || null,
+    tags: t.tags || [], intake: t.intake || null,
+    updated_at: t.updated_at || clNowIso(), deleted: false };
+}
+function clRowToTask(r){
+  var t = { id: r.task_id, step_id: r.step_id, title: r.title, why: r.why, hours: r.hours,
+    deadline: r.deadline, implemented: !!r.implemented, implemented_at: r.implemented_at,
+    status: r.status || "todo", auto: r.auto, evidence: r.evidence,
+    lead_days: r.lead_days, repeat: r.repeat, tags: r.tags || [], intake: r.intake,
+    updated_at: r.updated_at };
+  for (var k in t) { if (t[k] === null || t[k] === undefined) delete t[k]; }
+  if (!t.tags) t.tags = [];
+  return t;
+}
+
+async function clPull(first){
+  var rq = await cl.from("plan_tasks").select("*").eq("user_id", clUser.id).limit(2000);
+  if (rq.error) throw new Error(rq.error.message || "план в облаке не читается");
+  var rm = await cl.from("plan_meta").select("*").eq("user_id", clUser.id).maybeSingle();
+  if (rm.error) throw new Error(rm.error.message || "структура плана в облаке не читается");
+  var all = rq.data || [], alive = all.filter(function(r){ return !r.deleted; });
+  var changed = false;
+  if (first && clFreshLocal && alive.length) {
+    // новое устройство / пустая локальная копия — облако забираем целиком
+    state.tasks = alive.map(clRowToTask);
+    clData.pushed = {};
+    state.tasks.forEach(function(t){ clData.pushed[t.id] = snapTask(t); });
+    changed = true;
+  } else {
+    all.forEach(function(r){
+      var t = find(r.task_id);
+      var have = Object.prototype.hasOwnProperty.call(clData.pushed, r.task_id);
+      var localDirty = have && (!t || clData.pushed[r.task_id] !== snapTask(t));
+      var rt = r.updated_at || "", lt = (t && t.updated_at) || "";
+      if (!t) {
+        if (r.deleted) { delete clData.pushed[r.task_id]; return; }
+        if (have) return; // удалена локально, запись есть — push отправит могильник
+        var nt = clRowToTask(r); state.tasks.push(nt); clData.pushed[nt.id] = snapTask(nt); changed = true;
+        return;
+      }
+      if (!localDirty && rt > lt) { // правило владельца: чья правка свежее — та победила
+        if (r.deleted) {
+          state.tasks = state.tasks.filter(function(x){ return x.id !== r.task_id; });
+          logEvent("cloud-deleted", r.task_id, "удалена на другом устройстве");
+          delete clData.pushed[r.task_id];
+        } else {
+          var i = 0; while (i < state.tasks.length && state.tasks[i].id !== r.task_id) i++;
+          if (i < state.tasks.length) { state.tasks[i] = clRowToTask(r); clData.pushed[r.task_id] = snapTask(state.tasks[i]); }
+        }
+        changed = true;
+      }
+    });
+  }
+  var mrow = rm.data;
+  if (mrow && mrow.doc && typeof mrow.doc === "object") {
+    if (!clMetaDirty() || (first && clFreshLocal)) {
+      for (var k in mrow.doc) { if (k !== "tasks") state[k] = mrow.doc[k]; }
+      clData.metaSnap = JSON.stringify(clMetaDoc());
+      clData.rev = mrow.rev || clData.rev || 0;
+      changed = true;
+    }
+  }
+  if (all.length || (mrow && mrow.doc)) clData.lastPull = clNowIso();
+  return changed;
+}
+
+async function clPush(){
+  if (!cl || !clUser) return false;
+  var ids = clDirtyIds(), rows = [], nowIso = clNowIso();
+  ids.forEach(function(id){
+    var t = find(id);
+    if (t) { t.updated_at = nowIso; rows.push(clTaskToRow(t)); }
+    else rows.push({ user_id: clUser.id, task_id: id, title: "", status: "todo",
+                     implemented: false, tags: [], updated_at: nowIso, deleted: true });
+  });
+  var metaDirty = clMetaDirty(), did = false;
+  if (rows.length) {
+    var rp = await cl.from("plan_tasks").upsert(rows, { onConflict: "user_id,task_id" });
+    if (rp.error) throw new Error(rp.error.message || "задачи не отправились");
+    rows.forEach(function(r){ if (!r.deleted) { var t = find(r.task_id); if (t) clData.pushed[t.id] = snapTask(t); } });
+    did = true;
+  }
+  if (metaDirty) {
+    var rev = (clData.rev || 0) + 1;
+    var rmm = await cl.from("plan_meta").upsert(
+      { user_id: clUser.id, doc: clMetaDoc(), rev: rev, updated_at: clNowIso() },
+      { onConflict: "user_id" });
+    if (rmm.error) throw new Error(rmm.error.message || "структура плана не отправилась");
+    clData.metaSnap = JSON.stringify(clMetaDoc());
+    clData.rev = rev;
+    did = true;
+  }
+  if (did) { clData.lastPull = clNowIso(); clSave(); save(); render(); }
+  return did;
+}
+
+async function clRun(){
+  if (clBusy || !cl || !clUser) return;
+  clBusy = true; clUi("busy");
+  try { await clPush(); clBusy = false; clUi(); }
+  catch (e) { clBusy = false; console.warn("cloud push:", e); clUi("error", e.message || "сеть"); }
+}
+function cloudSchedule(){
+  if (!cl || !clUser) return;
+  clUi();
+  clearTimeout(clTimer);
+  clTimer = setTimeout(function(){ clRun(); }, 1200);
+}
+async function cloudInit(){
+  clLoad();
+  if (!window.supabase || !window.supabase.createClient) { clUi("off"); return; }
+  try {
+    cl = window.supabase.createClient(SUPA_URL, SUPA_ANON);
+    // getSession офлайн мог висеть (урок v0.8.63) — гонка с таймаутом 6 с
+    var s = await Promise.race([cl.auth.getSession(),
+      new Promise(function(res){ setTimeout(function(){ res(null); }, 6000); })]);
+    clUser = (s && s.data && s.data.session && s.data.session.user) || null;
+  } catch (e) { cl = null; clUser = null; }
+  if (!clUser) { clUi("nologin"); return; }
+  clFreshLocal = !localStorage.getItem(LS_KEY) && !fileHandle;
+  var btn = $("syncBtn");
+  if (btn && !btn.dataset.bound) { btn.dataset.bound = "1"; btn.onclick = function(){ clRun(); }; }
+  clBusy = true; clUi("busy");
+  try {
+    var changed = await clPull(true);
+    await clPush();
+    clSave();
+    if (changed) { save(); render(); }
+    clBusy = false; clUi();
+  } catch (e) {
+    clBusy = false; console.warn("cloud init:", e); clUi("error", e.message || "сеть");
+  }
+}
+/* ==== /CLOUD ==== */
+
 
 /* --- действия --- */
 function setImplemented(id, val, silent){
@@ -1759,6 +1963,36 @@ $("bExport").onclick = function(){
   document.body.appendChild(a); a.click(); a.remove();
   logEvent("note", null, "экспорт JSON"); save();
 };
+// v9.0.7 (модуль «Дневник»): импорт-слияние. Правило: задачи с новыми id добавляются,
+// существующие НЕ трогаются — живые правки владельца (облако/устройство) важнее файла.
+$("bImport").onclick = function(){
+  var inp = document.createElement("input");
+  inp.type = "file"; inp.accept = ".json,application/json";
+  inp.onchange = async function(){
+    var f = inp.files && inp.files[0];
+    if (!f) return;
+    try {
+      var txt = await f.text();
+      var doc = JSON.parse(txt);
+      if (!doc || !Array.isArray(doc.tasks)) { banner("В файле нет списка задач (tasks) — это не plan.json.", false); return; }
+      var added = 0, skipped = 0;
+      doc.tasks.forEach(function(t){
+        if (!t || !t.id) { skipped++; return; }
+        if (find(t.id)) { skipped++; return; } // уже есть — живые данные важнее файла
+        var nt = JSON.parse(JSON.stringify(t));
+        state.tasks.push(nt);
+        logEvent("import", nt.id, "из файла (слияние): " + (nt.title || ""));
+        added++;
+      });
+      save(); render();
+      banner("Добавлено из файла: " + added + (skipped ? "; уже было (не тронуты): " + skipped : "") +
+             ". Существующие задачи не изменялись.", false);
+    } catch (e) {
+      banner("Файл не читается: " + esc(e.message || e), false);
+    }
+  };
+  inp.click();
+};
 $("bBind").onclick = async function(){
   if (!window.showOpenFilePicker){
     banner("Этот браузер не умеет писать в файл сам. Работаем через автосохранение в браузере + кнопку «Скачать JSON».", false);
@@ -1805,6 +2039,9 @@ window.addEventListener("keydown", function(e){
   await boot();
   if (location.protocol !== "file:") { var bl = $("backLink"); if (bl) bl.style.display = "inline"; }
   render();
+  // v9.0.7: облако подключаем ПОСЛЕ отрисовки плана и не ждём его — сетевые ожидания
+  // не должны блокировать экран и напоминания (урок v0.8.63: сначала краски, потом сеть).
+  Promise.resolve(cloudInit()).catch(function(e){ console.warn("cloud init:", e); });
   if (mode === "week"){ $("bReview").click(); }
   if (mode === "daily"){ var nr = nextReminder(state, new Date()); beep();
     banner("<b>Ежедневное напоминание</b><br>" + (dueBuckets(state, new Date()).overdue.length + dueBuckets(state, new Date()).today.length) +
